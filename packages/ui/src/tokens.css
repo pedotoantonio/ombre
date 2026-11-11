@@ -11,6 +11,14 @@
   --testo-secondario: #4a5a73;
   --errore: #b42318;
 
+  /* Tones derived from the palette, with their WCAG contrast */
+  --oceano-scuro: #004a5a; /* primary on hover: white on it 9.87:1 */
+  --ambra-chiara: #f5ae2e; /* accent on hover: abisso on it 6.46:1 */
+  --bordo-campo: #71839a; /* edge of fields and controls: 3.35 to 3.88:1 on spuma, avorio, white */
+  --errore-tenue: #fdeeec; /* surface of error alerts: abisso on it 10.96:1 */
+  --su-scuro: #ffffff; /* text on abisso and on oceano */
+  --su-scuro-secondario: #d3deea; /* secondary text on abisso: 9.07:1 */
+
   /* Stati della planimetria: riempimenti per segni grafici, non per testo (contrasto 3:1) */
   --libero: #2a9d8f;
   --condiviso: #3a86ff;
@@ -20,6 +28,10 @@
   --condiviso-testo: #1f5fcc;
   --occupato-testo: #b5432a;
 
+  /* Focus ring: abisso on light surfaces, ambra on dark ones */
+  --fuoco: var(--abisso);
+  --fuoco-su-scuro: var(--ambra);
+
   --spazio-1: 0.25rem;
   --spazio-2: 0.5rem;
   --spazio-3: 0.75rem;
@@ -28,22 +40,45 @@
   --spazio-8: 2rem;
   --spazio-12: 3rem;
 
+  --raggio-piccolo: 0.5rem;
   --raggio: 0.75rem;
   --raggio-grande: 1.25rem;
   --raggio-pillola: 999px;
 
+  /* Soft shadows tinted with abisso: three depths */
+  --ombra-1: 0 1px 2px rgb(29 53 87 / 0.06), 0 2px 6px rgb(29 53 87 / 0.04);
+  --ombra-2: 0 2px 4px rgb(29 53 87 / 0.05), 0 10px 28px rgb(29 53 87 / 0.09);
+  --ombra-3: 0 4px 8px rgb(29 53 87 / 0.06), 0 20px 48px rgb(29 53 87 / 0.14);
+
   --tocco: 2.75rem;
   --larghezza: 70rem;
   --lettura: 65ch;
+  --margine: 1.25rem; /* side margin of the pages */
+  --testata: 4.25rem; /* header height on wide screens */
 
   --carattere: var(--font-jakarta), ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+
+  /* The three weights of Plus Jakarta Sans the design allows */
+  --peso-normale: 400;
+  --peso-medio: 600;
+  --peso-forte: 800;
+
+  /* Type scale. Running text never goes below 16 px. */
+  --testo-display: clamp(2.25rem, 1.55rem + 3.4vw, 4rem);
+  --testo-titolo-1: clamp(2rem, 1.5rem + 2.4vw, 3.25rem);
+  --testo-titolo-2: clamp(1.5rem, 1.27rem + 1.15vw, 2.125rem);
+  --testo-titolo-3: 1.1875rem;
+  --testo-guida: clamp(1.0625rem, 1rem + 0.45vw, 1.25rem);
+  --testo-corpo: 1rem;
+  --testo-piccolo: 0.9375rem; /* labels, table cells, navigation */
+  --testo-minimo: 0.875rem; /* short badge labels only */
+
+  /* Letter spacing tied to size: tight on large headings */
+  --lettere-display: -0.035em;
+  --lettere-titolo: -0.025em;
+  --lettere-sottotitolo: -0.012em;
+  --lettere-piccolo: 0.005em;
+
   --rapido: 100ms;
   --normale: 200ms;
-
-  /* Nomi della palette precedente: restano solo finche' base.css non e' riscritto. */
-  --laguna: var(--abisso);
-  --sole: var(--ambra);
-  --sabbia: var(--avorio);
-  --mare: var(--oceano);
-  --onda: #7fc8d4;
 }

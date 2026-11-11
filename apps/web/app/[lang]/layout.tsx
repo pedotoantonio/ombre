@@ -19,7 +19,7 @@ export const metadata: Metadata = {
   robots: config.indexable ? { index: true, follow: true } : { index: false, follow: false },
 };
 
-export const viewport: Viewport = { themeColor: '#fff8e7' };
+export const viewport: Viewport = { themeColor: '#ffffff' };
 
 export default async function RootLayout({
   children,

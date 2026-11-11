@@ -50,10 +50,19 @@ export function PageShell({ locale, page, highlight = true, alternatePath, crumb
               ))}
             </ul>
           </nav>
-          <Link className="lang-switch" href={alternatePath ?? pathFor(page, otherLocale)} hrefLang={otherLocale} lang={otherLocale}>
-            <span className="visually-hidden">{t.nav.languageLabel}: </span>
-            {t.nav.switchLanguage}
-          </Link>
+          <div className="site-header__tools">
+            <Link className="lang-switch" href={alternatePath ?? pathFor(page, otherLocale)} hrefLang={otherLocale} lang={otherLocale}>
+              <span className="visually-hidden">{t.nav.languageLabel}: </span>
+              {t.nav.switchLanguage}
+            </Link>
+            <Link className="account-link" href={accountPath(locale, 'signIn')}>
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <circle cx="12" cy="8" r="4" />
+                <path d="M4 20c0-3.6 3.6-6 8-6s8 2.4 8 6" />
+              </svg>
+              <span className="account-link__label">{t.nav.reservedArea}</span>
+            </Link>
+          </div>
         </div>
       </header>
       <main id="contenuto">
@@ -66,7 +75,7 @@ export function PageShell({ locale, page, highlight = true, alternatePath, crumb
               {(crumbs ?? [{ label: t.pages[page].h1 }]).map((crumb, index, all) =>
                 index === all.length - 1 || !crumb.href ? (
                   <li key={crumb.label} aria-current={index === all.length - 1 ? 'page' : undefined}>
-                    {crumb.label}
+                    <span className="breadcrumb__label">{crumb.label}</span>
                   </li>
                 ) : (
                   <li key={crumb.label}>
@@ -86,8 +95,7 @@ export function PageShell({ locale, page, highlight = true, alternatePath, crumb
               <Logo tone="onDark" />
               <span>{config.brandName}</span>
             </Link>
-            <p>{t.footer.tagline}</p>
-            <p>{t.footer.status}</p>
+            <p className="site-footer__tagline">{t.footer.tagline}</p>
           </div>
           <nav aria-label={t.footer.pagesTitle}>
             <h2>{t.footer.pagesTitle}</h2>
@@ -102,6 +110,9 @@ export function PageShell({ locale, page, highlight = true, alternatePath, crumb
               </li>
             </ul>
           </nav>
+        </div>
+        <div className="container site-footer__note">
+          <p>{t.footer.status}</p>
         </div>
       </footer>
     </>
