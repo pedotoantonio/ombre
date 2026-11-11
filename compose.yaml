@@ -1,27 +1,101 @@
 name: ombre
 
+# Development and test setup. The passwords below are placeholders for a database that is
+# never published outside the Docker network: production uses Docker secrets instead.
+
+x-hardening: &hardening
+  read_only: true
+  cap_drop:
+    - ALL
+  security_opt:
+    - no-new-privileges:true
+  restart: unless-stopped
+
 services:
+  db:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: ombre_owner
+      POSTGRES_PASSWORD: ${OMBRE_DB_OWNER_PASSWORD:-dev_owner_only}
+      POSTGRES_DB: ombre
+    volumes:
+      - db-data:/var/lib/postgresql
+    networks:
+      - backend
+    healthcheck:
+      test: ['CMD', 'pg_isready', '-q', '-h', '127.0.0.1', '-U', 'ombre_owner', '-d', 'ombre']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+
+  # Runs once at every start: migrations, application role, optional demo data.
+  migrate:
+    image: ombre-api:dev
+    build:
+      context: .
+      target: api
+    command: ['node', 'migrate.mjs']
+    environment:
+      OMBRE_DB_ADMIN_URL: postgres://ombre_owner:${OMBRE_DB_OWNER_PASSWORD:-dev_owner_only}@db:5432/ombre
+      OMBRE_DB_APP_PASSWORD: ${OMBRE_DB_APP_PASSWORD:-dev_app_only}
+      OMBRE_SEED_DEMO: ${OMBRE_SEED_DEMO:-false}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - backend
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: 'no'
+
+  api:
+    <<: *hardening
+    image: ombre-api:dev
+    environment:
+      # The API logs in with the restricted role: row level security always applies to it.
+      OMBRE_DB_URL: postgres://ombre_app:${OMBRE_DB_APP_PASSWORD:-dev_app_only}@db:5432/ombre
+      OMBRE_HOLD_MINUTES: ${OMBRE_HOLD_MINUTES:-10}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      - backend
+    # Only reachable from the server itself: a reverse proxy publishes it.
+    ports:
+      - '127.0.0.1:3211:3000'
+    tmpfs:
+      - /tmp
+    cpus: 1.0
+    mem_limit: 256m
+
   web:
+    <<: *hardening
     image: ombre-web:dev
     build:
       context: .
+      target: web
       args:
         OMBRE_BRAND_NAME: ${OMBRE_BRAND_NAME:-Ombrè}
         OMBRE_SITE_URL: ${OMBRE_SITE_URL:-http://localhost:3210}
         OMBRE_INDEXABLE: ${OMBRE_INDEXABLE:-false}
         OMBRE_BOOKINGS_OPEN: ${OMBRE_BOOKINGS_OPEN:-false}
         OMBRE_CONTACT_EMAIL: ${OMBRE_CONTACT_EMAIL:-}
-    # Only reachable from the server itself: a reverse proxy publishes it.
     ports:
       - '127.0.0.1:3210:3000'
-    read_only: true
     tmpfs:
       - /tmp
       - /app/apps/web/.next/cache
-    cap_drop:
-      - ALL
-    security_opt:
-      - no-new-privileges:true
     cpus: 1.0
     mem_limit: 512m
-    restart: unless-stopped
+
+networks:
+  backend:
+
+volumes:
+  db-data:

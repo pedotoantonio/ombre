@@ -13,7 +13,9 @@
     "typecheck": "turbo run typecheck",
     "lint": "eslint .",
     "check": "pnpm lint && turbo run typecheck test build",
-    "smoke": "node scripts/smoke.ts"
+    "smoke": "node scripts/smoke.ts",
+    "test:db": "sh scripts/test-db.sh",
+    "smoke:api": "node scripts/smoke-api.ts"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

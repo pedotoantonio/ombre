@@ -109,7 +109,7 @@ Le prime cinque voci si completano **prima** di scrivere codice di dominio.
 - [x] Ruoli definiti con cosa ciascuno può e non può fare ([progetto.md §Ruoli](progetto.md#ruoli-e-responsabilità)); da applicare dall'API
 - [ ] Piani e limiti in `plan_feature`, catalogo unico per portale e pannello
 - [x] Una scheda modulo per ogni modulo adottato, con "cosa resta manuale" ([schede-moduli.md](schede-moduli.md))
-- [ ] `tenant_id` e RLS su ogni tabella, test di isolamento tra stabilimenti verde
+- [ ] `tenant_id` e RLS su ogni tabella, test di isolamento tra stabilimenti verde (fatto per le prime cinque tabelle, con la colonna `beach_id`; da ripetere a ogni nuova tabella)
 - [ ] Autenticazione con 2FA per gestore e admin, blocco tentativi, sessioni revocabili
 - [ ] Registro attività e accesso di supporto con motivo
 - [ ] Segreti fuori dal repository, Docker secrets in produzione
@@ -117,6 +117,6 @@ Le prime cinque voci si completano **prima** di scrivere codice di dominio.
 - [ ] Backup automatico con almeno una prova di ripristino riuscita
 - [ ] Health, metriche interne e allarmi
 - [ ] OpenAPI generata e controllata in CI
-- [ ] Stabilimento demo dal seed
+- [x] Stabilimento demo dal seed (`OMBRE_SEED_DEMO=true`: Bagno delle Dune, 17/06/2027, MARE10)
 - [ ] Testi in italiano e inglese (fatto per il sito pubblico, con test di parità dei dizionari; da estendere a ogni nuova interfaccia)
 - [x] Registro delle decisioni e documento di stato aperti

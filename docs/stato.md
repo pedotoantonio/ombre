@@ -10,44 +10,59 @@ Aggiornato all'11/11/2026.
   decisioni; schema della struttura logica ([struttura-logica.png](struttura-logica.png));
   requisiti di design, accessibilità, prestazioni, SEO, AEO e GEO in
   [qualita-web.md](qualita-web.md).
-- **Codice, provato in container**: monorepo avviato; sito pubblico bilingue (italiano e
-  inglese) con sei pagine per lingua; nucleo condiviso con calcoli in centesimi
-  (preventivo, sconto, ripartizione) e le cinque macchine a stati; `Dockerfile` e compose.
-- **Non fatto**: API, database, worker, autenticazione, aree riservate (ospite,
-  stagionale, gestione, reception, console), ricerca reale, prenotazione, pagamenti. Nessun
-  dominio registrato, nessuna pubblicazione. Il sito dichiara che il servizio è in
-  preparazione e chiede di non essere indicizzato.
+- **Codice, provato in container**:
+  - sito pubblico bilingue (italiano e inglese) con sei pagine per lingua;
+  - nucleo condiviso con calcoli in centesimi e le cinque macchine a stati;
+  - database PostgreSQL con stabilimenti, postazioni, riga unica `inventory_day`,
+    riserve e promozioni, isolato per stabilimento con RLS;
+  - API `/v1`: elenco degli stabilimenti attivi, disponibilità di una giornata,
+    preventivo calcolato dal server, riserva con chiave di idempotenza;
+  - `Dockerfile` e compose con database, migrazioni, API e sito.
+- **Non fatto**: autenticazione e ruoli, aree riservate (ospite, stagionale, gestione,
+  reception, console), condivisione stagionale, prenotazione confermata, pagamenti, pass,
+  rendiconto, worker. Il sito non è ancora collegato all'API: la pagina «Esplora» non
+  mostra dati. Nessun dominio registrato, nessuna pubblicazione. Il sito dichiara che il
+  servizio è in preparazione e chiede di non essere indicizzato.
 
 ## Controlli eseguiti l'11/11/2026
 
 | Controllo | Esito |
 |---|---|
 | Lint e controllo dei tipi | Superati |
-| Test del nucleo condiviso (18) | Superati: esempio MARE10 da €30 a €27, ripartizione 13,50 / 10,80 / 2,70, parità dei dizionari, indirizzi |
-| Build di produzione e immagine Docker | Riuscite; i test girano dentro la build dell'immagine |
-| Pagine servite dal container (192 verifiche su 12 pagine) | Superate: un solo H1, title e descrizioni unici, canonical, hreflang reciproci, dati strutturati, 404 e reindirizzamenti |
-| Container | Utente non root, file system in sola lettura, nessun privilegio aggiuntivo |
-| Resa visiva | Controllata su schermate a 390 px e 1280 px |
+| Test (31, di cui 13 su un PostgreSQL vero) | Superati |
+| Due acquisti sulla stessa giornata | Dodici richieste simultanee, una sola riserva; ripetuto sull'API in container con dieci richieste: un 201 e nove 409 |
+| Prezzo manipolato nel browser | L'importo inviato dal client è ignorato: vale quello del server |
+| MARE10 su €30 | Totale €27, salvato nella riserva e immutato se il listino cambia |
+| Ultimo utilizzo di una promozione conteso | Limite rispettato; l'utilizzo torna disponibile al rilascio |
+| Riserva scaduta | La giornata torna acquistabile anche senza job di pulizia |
+| Accesso a un altro stabilimento | Zero righe lette e zero scritte dal database, qualunque sia la query |
+| Chiave di idempotenza | Stessa richiesta, stessa riserva; richiesta diversa, errore esplicito |
+| Pagine servite dal container (192 verifiche su 12 pagine) | Superate |
+| Container | Sito e API non root, in sola lettura; database non pubblicato; ruolo dell'API senza privilegi |
+| Riavvio | Migrazioni e seed ripetibili senza effetti |
 
-Verifiche ancora aperte: Core Web Vitals misurati, prova con lettore di schermo e da sola
-tastiera, controllo automatico di accessibilità, intestazione Content-Security-Policy,
-immagine per le anteprime social, pagina 404 con la grafica del sito.
+Verifiche ancora aperte: documento OpenAPI generato dal codice, limiti alle richieste,
+prova di ripristino da backup, Core Web Vitals misurati, prove con lettore di schermo e
+da tastiera, controllo automatico di accessibilità, intestazione
+Content-Security-Policy, immagine per le anteprime social, pagina 404 con la grafica del
+sito. Il preventivo non è ancora salvato con una scadenza propria e manca il job che
+ripulisce le riserve scadute (oggi la scadenza è valutata al momento della richiesta).
 
 ## Prossimo risultato da costruire
 
 Un incremento operativo verificabile in ambiente di prova che colleghi:
 sito personale → autorizzazione stagionale → acquisto → inventario → reception →
-rendiconto. Il primo passo è il pacchetto `db` (schema, migrazioni, `tenant_id` e RLS) con
-la riga unica `InventoryDay` e la prova dei due acquisti simultanei, poi l'API `/v1` per
-preventivi e riserve.
+rendiconto. Inventario e riserva ci sono; il prossimo anello è l'acquisto visibile:
+scheda del bagno e percorso di prenotazione nel sito, collegati all'API.
 
 ## Passi successivi in ordine
 
-1. Pacchetto `db` e API con inventario, preventivi e riserve (PostgreSQL in container).
-2. Autenticazione, ruoli e isolamento tra stabilimenti, con i relativi test.
-3. Stabilimento dimostrativo dal seed, scheda del bagno e percorso di prenotazione in
-   ambiente di prova.
-4. In parallelo, fuori dal codice: chiudere le decisioni di avvio (marchio e domini,
+1. Scheda del bagno, planimetria con vista a elenco e riepilogo nel sito, sull'API
+   esistente, nelle due lingue.
+2. Autenticazione, ruoli e gestione (inventario, prezzi, blocchi) con i test di permesso.
+3. Prenotazione confermata con pagamento in sandbox, pass e verifica alla reception.
+4. Condivisione stagionale, worker con outbox, rendiconto.
+5. In parallelo, fuori dal codice: chiudere le decisioni di avvio (marchio e domini,
    soggetto venditore, provider pagamenti, condizioni) e scegliere i partner pilota.
 
 ## Dipendenze esterne aperte

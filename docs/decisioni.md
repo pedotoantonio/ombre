@@ -96,3 +96,14 @@ React 19, Vitest. CSS con token propri, senza framework grafico. Il nome della
 piattaforma viene solo dalla configurazione (`OMBRE_BRAND_NAME`), mai scritto nei testi.
 Tutto gira in container: immagine a più stadi, utente non root, file system in sola
 lettura. I reindirizzamenti permanenti usano il codice 308, equivalente al 301.
+
+## D14 — Database e API del primo incremento — accettata (11/11/2026)
+
+PostgreSQL 18 in container. Le migrazioni sono file SQL scritti a mano e applicati in
+ordine: sono la fonte autorevole dello schema, perché ruoli, vincoli e RLS si leggono
+meglio in SQL. Drizzle dà i tipi alle query. La colonna del tenant si chiama `beach_id`
+(lo stabilimento) e ogni tabella operativa ha la propria regola RLS; l'API usa il ruolo
+`ombre_app`, che non è proprietario delle tabelle e non può aggirare le regole.
+L'acquisizione di una giornata blocca prima la riga `inventory_day`, poi la promozione,
+sempre in quest'ordine. API con Hono e validazione zod, distribuita come un solo file.
+La riserva dura 10 minuti, modificabile con `OMBRE_HOLD_MINUTES`.
