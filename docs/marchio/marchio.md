@@ -1,121 +1,134 @@
 # Marchio «ombrè»
 
-Regole d'uso del simbolo e del logo, disegnati l'11/11/2026 sul progetto grafico
-«Solar & Fresh» ([../progetto-grafico.md](../progetto-grafico.md)). Sostituiscono il
-vecchio simbolo (ombrellone di profilo su un'onda), che non va più usato.
+Regole d'uso del logo. **Il logo è del committente**: questi file lo riproducono in
+vettoriale dalla sua scheda d'identità (`docs/grafica/identita-riferimento.jpg`, nel ramo
+principale del progetto). Non è un disegno nostro e non va reinterpretato. Sostituisce
+tutti i simboli usati prima nel progetto.
 
 > **Stato legale: non verificato.** La disponibilità del marchio «Ombrè» e dei domini è
 > ancora una dipendenza aperta ([../stato.md](../stato.md)). Non è stata fatta alcuna
-> ricerca di anteriorità, né sul nome né sul segno grafico: un ombrellone a otto spicchi
-> visto dall'alto è un motivo diffuso e la somiglianza con marchi esistenti va controllata
-> da un consulente prima di qualsiasi uso pubblico o deposito.
+> ricerca di anteriorità, né sul nome né sul segno grafico.
 
-![Logo orizzontale](logo-orizzontale.png)
+![Logo verticale](logo-verticale.png)
 
-## Che cosa rappresenta
+## Com'è fatto
 
-Il simbolo è fatto di due sole forme.
+- **Emblema**, di forma circa circolare: un ombrellone inclinato visto di lato, a tre
+  spicchi separati da stecche bianche, con il puntale in alto e il palo che scende verso
+  destra; accanto al palo un viso sorridente fatto di tre tratti (due occhi chiusi ad
+  arco e il sorriso); sotto, un'onda che risale a destra e chiude il cerchio, con un
+  piccolo riflesso più chiaro sulla cresta; sotto l'onda una falce di sabbia color ambra.
+- **Logotipo**: «ombrè» minuscolo in un carattere tondo e pieno. Al posto dell'accento
+  grave sulla «e» c'è un piccolo **sole che sorge**: mezzo disco ambra con cinque raggi.
+- **Motto**: «IL TUO POSTO AL SOLE, SENZA PENSIERI», in maiuscolo leggero e spaziato,
+  sotto il logotipo.
 
-- **L'ombrellone visto dall'alto**: otto spicchi con il bordo appena incavato fra una
-  stecca e l'altra, separati da raggi vuoti, e un puntale al centro. È il «posto» che si
-  prenota, visto come sulla planimetria della spiaggia.
-- **La falce sotto l'ombrellone**: è insieme un'onda che lo lambisce e un sorriso. Ha il
-  colore del sole e riprende l'ombra che l'ombrellone lascia sulla sabbia.
+## Come è stato riprodotto
 
-Sole, mare e relax stanno in un segno solo; il nome, sempre minuscolo e con l'accento
-grave, è «ombrè». Motto: «Il tuo posto al sole, senza pensieri.»
+- La scheda del committente è un'immagine JPEG (2816×1536 px) in cui l'emblema è largo
+  circa 365 px. L'emblema è stato ricalcato dall'immagine ingrandita (maschere di colore
+  e tracciamento automatico), poi ripulito: un solo tono pieno per colore, niente
+  ombreggiature. Il riflesso sull'onda è ridisegnato a mano sopra l'originale.
+- Confronto con l'originale, sovrapponendo il nostro disegno al ritaglio della scheda:
+  nell'emblema differisce in modo netto lo 0,5% dei punti, tutti lungo i bordi (l'originale
+  ha bordi sfumati). La sfumatura scura alla base dell'onda dell'originale è stata
+  sostituita dal colore pieno.
+- I colori sono quelli esatti della tavolozza, non quelli campionati dall'immagine.
+- **Logotipo**: il carattere della scheda corrisponde a **Nunito Bold** (versione 3.602,
+  licenza SIL Open Font License 1.1): sovrapposte, «o» e «m» coincidono. Per restare
+  fedeli alla scheda le lettere sono posizionate una per una come nell'originale e l'asta
+  della «b» è accorciata di 37 millesimi di corpo. La «e» della scheda è circa il 2% più
+  larga della nostra. Il logotipo è **convertito in tracciati**: non serve avere il
+  carattere installato.
+- **Motto**: Nunito Regular in maiuscolo, spaziatura +0,024 em, anch'esso in tracciati.
+- Il sole è costruito con forme geometriche (un disco tagliato da un arco, cinque raggi
+  con le estremità tonde) sulle misure rilevate dalla scheda.
 
-## Costruzione
-
-Griglia quadrata di 240 unità, con 10 unità di margine interno.
-
-| Elemento | Misure (unità della griglia) |
-|---|---|
-| Ombrellone | Centro (120; 95,8). Otto punte a 85,8 dal centro, una rivolta in alto; raggi vuoti larghi 6; bordo incavato del 2% |
-| Puntale | Disco di raggio 8,2 dentro un anello vuoto di raggio 14,3 |
-| Falce | Differenza fra due cerchi: quello esterno di raggio 92,4, quello interno di raggio 101,2 con il centro 44 più in alto. Spessore massimo 35; punte arrotondate con raggio 5,5 |
-| Distanza fra ombrellone e falce | 13 |
-
-I raggi orizzontale e verticale cadono sulla griglia dei pixel: per questo alle misure
-piccole il segno resta nitido. Niente sfumature, niente contorni, tre tinte al massimo.
+Il carattere dell'interfaccia resta Plus Jakarta Sans
+([../progetto-grafico.md](../progetto-grafico.md)): Nunito si usa solo dentro il logo.
 
 ## Versioni
 
 | File | Che cos'è | Quando si usa |
 |---|---|---|
-| `simbolo.svg` | Simbolo a colori: ombrellone Deep Ocean Teal, falce e puntale Sand Amber | Su fondi chiari: Ivory Sand, Seafoam Tint, bianco |
-| `simbolo-su-scuro.svg` | Ombrellone Ivory Sand, falce e puntale Sand Amber, fondo trasparente | Su Slate Abyss e su Deep Ocean Teal |
-| `simbolo-monocromatico.svg` | Tutto in un solo colore | Stampa a un inchiostro, timbri, incisioni, ricami; ogni volta che l'ambra non è disponibile o non stacca dal fondo. Colori ammessi: Deep Ocean Teal, Slate Abyss, bianco su fondo scuro |
-| `logo-orizzontale.svg` | Simbolo e logotipo affiancati | Versione principale: intestazioni, documenti, presentazioni |
-| `logo-su-scuro.svg` | Come sopra, logotipo Ivory Sand, fondo trasparente | Piè di pagina e superfici Slate Abyss |
-| `../../apps/web/app/icon.svg` | Icona del sito: simbolo chiaro su tessera Deep Ocean Teal con angoli arrotondati | Solo come icona (scheda del browser, segnalibri). I raggi sono più larghi di un terzo per reggere a 16 px |
+| `logo-verticale.svg` | Emblema, logotipo e motto uno sopra l'altro, **come nella scheda del committente** | Versione principale: copertine, presentazioni, materiali stampati, schermate d'apertura |
+| `logo-verticale-su-scuro.svg` | Come sopra per fondi scuri, fondo trasparente | Su Slate Abyss |
+| `logo-orizzontale.svg` | Emblema a sinistra e logotipo a destra, senza motto | Intestazioni del sito, firme, spazi bassi e larghi |
+| `logo-su-scuro.svg` | Come sopra per fondi scuri, fondo trasparente | Piè di pagina e superfici Slate Abyss |
+| `simbolo.svg` | Il solo emblema a colori | Dove il nome è già scritto accanto, avatar, spazi quadrati |
+| `simbolo-su-scuro.svg` | Emblema per fondi scuri, fondo trasparente | Su Slate Abyss |
+| `simbolo-monocromatico.svg` | Emblema in un solo colore, senza riflesso | Stampa a un inchiostro, timbri, incisioni. Colori ammessi: Deep Ocean Teal, Slate Abyss, bianco su fondo scuro |
+| `../../apps/web/app/icon.svg` | Icona del sito: emblema su disco bianco | Solo come icona (scheda del browser, segnalibri) |
 
 Anteprime in PNG, da non usare come originali: `simbolo-16.png`, `simbolo-32.png`,
-`simbolo-192.png`, `simbolo-512.png` (fondo trasparente), `logo-orizzontale.png` (fondo
-trasparente) e `logo-su-scuro.png` (su Slate Abyss).
+`simbolo-192.png`, `simbolo-512.png`, `logo-orizzontale.png`, `logo-verticale.png` (fondo
+trasparente), `logo-su-scuro.png` e `logo-verticale-su-scuro.png` (su Slate Abyss).
 
-I due file «su scuro» hanno il fondo trasparente: aperti da soli su una pagina bianca
-il logotipo non si vede.
+Che cosa viene dalla scheda e che cosa no:
+
+- Dalla scheda: emblema, logotipo con il sole, motto e la loro disposizione verticale.
+- Derivate da noi con gli stessi elementi, **da far approvare al committente**: la
+  disposizione orizzontale, le versioni per fondi scuri, la versione a un colore e
+  l'icona semplificata.
+
+I file «su scuro» hanno il fondo trasparente: aperti da soli su una pagina bianca quasi
+non si vedono.
 
 ### Nel sito
 
-Il componente `Logo` di `packages/ui` disegna il solo simbolo, con `tone="color"`
-(predefinito) o `tone="onDark"`. È decorativo: il nome è sempre scritto accanto come
-testo, preso dalla configurazione, e non è mai dentro il componente. Le illustrazioni
-`CoastScene` e `BeachScene` riprendono lo stesso ombrellone visto dall'alto.
+`packages/ui` espone due componenti, entrambi con `tone="color"` (predefinito) o
+`tone="onDark"`:
 
-## Logotipo
+- `Logo`: il solo emblema, decorativo, per quando il nome è scritto accanto come testo.
+- `LogoLockup`: emblema e logotipo in orizzontale come un'unica immagine; il nome
+  accessibile si passa con `label` e viene dalla configurazione. Non contiene il motto.
 
-- Carattere: Plus Jakarta Sans ExtraBold (peso 800), versione 2.071, spaziatura fra le
-  lettere −0,03 em: la stessa del nome nell'intestazione del sito.
-- Nei file originali il logotipo è **convertito in tracciati**: non serve avere il
-  carattere installato e il risultato è identico ovunque. Plus Jakarta Sans è distribuito
-  con licenza SIL Open Font License 1.1, che consente questo uso.
-- Proporzioni fisse: l'altezza della «o» è il 38% dell'altezza del riquadro del simbolo;
-  la fascia delle minuscole è centrata sul riquadro; fra simbolo e logotipo c'è uno
-  spazio pari al 18% del riquadro. Simbolo e logotipo non si ricompongono a mano: si usa
-  il file.
+### Icona e misure piccole
+
+Nell'icona l'emblema è semplificato: niente riflesso sull'onda, occhi e sorriso
+ingrossati, e un disco bianco dietro perché si legga anche sulle schede scure del
+browser. A 32 px il viso si riconosce; **a 16 px no**: restano la sagoma dell'ombrellone,
+l'onda e la sabbia.
 
 ## Colori
 
-| Colore | Valore | Ruolo nel marchio |
+| Colore | Valore | Ruolo nel logo |
 |---|---|---|
-| Deep Ocean Teal | `#005F73` | Ombrellone e logotipo su fondi chiari; tessera dell'icona |
-| Sand Amber | `#EE9B00` | Falce e puntale: è un accento, mai il colore del logotipo |
-| Ivory Sand | `#F8F9FA` | Ombrellone e logotipo su fondi scuri |
+| Deep Ocean Teal | `#005F73` | Ombrellone, viso, onda, logotipo e motto su fondi chiari |
+| Sand Amber | `#EE9B00` | Sabbia dell'emblema e sole sul logotipo |
+| Ivory Sand | `#F8F9FA` | Al posto del teal sui fondi scuri |
+| Seafoam Tint | `#E0F2F1` | Riflesso sull'onda (al 30% sul teal; pieno nelle versioni per fondi scuri) |
 | Slate Abyss | `#1D3557` | Fondo scuro; colore ammesso per la versione a un colore |
-| Seafoam Tint | `#E0F2F1` | Solo come fondo |
 
 Contrasti (WCAG), dal progetto grafico:
 
-| Coppia | Rapporto | Che cosa significa per il marchio |
+| Coppia | Rapporto | Che cosa significa per il logo |
 |---|---|---|
-| Oceano e Avorio | 6,91:1 | Ombrellone e logotipo ben leggibili su fondo chiaro; ombrellone chiaro sulla tessera dell'icona |
+| Oceano su Avorio | 6,91:1 | Emblema, logotipo e motto ben leggibili |
 | Oceano su Spuma | 6,29:1 | Idem |
-| Bianco su Oceano | 7,28:1 | Versione a un colore, bianca, su Deep Ocean Teal |
-| Abisso e Avorio | 11,72:1 | Ombrellone e logotipo chiari sul fondo scuro |
-| Abisso e Ambra | 5,49:1 | La falce stacca bene sul fondo scuro |
-| Ambra su Avorio | 2,14:1 | **Basso.** La falce su fondo chiaro è decorazione |
-| Bianco e Ambra | 2,25:1 | **Basso.** Mai il simbolo chiaro su fondo ambra |
+| Oceano su bianco | 7,28:1 | Emblema sul disco bianco dell'icona |
+| Avorio su Abisso | 11,72:1 | Versioni per fondi scuri |
+| Ambra su Abisso | 5,49:1 | Sabbia e sole staccano bene sul fondo scuro |
+| Ambra su Avorio | 2,14:1 | **Basso.** Sabbia e sole su fondo chiaro sono decorazione |
+| Ambra su bianco | 2,25:1 | **Basso.** Idem |
 
-Calcolati qui con la stessa formula, perché il progetto grafico non li riporta: Ambra su
-Oceano 3,23:1 (la falce nell'icona), Ambra su Spuma 1,95:1, Oceano su Abisso 1,70:1.
+Calcolato qui con la stessa formula: Oceano su Abisso 1,70:1.
 
 Conseguenze pratiche:
 
-- Su fondi chiari la falce ambra ha poco contrasto. Va bene perché il simbolo è
-  decorativo e il nome è sempre scritto accanto; quando il simbolo deve reggersi da solo
-  o servire a persone con vista ridotta si usa la versione a un colore.
-- Il logotipo non è mai ambra.
-- Il simbolo a colori non va su Deep Ocean Teal né su Slate Abyss (1,70:1 fra i due):
-  lì si usa la versione per fondi scuri.
+- Il nome è sempre scritto in teal (o in avorio sui fondi scuri), mai in ambra. Il sole
+  ambra sostituisce l'accento solo come segno grafico: dove il nome deve essere letto da
+  tutti, anche dai lettori di schermo, è scritto come testo, «ombrè», con il suo accento.
+- La versione a colori non va su Slate Abyss né su Deep Ocean Teal: lì si usa la versione
+  per fondi scuri.
+- Il motto è sottile: sotto le misure minime si toglie, non si rimpicciolisce.
 
 ## Area di rispetto
 
-- **Logo orizzontale**: attorno al logo resta libero uno spazio pari all'altezza della
-  «o» del logotipo. I file `logo-orizzontale.svg` e `logo-su-scuro.svg` hanno già questo
-  margine: basta non ritagliarli.
-- **Simbolo da solo**: spazio libero pari a un quarto della sua altezza su ogni lato.
+- **Logo verticale e orizzontale**: attorno al logo resta libero uno spazio pari
+  all'altezza della «o» del logotipo. I file hanno già questo margine: basta non
+  ritagliarli.
+- **Emblema da solo**: spazio libero pari a un quarto del suo diametro su ogni lato.
 
 Dentro l'area di rispetto non entrano testi, bordi, altre immagini o il margine del
 foglio.
@@ -124,30 +137,38 @@ foglio.
 
 | Versione | A schermo | In stampa |
 |---|---|---|
-| Simbolo | 16 px di lato; sotto i 24 px i raggi si attenuano e restano ombrellone e falce | 6 mm |
-| Icona del sito | 16 px | — |
-| Logo orizzontale | 24 px di altezza del simbolo (circa 80 px di larghezza) | 10 mm di altezza del simbolo |
+| Emblema | 24 px di lato perché il viso si legga; fino a 16 px solo come icona | 8 mm |
+| Logo orizzontale | 28 px di altezza (circa 94 px di larghezza) | 10 mm di altezza |
+| Logo verticale con motto | 200 px di larghezza (il motto resta alto circa 7 px) | 40 mm di larghezza |
 
-Sotto queste misure si usa il solo simbolo, non una versione rimpicciolita del logo.
+Proporzioni fisse, da non ricomporre a mano:
+
+- orizzontale: l'altezza della «o» è il 38% dell'altezza dell'emblema; fra emblema e
+  logotipo c'è uno spazio pari al 42% dell'altezza della «o»;
+- verticale: emblema, logotipo e motto sono centrati e alle distanze della scheda del
+  committente.
 
 ## Cosa non fare
 
+- Non ridisegnare, semplificare o «migliorare» l'emblema: si usano questi file.
 - Non cambiare i colori e non aggiungere sfumature, ombre, contorni o effetti.
-- Non ruotare, inclinare, specchiare o deformare il simbolo; non staccare la falce
-  dall'ombrellone e non usarne una senza l'altro.
-- Non riscrivere il logotipo con un altro carattere o un altro peso, non scriverlo con
-  l'iniziale maiuscola e non togliere l'accento: è «ombrè».
-- Non cambiare proporzioni e distanza fra simbolo e logotipo, e non mettere il simbolo a
-  destra o sopra il nome senza una versione disegnata apposta.
+- Non ruotare, specchiare o deformare; non separare ombrellone, viso, onda e sabbia.
+- Non riscrivere il logotipo con un altro carattere, non scriverlo con l'iniziale
+  maiuscola e non sostituire il sole con un accento o con altro.
+- Non cambiare proporzioni e distanze fra emblema, logotipo e motto.
+- Non usare il motto da solo come se fosse il logo, e non usarlo sotto le misure minime.
 - Non appoggiare il logo su fotografie o fondi mossi senza una superficie piena sotto, e
   non usare la versione a colori su fondi scuri.
-- Non usare il simbolo come unico portatore di un'informazione (uno stato, un avviso): è
-  un segno di identità.
-- Non usare più il vecchio simbolo con l'ombrellone di profilo.
+- Non usare più i simboli precedenti (l'ombrellone di profilo sull'onda a zigzag e
+  l'ombrellone visto dall'alto con la falce).
 
 ## Limiti onesti
 
 - Marchio e domini non sono verificati (vedi in alto).
+- L'originale ricevuto è un'immagine a bassa risoluzione, non un file vettoriale: i
+  dettagli più piccoli (forma esatta del riflesso, raggio degli angoli, spessore dei
+  tratti del viso) sono ricostruiti con uno scarto di circa un punto dell'immagine. Se il
+  committente ha il file vettoriale originale, va usato quello.
+- Il carattere è stato riconosciuto per sovrapposizione, non confermato dal committente.
 - Le prove sono state fatte rasterizzando i file a 16, 32, 192 e 512 px su Ivory Sand e
-  su Slate Abyss. Non ci sono prove di stampa né prove su schermi reali, e non esistono
-  ancora versioni verticale, per app o per social.
+  su Slate Abyss. Non ci sono prove di stampa né prove su schermi reali.
