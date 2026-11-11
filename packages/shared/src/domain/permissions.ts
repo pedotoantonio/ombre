@@ -10,13 +10,15 @@ export const actions = [
   'bookings.read',
   'sharing.manage',
   'reports.read',
+  'site.read',
+  'site.edit',
 ] as const;
 export type Action = (typeof actions)[number];
 
 /** What each role of a beach club may do. Anything not listed is refused. */
 export const permissions: Record<MembershipRole, readonly Action[]> = {
   manager: actions,
-  reception: ['inventory.read', 'inventory.block', 'access.check', 'bookings.read'],
+  reception: ['inventory.read', 'inventory.block', 'access.check', 'bookings.read', 'site.read'],
   accounting: ['reports.read'],
 };
 

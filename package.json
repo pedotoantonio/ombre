@@ -18,7 +18,8 @@
     "smoke:api": "node scripts/smoke-api.ts",
     "smoke:flow": "node scripts/smoke-flow.ts",
     "smoke:booking": "node scripts/smoke-booking.ts",
-    "smoke:areas": "node scripts/smoke-areas.ts"
+    "smoke:areas": "node scripts/smoke-areas.ts",
+    "smoke:site": "node scripts/smoke-site.ts"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

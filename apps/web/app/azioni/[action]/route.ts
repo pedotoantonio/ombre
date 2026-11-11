@@ -37,6 +37,17 @@ async function manage(request: Request, form: Form, lang: Locale, path: string, 
   return { to: back, err: result.status === 0 ? 'unavailable' : result.code };
 }
 
+/** Runs a website call and returns to the editor with the result. */
+async function site(request: Request, form: Form, lang: Locale, path: string, method: string, body: unknown): Promise<Outcome> {
+  const beach = form('beach');
+  if (!slugPattern.test(beach)) return bad();
+  const result = await apiCall<unknown>(method, `/v1/manage/beaches/${beach}${path}`, { body, token: cookieToken(request) });
+  const back = accountPath(lang, 'site', beach);
+  if (result.ok) return { to: back, ok: '1' };
+  if (result.status === 401) return { to: accountPath(lang, 'signIn') };
+  return { to: back, err: result.status === 0 ? 'unavailable' : result.code };
+}
+
 const actions: Record<string, (request: Request, form: Form, lang: Locale) => Promise<Outcome>> = {
   async riserva(_request, form, lang) {
     const beach = form('beach');
@@ -120,6 +131,29 @@ const actions: Record<string, (request: Request, form: Form, lang: Locale) => Pr
       const entry = data as { code: string; spotCode: string; guestName: string };
       return `${entry.code} · ${entry.spotCode} · ${entry.guestName}`;
     }),
+
+  async 'sito-salva'(request, form, lang) {
+    const texts = (prefix: string) => ({
+      tagline: form(`${prefix}_tagline`),
+      description: form(`${prefix}_description`),
+      services: form(`${prefix}_services`).split(/\r?\n/).map((line) => line.trim()).filter(Boolean),
+      openingPeriod: form(`${prefix}_openingPeriod`),
+      openingHours: form(`${prefix}_openingHours`),
+      address: form(`${prefix}_address`),
+      phone: form(`${prefix}_phone`),
+      accessibility: form(`${prefix}_accessibility`),
+    });
+    const en = texts('en');
+    const hasEnglish = Object.values(en).some((value) => (Array.isArray(value) ? value.length > 0 : value.trim() !== ''));
+    const version = form('version');
+    return site(request, form, lang, '/site/draft', 'PUT', {
+      expectedVersion: version === '' ? null : Number(version),
+      template: form('template'),
+      content: { it: texts('it'), en: hasEnglish ? en : null },
+    });
+  },
+  'sito-pubblica': (request, form, lang) => site(request, form, lang, '/site/publish', 'POST', { expectedVersion: Number(form('version')) }),
+  'sito-ripristina': (request, form, lang) => site(request, form, lang, '/site/restore', 'POST', { revisionId: form('revision') }),
 
   async 'stagionale-proponi'(request, form, lang) {
     const contract = form('contract');

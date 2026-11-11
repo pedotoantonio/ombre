@@ -4,6 +4,7 @@ import { accountPages, accountPath, accountSection, can, config, formatMoney, ge
 import { apiCall, dayPattern, formatDay, slugPattern, uuidPattern } from '@/lib/api';
 import { sessionToken } from '@/lib/session';
 import { PageHead, PageShell } from './PageShell';
+import { SiteEditorView } from './site-editor';
 
 type Query = Record<string, string | string[] | undefined>;
 const first = (value: string | string[] | undefined): string | undefined => (Array.isArray(value) ? value[0] : value);
@@ -210,6 +211,11 @@ async function ManageView({ locale, beachSlug, query }: { locale: Locale; beachS
       <section className="section">
         <div className="container stack">
           <Notice locale={locale} query={query} />
+          {can(role, 'site.read') ? (
+            <Link className="button button--secondary" href={accountPath(locale, 'site', beachSlug)}>
+              {getDictionary(locale, config.brandName).site.openEditor}
+            </Link>
+          ) : null}
           <form className="form-row" method="get" action={accountPath(locale, 'manage', beachSlug)}>
             <div className="field">
               <label htmlFor="giorno">{t.day}</label>
@@ -559,5 +565,6 @@ export async function AccountRoute({ locale, segments, query }: { locale: Locale
   if (segments.length === 1 && page === 'overview') return <OverviewView locale={locale} />;
   if (segments.length === 2 && page === 'manage') return <ManageView locale={locale} beachSlug={segments[1]!} query={query} />;
   if (segments.length === 2 && page === 'season') return <SeasonView locale={locale} contractId={segments[1]!} query={query} />;
+  if (segments.length === 2 && page === 'site') return <SiteEditorView locale={locale} beachSlug={segments[1]!} query={query} />;
   notFound();
 }

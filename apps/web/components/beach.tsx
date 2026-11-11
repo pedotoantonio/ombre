@@ -14,9 +14,13 @@ import {
   locales,
   pathFor,
   type Locale,
+  type SiteContent,
+  type SiteTemplate,
 } from '@ombre/shared';
 import { api, dayPattern, formatDay, formatTime, slugPattern, uuidPattern, type ApiBeach, type ApiSpot } from '@/lib/api';
+import { JsonLd } from '@/lib/seo';
 import { PageHead, PageShell, type Crumb } from './PageShell';
+import { BeachSite, localBusinessData } from './site-view';
 
 type Query = Record<string, string | string[] | undefined>;
 
@@ -29,14 +33,18 @@ export function otherLocale(locale: Locale): Locale {
 }
 
 /** Checks the localized segments and loads the beach club, or answers 404. */
-export async function loadBeach(lang: string, section: string, slug: string): Promise<{ locale: Locale; beach: ApiBeach; nextDay: string | null }> {
+export async function loadBeach(
+  lang: string,
+  section: string,
+  slug: string,
+): Promise<{ locale: Locale; beach: ApiBeach; nextDay: string | null; site: { template: SiteTemplate; content: SiteContent } | null }> {
   if (!isLocale(lang) || section !== beachSection[lang] || !slugPattern.test(slug)) notFound();
   const result = await api.beach(slug);
   if (!result.ok) {
     if (result.status === 404) notFound();
     throw new Error(`API not available (${result.code})`);
   }
-  return { locale: lang, beach: result.data.beach, nextDay: result.data.nextAvailableDay };
+  return { locale: lang, beach: result.data.beach, nextDay: result.data.nextAvailableDay, site: result.data.site };
 }
 
 export function crumbsFor(locale: Locale, beach: ApiBeach, last?: string): Crumb[] {
@@ -94,8 +102,9 @@ function SpotCard({ locale, beach, spot, day }: { locale: Locale; beach: ApiBeac
 }
 
 export async function BeachView({ lang, section, slug, query }: { lang: string; section: string; slug: string; query: Query }) {
-  const { locale, beach, nextDay } = await loadBeach(lang, section, slug);
+  const { locale, beach, nextDay, site } = await loadBeach(lang, section, slug);
   const t = getDictionary(locale, config.brandName).booking;
+  const texts = site ? site.content[locale] : null;
   const asked = first(query.day);
   const day = asked && dayPattern.test(asked) ? asked : nextDay;
   const availability = day ? await api.availability(beach.slug, day) : null;
@@ -106,6 +115,14 @@ export async function BeachView({ lang, section, slug, query }: { lang: string; 
     <PageShell locale={locale} page="explore" alternatePath={beachPath(otherLocale(locale), beach.slug)} crumbs={crumbsFor(locale, beach)}>
       <PageHead title={beach.name} lead={t.beachLead(beach.locality)} />
       <DemoBadge locale={locale} beach={beach} />
+      {site && texts ? (
+        <section className="section">
+          <div className="container">
+            <BeachSite locale={locale} template={site.template} texts={texts} />
+            {beach.demo ? null : <JsonLd data={localBusinessData(beach, texts, config.siteUrl + beachPath(locale, beach.slug))} />}
+          </div>
+        </section>
+      ) : null}
       <section className="section">
         <div className="container">
           {first(query.taken) ? <p className="alert" role="alert">{t.takenNotice}</p> : null}

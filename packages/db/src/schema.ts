@@ -226,3 +226,18 @@ export const notification = pgTable('notification', {
   status: text('status').notNull(),
   provider: text('provider').notNull(),
 });
+
+export const siteTemplate = pgEnum('site_template', ['riviera', 'boutique', 'essential']);
+export const revisionStatus = pgEnum('revision_status', ['draft', 'published', 'archived']);
+
+export const siteRevision = pgTable('site_revision', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  beachId: uuid('beach_id').notNull(),
+  number: integer('number').notNull(),
+  status: revisionStatus('status').notNull().default('draft'),
+  template: siteTemplate('template').notNull(),
+  content: jsonb('content').notNull(),
+  version: integer('version').notNull().default(1),
+  createdBy: uuid('created_by').notNull(),
+  publishedAt: timestamp('published_at', { withTimezone: true }),
+});

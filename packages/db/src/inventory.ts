@@ -16,7 +16,8 @@ export type DomainErrorCode =
   | 'hold_expired'
   | 'pass_invalid'
   | 'wrong_day'
-  | 'cap_reached';
+  | 'cap_reached'
+  | 'version_conflict';
 
 /** A refusal the caller can explain to the user. Anything else is an internal fault. */
 export class DomainError extends Error {

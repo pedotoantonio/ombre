@@ -71,6 +71,7 @@ export const accountPages = {
   overview: { it: 'profilo', en: 'overview' },
   manage: { it: 'gestione', en: 'manage' },
   season: { it: 'stagionale', en: 'season' },
+  site: { it: 'sito', en: 'site' },
 } as const satisfies Record<string, Record<Locale, string>>;
 export type AccountPage = keyof typeof accountPages;
 

@@ -13,7 +13,9 @@ import {
   findActiveBeach,
   getBooking,
   getHold,
+  getPublishedSite,
   getSharingSettings,
+  getSiteState,
   holderStatement,
   listActiveBeaches,
   listAvailability,
@@ -27,9 +29,12 @@ import {
   logout,
   nextAvailableDay,
   proposeDays,
+  publishDraft,
   publishDay,
   reportSummary,
   resolveSession,
+  restoreRevision,
+  saveDraft,
   setBlocked,
   setContractStatus,
   setPrice,
@@ -42,7 +47,7 @@ import {
   type PublicBeach,
   type SessionUser,
 } from '@ombre/db';
-import { expandRecurrence, type Action, type DayQuote } from '@ombre/shared';
+import { expandRecurrence, siteTemplates, siteTextLimits, type Action, type DayQuote } from '@ombre/shared';
 
 export interface AppOptions {
   db: Database;
@@ -81,6 +86,7 @@ const domainStatus: Record<DomainErrorCode, 401 | 403 | 404 | 409 | 422 | 429> =
   pass_invalid: 422,
   wrong_day: 409,
   cap_reached: 409,
+  version_conflict: 409,
 };
 
 const slugSchema = z.string().regex(/^[a-z0-9]+(-[a-z0-9]+)*$/).max(80);
@@ -124,6 +130,23 @@ const proposeSchema = z
     recurrence: z.object({ from: daySchema, to: daySchema, weekdays: z.array(z.number().int().min(1).max(7)).min(1).max(7) }).optional(),
   })
   .refine((value) => Boolean(value.days) !== Boolean(value.recurrence));
+// Website texts are plain text: anything that looks like markup is refused.
+const plain = (max: number) => z.string().trim().max(max).regex(/^[^<>]*$/);
+const siteTextsSchema = z.object({
+  tagline: plain(siteTextLimits.tagline),
+  description: plain(siteTextLimits.description),
+  services: z.array(plain(siteTextLimits.service).min(1)).max(siteTextLimits.services),
+  openingPeriod: plain(siteTextLimits.line),
+  openingHours: plain(siteTextLimits.line),
+  address: plain(siteTextLimits.line),
+  phone: z.string().trim().max(siteTextLimits.phone).regex(/^[+0-9 ()./-]*$/),
+  accessibility: plain(siteTextLimits.accessibility),
+});
+const siteDraftSchema = z.object({
+  expectedVersion: z.number().int().min(1).nullable(),
+  template: z.enum(siteTemplates),
+  content: z.object({ it: siteTextsSchema.refine((texts) => texts.description.length > 0), en: siteTextsSchema.nullable() }),
+});
 const idempotencyKeySchema = z.string().min(8).max(200).regex(/^[\x21-\x7e]+$/);
 
 function parse<T>(schema: z.ZodType<T>, value: unknown, what: string): T {
@@ -370,6 +393,30 @@ export function createApp(options: AppOptions): Hono {
     return c.json({ currency: 'EUR', ...(await reportSummary(db, actor, from, to)) });
   });
 
+  // ---- Beach club website: draft, publish, restore ----
+  app.get('/v1/manage/beaches/:slug/site', async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'site.read');
+    return c.json(await getSiteState(db, actor));
+  });
+
+  app.put('/v1/manage/beaches/:slug/site/draft', async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'site.edit');
+    const draft = parse(siteDraftSchema, await body(c.req.raw), 'website content');
+    return c.json(await saveDraft(db, actor, draft.expectedVersion, { template: draft.template, content: draft.content }));
+  });
+
+  app.post('/v1/manage/beaches/:slug/site/publish', async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'site.edit');
+    const { expectedVersion } = parse(z.object({ expectedVersion: z.number().int().min(1) }), await body(c.req.raw), 'request');
+    return c.json(await publishDraft(db, actor, expectedVersion));
+  });
+
+  app.post('/v1/manage/beaches/:slug/site/restore', async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'site.edit');
+    const { revisionId } = parse(z.object({ revisionId: z.uuid() }), await body(c.req.raw), 'request');
+    return c.json(await restoreRevision(db, actor, revisionId));
+  });
+
   app.get('/v1/health', async (c) => {
     await db.execute(sql`select 1`);
     return c.json({ status: 'ok' });
@@ -382,7 +429,7 @@ export function createApp(options: AppOptions): Hono {
 
   app.get('/v1/beaches/:slug', async (c) => {
     const beach = await beachBySlug(parse(slugSchema, c.req.param('slug'), 'beach club'));
-    return c.json({ beach: publicBeach(beach), nextAvailableDay: await nextAvailableDay(db, beach) });
+    return c.json({ beach: publicBeach(beach), nextAvailableDay: await nextAvailableDay(db, beach), site: await getPublishedSite(db, beach.id) });
   });
 
   app.get('/v1/beaches/:slug/holds/:holdId', async (c) => {

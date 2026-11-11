@@ -46,10 +46,14 @@ Aggiornato all'11/11/2026.
     ritiro, rendiconto); gestione dello stabilimento (giornata, blocchi, prezzi,
     proposte, regole, abbonamenti, riepilogo economico); reception (verifica del pass,
     prenotazioni del giorno). Ogni ruolo vede solo ciò che gli spetta;
+  - sito dello stabilimento: testi in italiano e, se compilati, in inglese; tre modelli
+    grafici sullo stesso contenuto; bozza con anteprima, pubblicazione, archivio delle
+    revisioni e ripristino; conflitto segnalato se due persone modificano insieme; solo
+    testo semplice, nessun codice accettato;
   - `Dockerfile` e compose con database, migrazioni, API, worker e sito.
 - **Non fatto**: secondo fattore di accesso, inviti e recupero password (oggi gli accessi
   li crea l'amministratore da riga di comando), console centrale della piattaforma,
-  annullamento da parte dell'ospite, sito del bagno con modelli e revisioni, pagamenti
+  annullamento da parte dell'ospite, immagini e dominio personalizzato nel sito del bagno, pagamenti
   e liquidazioni reali, invio reale della posta. Nessun dominio registrato, nessuna
   pubblicazione. Il sito dichiara che il servizio è in preparazione e chiede di non
   essere indicizzato.
@@ -59,7 +63,7 @@ Aggiornato all'11/11/2026.
 | Controllo | Esito |
 |---|---|
 | Lint e controllo dei tipi | Superati |
-| Test (67, di cui 42 su un PostgreSQL vero) | Superati |
+| Test (72, di cui 47 su un PostgreSQL vero) | Superati |
 | Due acquisti sulla stessa giornata | Dodici richieste simultanee, una sola riserva; ripetuto sull'API in container con dieci richieste: un 201 e nove 409 |
 | Prezzo manipolato nel browser | L'importo inviato dal client è ignorato: vale quello del server |
 | MARE10 su €30 | Totale €27, salvato nella riserva e immutato se il listino cambia |
@@ -77,6 +81,7 @@ Aggiornato all'11/11/2026.
 | Worker | Ogni elemento della coda trattato una volta anche con due worker insieme; un errore viene ritentato e abbandonato al quinto tentativo; riserve scadute liberate; giornate passate chiuse; una giornata passata non si può più vendere |
 | Percorso completo sui container (20 verifiche) | Riserva, prenotazione, pagamento di prova firmato, conferma `OM-270617-001`, notifica dal worker, quote 13,50 / 10,80 / 2,70, ruoli e rendiconto dello stagionale |
 | Aree riservate sul sito in container (37 verifiche) | Ospite: dati, pagamento di prova, pass con QR, pagina non apribile con un token errato. Gestore: pubblica, blocca, autorizza. Reception: verifica i pass, non cambia i prezzi. Stagionale: propone, vede la quota di 13,50 senza dati dell'ospite, ritira. Uscita e ruoli rispettati |
+| Sito dello stabilimento (20 verifiche sui container) | La bozza non è visibile al pubblico; pubblicazione e ripristino conservano la storia; cambio di modello senza perdita di contenuti; pagina inglese senza testi italiani quando manca la traduzione; salvataggio su versione vecchia rifiutato; la reception legge ma non modifica |
 | Chiave di idempotenza | Stessa richiesta, stessa riserva; richiesta diversa, errore esplicito |
 | Pagine servite dal container (192 verifiche su 12 pagine) | Superate |
 | Percorso di riserva sul sito in container (24 verifiche) | Superato: MARE10 da 30,00 a 27,00, doppio invio del modulo senza doppia riserva, secondo acquirente rimandato alla scelta, modulo inviato da un altro sito rifiutato, dati dimostrativi non indicizzabili |
@@ -94,13 +99,12 @@ sito. Il preventivo non è ancora salvato con una scadenza propria.
 Un incremento operativo verificabile in ambiente di prova che colleghi:
 sito personale → autorizzazione stagionale → acquisto → inventario → reception →
 rendiconto. Inventario, riserva e percorso nel sito ci sono; il prossimo anello sono
-il sito del bagno con modelli e revisioni, poi sicurezza e collaudo finale.
+sicurezza e contratti dell'API, poi il collaudo finale.
 
 ## Passi successivi in ordine
 
-1. Sito del bagno con modelli e revisioni.
-2. Sicurezza e contratti: OpenAPI, limiti alle richieste, CSP, backup, secondo fattore.
-3. In parallelo, fuori dal codice: chiudere le decisioni di avvio (marchio e domini,
+1. Sicurezza e contratti: OpenAPI, limiti alle richieste, CSP, backup, secondo fattore.
+2. In parallelo, fuori dal codice: chiudere le decisioni di avvio (marchio e domini,
    soggetto venditore, provider pagamenti, condizioni) e scegliere i partner pilota.
 
 ## Dipendenze esterne aperte

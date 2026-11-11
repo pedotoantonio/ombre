@@ -8,4 +8,5 @@ export * from './manage';
 export * from './migrate';
 export * from './seed';
 export * from './sharing';
+export * from './site';
 export * as schema from './schema';

@@ -74,7 +74,7 @@ services:
       - backend
     # Only reachable from the server itself: a reverse proxy publishes it.
     ports:
-      - '127.0.0.1:3211:3000'
+      - '127.0.0.1:${OMBRE_API_PORT:-3211}:3000'
     tmpfs:
       - /tmp
     cpus: 1.0
@@ -125,7 +125,7 @@ services:
     networks:
       - backend
     ports:
-      - '127.0.0.1:3210:3000'
+      - '127.0.0.1:${OMBRE_WEB_PORT:-3210}:3000'
     tmpfs:
       - /tmp
       - /app/apps/web/.next/cache

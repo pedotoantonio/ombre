@@ -1,3 +1,5 @@
+import type { SiteContent, SiteTemplate } from '@ombre/shared';
+
 // Server-side client of the Ombrè API. The address is read at request time.
 
 export interface ApiBeach {
@@ -71,7 +73,8 @@ export interface DayRequest {
 
 export const api = {
   beaches: () => call<{ beaches: ApiBeach[] }>('/v1/beaches'),
-  beach: (slug: string) => call<{ beach: ApiBeach; nextAvailableDay: string | null }>(`/v1/beaches/${encodeURIComponent(slug)}`),
+  beach: (slug: string) =>
+    call<{ beach: ApiBeach; nextAvailableDay: string | null; site: { template: SiteTemplate; content: SiteContent } | null }>(`/v1/beaches/${encodeURIComponent(slug)}`),
   availability: (slug: string, day: string) =>
     call<{ spots: ApiSpot[] }>(`/v1/beaches/${encodeURIComponent(slug)}/availability?day=${encodeURIComponent(day)}`),
   quote: (request: DayRequest) => post<ApiQuote>('/v1/quotes', request),
