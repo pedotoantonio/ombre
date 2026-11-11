@@ -33,7 +33,7 @@ services:
 
   # Runs once at every start: migrations, application role, optional demo data.
   migrate:
-    image: ombre-api:dev
+    image: ombre-api:${OMBRE_IMAGE_TAG:-dev}
     build:
       context: .
       target: api
@@ -59,7 +59,7 @@ services:
 
   api:
     <<: *hardening
-    image: ombre-api:dev
+    image: ombre-api:${OMBRE_IMAGE_TAG:-dev}
     environment:
       # The API logs in with the restricted role: row level security always applies to it.
       OMBRE_DB_URL: postgres://ombre_app:${OMBRE_DB_APP_PASSWORD:-dev_app_only}@db:5432/ombre
@@ -85,7 +85,7 @@ services:
 
   worker:
     <<: *hardening
-    image: ombre-worker:dev
+    image: ombre-worker:${OMBRE_IMAGE_TAG:-dev}
     build:
       context: .
       target: worker
@@ -109,7 +109,7 @@ services:
 
   web:
     <<: *hardening
-    image: ombre-web:dev
+    image: ombre-web:${OMBRE_IMAGE_TAG:-dev}
     build:
       context: .
       target: web

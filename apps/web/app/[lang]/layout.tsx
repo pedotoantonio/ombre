@@ -5,6 +5,7 @@ import { notFound } from 'next/navigation';
 import { config, htmlLang, isLocale, locales } from '@ombre/shared';
 import '@ombre/ui/tokens.css';
 import '@ombre/ui/base.css';
+import '@ombre/ui/portal.css';
 
 const jakarta = Plus_Jakarta_Sans({ subsets: ['latin'], display: 'swap', variable: '--font-jakarta' });
 

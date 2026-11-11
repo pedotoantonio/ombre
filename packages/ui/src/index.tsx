@@ -51,3 +51,12 @@ export function BeachScene(): ReactElement {
     </svg>
   );
 }
+
+/** Wide coastal scene for the top of the portal home page. Decorative. */
+export function CoastScene(): ReactElement {
+  return (
+    <svg viewBox="0 0 1440 560" preserveAspectRatio="xMidYMid slice" aria-hidden="true" focusable="false">
+      <rect width="1440" height="560" fill="#e0f2f1" />
+    </svg>
+  );
+}
