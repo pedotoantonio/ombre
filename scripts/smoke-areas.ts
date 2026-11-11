@@ -48,9 +48,16 @@ if (!password) {
   process.exit(1);
 }
 
+/** Spots drawn on the map of the public page: links for the free ones, plain marks for the others. */
+async function mapOf(onDay: string): Promise<{ free: number; taken: number }> {
+  const html = (await new Visitor().get(`/bagni/${beach}?day=${onDay}`)).html;
+  return { free: (html.match(/<a class="plan-spot /g) ?? []).length, taken: (html.match(/class="plan-spot plan-spot--taken"/g) ?? []).length };
+}
+
 // ---- Guest: hold, details, test payment, pass ----
 const guest = new Visitor();
 const club = await guest.get(`/bagni/${beach}`);
+check(/<a class="plan-spot plan-spot--shared"[^>]*>(?:(?!<\/a>)[^])*>B02</.test(club.html), 'public page: B02 is not drawn as a shared day on the map');
 // B02 is the shared spot of the demo: buying it also exercises the season holder share.
 const card = club.html.split('<li class="spot">').find((part) => part.startsWith('<span class="spot__code">B02<')) ?? '';
 const link = /href="(\/bagni\/bagno-delle-dune\/prenota\?spot=([0-9a-f-]{36})&day=2027-06-17)"/.exec(card);
@@ -106,6 +113,8 @@ const firstSpot = /name="spot" value="([0-9a-f-]{36})"/.exec(published.html)?.[1
 check((await manager.post('gestione-blocco', { lang: 'it', beach, day: newDay, spot: firstSpot, blocked: 'yes' })).includes('ok=1'), 'management: the spot was not blocked');
 check((await manager.get(`/area/gestione/${beach}?day=${newDay}`)).html.includes('Bloccata'), 'management: the block is not shown');
 check(((await guest.get(`/bagni/${beach}?day=${newDay}`)).html.match(/class="spot__code"/g) ?? []).length === 7, 'public page: a blocked spot is still on sale');
+check(JSON.stringify(await mapOf(newDay)) === JSON.stringify({ free: 7, taken: 1 }), 'public page: the map does not draw the blocked spot as unavailable');
+check(JSON.stringify(await mapOf('2027-06-21')) === JSON.stringify({ free: 0, taken: 8 }), 'public page: a day never published is not drawn as fully unavailable');
 
 // ---- Front desk: can check passes, cannot change prices ----
 const reception = new Visitor();
@@ -124,6 +133,7 @@ const booked = await reception.post('banco-prenota', { lang: 'it', beach, day: n
 const deskCode = /OM-270620-\d{3}/.exec(decodeURIComponent(booked))?.[0] ?? '';
 check(deskCode !== '', `front desk: the desk booking was not registered (${booked})`);
 check(((await guest.get(`/bagni/${beach}?day=${newDay}`)).html.match(/class="spot__code"/g) ?? []).length === 6, 'public page: a spot booked at the desk is still on sale');
+check(JSON.stringify(await mapOf(newDay)) === JSON.stringify({ free: 6, taken: 2 }), 'public page: the map still offers the spot booked at the desk');
 
 const afterDesk = await reception.get(`/area/gestione/${beach}?day=${newDay}`);
 const otherSpot = new RegExp(`name="code" value="${deskCode}"[^]*?<option value="([0-9a-f-]{36})"`).exec(afterDesk.html)?.[1] ?? '';
@@ -150,8 +160,10 @@ const proposal = /name="proposal" value="([0-9a-f-]{36})"/.exec(waiting.html)?.[
 check((await manager.post('gestione-proposta', { lang: 'it', beach, day, proposal, approve: 'yes' })).includes('ok=1'), 'management: the proposal was not approved');
 check((await holder.get(seasonUrl)).html.includes('Autorizzata'), 'season holder: the approval is not shown');
 check((await guest.get(`/bagni/${beach}?day=2027-07-06`)).html.includes('Giornata condivisa'), 'public page: the approved shared day is not on sale');
+check((await guest.get('/esplora?day=2027-07-06&guests=2&shared=1')).html.includes('1 postazione libera<'), 'explore: the approved shared day is not found by the search');
 check((await holder.post('stagionale-ritira', { lang: 'it', contract: seasonUrl.split('/').at(-1)!, day: '2027-07-06' })).includes('ok=1'), 'season holder: could not withdraw a free day');
 check(!(await guest.get(`/bagni/${beach}?day=2027-07-06`)).html.includes('class="spot__code"'), 'public page: a withdrawn day is still on sale');
+check(JSON.stringify(await mapOf('2027-07-06')) === JSON.stringify({ free: 0, taken: 8 }), 'public page: the map still offers a withdrawn day');
 
 // ---- Sign-out and other roles ----
 await manager.post('uscita', { lang: 'it' });

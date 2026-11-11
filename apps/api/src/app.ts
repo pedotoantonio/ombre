@@ -22,7 +22,7 @@ import {
   getSiteState,
   holderStatement,
   listActiveBeaches,
-  listAvailability,
+  listDayMap,
   listBookings,
   listContracts,
   listInventory,
@@ -40,6 +40,7 @@ import {
   resolveSession,
   restoreRevision,
   saveDraft,
+  searchBeaches,
   setBlocked,
   setContractStatus,
   setPrice,
@@ -169,6 +170,15 @@ const siteDraftSchema = z.object({
 const deskSchema = z.object({ spotId: z.uuid(), day: daySchema, guestName: z.string().trim().min(1).max(120) });
 const bookingCodeSchema = z.string().regex(/^OM-\d{6}-\d{3}$/i);
 const idempotencyKeySchema = z.string().min(8).max(200).regex(/^[\x21-\x7e]+$/);
+// Guests and shared days only mean something on a given day.
+const beachSearchSchema = z
+  .object({
+    day: daySchema.optional(),
+    guests: z.string().regex(/^\d{1,2}$/).transform(Number).pipe(z.number().int().min(1).max(20)).optional(),
+    locality: z.string().trim().min(1).max(80).optional(),
+    sharedOnly: z.enum(['true', 'false']).optional(),
+  })
+  .refine((search) => search.day !== undefined || (search.guests === undefined && search.sharedOnly === undefined));
 
 function parse<T>(schema: z.ZodType<T>, value: unknown, what: string): T {
   const result = schema.safeParse(value);
@@ -511,10 +521,37 @@ export function createApp(options: AppOptions): Hono {
     return c.json({ status: 'ok' });
   });
 
-  route({ method: 'get', path: '/v1/beaches', summary: 'Active beach clubs', tag: 'Public', auth: 'none', success: 200, errors: [] }, async (c) => {
-    const beaches = await listActiveBeaches(db);
-    return c.json({ beaches: beaches.map(publicBeach) });
-  });
+  route(
+    {
+      method: 'get',
+      path: '/v1/beaches',
+      summary: 'Active beach clubs; with a day, the free spots and the lowest price of each',
+      tag: 'Public',
+      auth: 'none',
+      optionalQuery: {
+        day: 'YYYY-MM-DD. Adds freeSpots and priceFromCents to every beach club',
+        guests: 'People who must fit under one spot, 1 to 20. Needs day; 1 when left out',
+        locality: 'Text contained in the locality or in the name',
+        sharedOnly: 'true to count only shared days. Needs day',
+      },
+      success: 200,
+      errors: [400],
+    },
+    async (c) => {
+      const search = parse(beachSearchSchema, c.req.query(), 'search');
+      if (!search.day) return c.json({ beaches: (await listActiveBeaches(db, search.locality)).map(publicBeach) });
+      const guests = search.guests ?? 1;
+      const sharedOnly = search.sharedOnly === 'true';
+      const offers = await searchBeaches(db, { day: search.day, guests, sharedOnly, place: search.locality });
+      return c.json({
+        day: search.day,
+        guests,
+        sharedOnly,
+        currency: 'EUR',
+        beaches: offers.map((offer) => ({ ...publicBeach(offer), freeSpots: offer.freeSpots, priceFromCents: offer.priceFromCents })),
+      });
+    },
+  );
 
   route({ method: 'get', path: '/v1/beaches/:slug', summary: 'A beach club, its next free day and its published website', tag: 'Public', auth: 'none', success: 200, errors: [400, 404] }, async (c) => {
     const beach = await beachBySlug(parse(slugSchema, c.req.param('slug'), 'beach club'));
@@ -535,16 +572,18 @@ export function createApp(options: AppOptions): Hono {
     });
   });
 
-  route({ method: 'get', path: '/v1/beaches/:slug/availability', summary: 'Free spots of a day with prices', tag: 'Public', auth: 'none', query: { day: 'YYYY-MM-DD' }, success: 200, errors: [400, 404] }, async (c) => {
+  route({ method: 'get', path: '/v1/beaches/:slug/availability', summary: 'Free spots of a day with prices, and every spot with its state for the map', tag: 'Public', auth: 'none', query: { day: 'YYYY-MM-DD' }, success: 200, errors: [400, 404] }, async (c) => {
     const slug = parse(slugSchema, c.req.param('slug'), 'beach club');
     const day = parse(daySchema, c.req.query('day'), 'day');
     const beach = await beachBySlug(slug);
-    const spots = await listAvailability(db, beach.id, day);
+    // One reading for both lists, so that they can never disagree.
+    const layout = await listDayMap(db, beach.id, day);
     return c.json({
       beach: publicBeach(beach),
       day,
       currency: 'EUR',
-      spots: spots.map(({ priceCents, ...spot }) => ({ ...spot, priceCents })),
+      spots: layout.flatMap(({ status, priceCents, ...spot }) => (priceCents === null ? [] : [{ ...spot, priceCents, shared: status === 'shared' }])),
+      layout,
     });
   });
 

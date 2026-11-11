@@ -10,6 +10,32 @@ export interface ApiBeach {
   demo: boolean;
 }
 
+/** A beach club in a search by day: what it can sell for those guests, and from which price. */
+export interface ApiBeachOffer extends ApiBeach {
+  freeSpots?: number;
+  priceFromCents?: number | null;
+}
+
+export interface BeachSearch {
+  locality?: string;
+  /** Guests and shared days are only counted on a given day. */
+  day?: string;
+  guests?: number;
+  sharedOnly?: boolean;
+}
+
+/** A spot as the map draws it. The price is there only when the spot can be bought. */
+export interface ApiMapSpot {
+  spotId: string;
+  code: string;
+  rowNumber: number;
+  umbrellas: number;
+  sunbeds: number;
+  maxGuests: number;
+  status: 'free' | 'shared' | 'unavailable';
+  priceCents: number | null;
+}
+
 export interface ApiSpot {
   spotId: string;
   code: string;
@@ -87,12 +113,24 @@ export interface DayRequest {
   promoCode?: string;
 }
 
+function searchQuery(search: BeachSearch): string {
+  const query = new URLSearchParams();
+  if (search.locality) query.set('locality', search.locality);
+  if (search.day) {
+    query.set('day', search.day);
+    if (search.guests) query.set('guests', String(search.guests));
+    if (search.sharedOnly) query.set('sharedOnly', 'true');
+  }
+  const text = query.toString();
+  return text ? `?${text}` : '';
+}
+
 export const api = {
-  beaches: () => call<{ beaches: ApiBeach[] }>('/v1/beaches'),
+  beaches: (search: BeachSearch = {}) => call<{ beaches: ApiBeachOffer[] }>(`/v1/beaches${searchQuery(search)}`),
   beach: (slug: string) =>
     call<{ beach: ApiBeach; nextAvailableDay: string | null; site: { template: SiteTemplate; content: SiteContent } | null }>(`/v1/beaches/${encodeURIComponent(slug)}`),
   availability: (slug: string, day: string) =>
-    call<{ spots: ApiSpot[] }>(`/v1/beaches/${encodeURIComponent(slug)}/availability?day=${encodeURIComponent(day)}`),
+    call<{ spots: ApiSpot[]; layout: ApiMapSpot[] }>(`/v1/beaches/${encodeURIComponent(slug)}/availability?day=${encodeURIComponent(day)}`),
   quote: (request: DayRequest) => post<ApiQuote>('/v1/quotes', request),
   hold: (request: DayRequest, idempotencyKey: string) =>
     post<{ holdId: string }>('/v1/holds', request, { 'Idempotency-Key': idempotencyKey }),
@@ -133,6 +171,18 @@ export async function sandboxNotify(reference: string, outcome: 'succeeded' | 'f
 export const dayPattern = /^\d{4}-\d{2}-\d{2}$/;
 export const slugPattern = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 export const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Today as YYYY-MM-DD where the beach clubs are: the first day a search may ask for. */
+export function today(timeZone = 'Europe/Rome'): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+}
+
+/** True for a real calendar day written as YYYY-MM-DD. */
+export function isDay(value: string | undefined): value is string {
+  if (!value || !dayPattern.test(value)) return false;
+  const date = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}
 
 const dateLocale = { it: 'it-IT', en: 'en-GB' } as const;
 

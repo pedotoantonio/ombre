@@ -108,6 +108,18 @@ for (const page of pages) {
   await checkPage(page.en, 'en', page, page.types);
 }
 
+// A search is one view of the explore page: never indexed, canonical on the plain address.
+for (const [path, plain] of [['/esplora?day=2027-06-17&guests=2', '/esplora'], ['/en/explore?place=mare', '/en/explore']] as const) {
+  const response = await fetch(base + path, { redirect: 'manual' });
+  const html = await response.text();
+  const robotsMeta = attribute(tags(html, 'meta').find((tag) => attribute(tag, 'name') === 'robots') ?? '', 'content') ?? '';
+  const canonical = attribute(tags(html, 'link').find((tag) => attribute(tag, 'rel') === 'canonical') ?? '', 'href');
+  check(response.status === 200 && tags(html, 'h1').length === 1, `${path}: status ${response.status} or not exactly one h1`);
+  check(robotsMeta.includes('noindex'), `${path}: a search must be noindex, found "${robotsMeta}"`);
+  check(!indexable || robotsMeta.includes('follow'), `${path}: a search should still let links be followed`);
+  check(canonical === absolute(plain), `${path}: canonical is ${canonical}, expected ${absolute(plain)}`);
+}
+
 await expectStatus('/it', 308, '/');
 await expectStatus('/it/come-funziona', 308, '/come-funziona');
 await expectStatus('/pagina-che-non-esiste', 404);

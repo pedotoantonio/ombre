@@ -13,7 +13,7 @@ describe('API contract', () => {
   it('describes every route it serves, and nothing else', async () => {
     const document = (await (await app.request('/v1/openapi.json')).json()) as {
       openapi: string;
-      paths: Record<string, Record<string, { summary: string; requestBody?: unknown; responses: Record<string, unknown> }>>;
+      paths: Record<string, Record<string, { summary: string; requestBody?: unknown; parameters: { name: string; in: string; required: boolean }[]; responses: Record<string, unknown> }>>;
     };
     expect(document.openapi).toBe('3.1.0');
 
@@ -36,6 +36,14 @@ describe('API contract', () => {
     const hold = document.paths['/v1/holds']!.post!;
     expect(JSON.stringify(hold.requestBody)).toContain('beachSlug');
     expect(Object.keys(hold.responses)).toEqual(expect.arrayContaining(['201', '409', '429']));
+
+    // The search filters may be left out; the day of an availability request may not.
+    const searchParameters = document.paths['/v1/beaches']!.get!.parameters;
+    expect(searchParameters.map((parameter) => parameter.name)).toEqual(['day', 'guests', 'locality', 'sharedOnly']);
+    expect(searchParameters.every((parameter) => parameter.in === 'query' && !parameter.required)).toBe(true);
+    expect(document.paths['/v1/beaches/{slug}/availability']!.get!.parameters).toEqual(
+      expect.arrayContaining([expect.objectContaining({ name: 'day', in: 'query', required: true })]),
+    );
   });
 
   it('answers unknown addresses and broken bodies without internal details', async () => {

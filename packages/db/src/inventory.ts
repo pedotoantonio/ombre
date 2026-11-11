@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { and, asc, eq, sql } from 'drizzle-orm';
+import { and, asc, eq, gte, ilike, or, sql } from 'drizzle-orm';
 import { quoteDay, type DayQuote } from '@ombre/shared';
 import { withBeach, type Database, type Transaction } from './client';
 import { beach, hold, inventoryDay, promotion, spot } from './schema';
@@ -51,8 +51,16 @@ const publicBeachColumns = {
   demo: beach.demo,
 };
 
-export function listActiveBeaches(db: Database): Promise<PublicBeach[]> {
-  return db.select(publicBeachColumns).from(beach).where(eq(beach.status, 'active')).orderBy(asc(beach.name));
+/** Active beach clubs. `place` keeps those whose locality or name contains the text. */
+export function listActiveBeaches(db: Database, place?: string): Promise<PublicBeach[]> {
+  const text = place?.trim();
+  // The text is matched literally: the wildcards of LIKE lose their meaning.
+  const pattern = text ? `%${text.replace(/[\\%_]/g, '\\$&')}%` : null;
+  return db
+    .select(publicBeachColumns)
+    .from(beach)
+    .where(and(eq(beach.status, 'active'), pattern ? or(ilike(beach.locality, pattern), ilike(beach.name, pattern)) : undefined))
+    .orderBy(asc(beach.name));
 }
 
 export async function findActiveBeach(db: Database, slug: string): Promise<PublicBeach | null> {
@@ -94,6 +102,79 @@ export function listAvailability(db: Database, beachId: string, day: string): Pr
       .where(and(eq(inventoryDay.day, day), isFree))
       .orderBy(asc(spot.rowNumber), asc(spot.code)),
   );
+}
+
+export interface DaySpot {
+  spotId: string;
+  code: string;
+  rowNumber: number;
+  umbrellas: number;
+  sunbeds: number;
+  maxGuests: number;
+  /** `unavailable` covers everything that cannot be bought: held, sold, blocked, never published, past. */
+  status: 'free' | 'shared' | 'unavailable';
+  /** Only for a spot that can be bought. */
+  priceCents: number | null;
+}
+
+/** Every spot of the beach club on a day, for the map: free ones with their price, the others without details. */
+export function listDayMap(db: Database, beachId: string, day: string): Promise<DaySpot[]> {
+  return withBeach(db, beachId, async (tx) => {
+    const rows = await tx
+      .select({
+        spotId: spot.id,
+        code: spot.code,
+        rowNumber: spot.rowNumber,
+        umbrellas: spot.umbrellas,
+        sunbeds: spot.sunbeds,
+        maxGuests: spot.maxGuests,
+        free: sql<boolean>`coalesce(${isFree}, false)`,
+        priceCents: inventoryDay.priceCents,
+        shared: inventoryDay.shared,
+      })
+      .from(spot)
+      .leftJoin(inventoryDay, and(eq(inventoryDay.spotId, spot.id), eq(inventoryDay.day, day)))
+      .leftJoin(hold, eq(hold.id, inventoryDay.activeHoldId))
+      .orderBy(asc(spot.rowNumber), asc(spot.code));
+    return rows.map(({ free, priceCents, shared, ...place }) =>
+      free && priceCents !== null
+        ? { ...place, status: shared ? ('shared' as const) : ('free' as const), priceCents }
+        : { ...place, status: 'unavailable' as const, priceCents: null },
+    );
+  });
+}
+
+export interface BeachSearch {
+  day: string;
+  /** People who must fit under one spot. One when not given. */
+  guests?: number;
+  sharedOnly?: boolean;
+  place?: string;
+}
+
+export interface BeachOffer extends PublicBeach {
+  /** Spots that can be bought on the day and fit the guests. */
+  freeSpots: number;
+  /** Lowest price among those same spots: a price that can really be paid. Null when there is none. */
+  priceFromCents: number | null;
+}
+
+/** Active beach clubs with what each one can sell on a day. Each club is read inside its own boundary. */
+export async function searchBeaches(db: Database, search: BeachSearch): Promise<BeachOffer[]> {
+  const beaches = await listActiveBeaches(db, search.place);
+  const offers: BeachOffer[] = [];
+  for (const target of beaches) {
+    const [found] = await withBeach(db, target.id, (tx) =>
+      tx
+        .select({ freeSpots: sql<number>`count(*)::int`, priceFromCents: sql<number | null>`min(${inventoryDay.priceCents})` })
+        .from(inventoryDay)
+        .innerJoin(spot, eq(spot.id, inventoryDay.spotId))
+        .leftJoin(hold, eq(hold.id, inventoryDay.activeHoldId))
+        .where(and(eq(inventoryDay.day, search.day), isFree, gte(spot.maxGuests, search.guests ?? 1), search.sharedOnly ? eq(inventoryDay.shared, true) : undefined)),
+    );
+    offers.push({ ...target, freeSpots: found?.freeSpots ?? 0, priceFromCents: found?.priceFromCents ?? null });
+  }
+  return offers;
 }
 
 /** First day, from today in the beach club's time zone, with at least one free spot. */

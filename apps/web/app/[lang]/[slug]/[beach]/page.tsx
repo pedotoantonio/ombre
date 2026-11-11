@@ -7,9 +7,9 @@ interface Props {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
+export async function generateMetadata({ params, searchParams }: Props): Promise<Metadata> {
   const { lang, slug, beach } = await params;
-  return isAccountSection(lang, slug) ? { ...privateMetadata, robots: { index: false, follow: false } } : beachMetadata(lang, slug, beach);
+  return isAccountSection(lang, slug) ? { ...privateMetadata, robots: { index: false, follow: false } } : beachMetadata(lang, slug, beach, await searchParams);
 }
 
 export default async function Page({ params, searchParams }: Props) {
