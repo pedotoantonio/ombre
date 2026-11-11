@@ -17,7 +17,7 @@ import {
   type SiteContent,
   type SiteTemplate,
 } from '@ombre/shared';
-import { api, dayPattern, formatDay, formatTime, slugPattern, uuidPattern, type ApiBeach, type ApiSpot } from '@/lib/api';
+import { api, dayPattern, formatDay, formatTime, isDay, slugPattern, uuidPattern, type ApiBeach, type ApiMapSpot, type ApiSpot } from '@/lib/api';
 import { JsonLd } from '@/lib/seo';
 import { PageHead, PageShell, type Crumb } from './PageShell';
 import { BeachSite, localBusinessData } from './site-view';
@@ -64,40 +64,204 @@ export function DemoBadge({ locale, beach }: { locale: Locale; beach: ApiBeach }
   );
 }
 
-export async function beachMetadata(lang: string, section: string, slug: string): Promise<Metadata> {
+export async function beachMetadata(lang: string, section: string, slug: string, query: Query = {}): Promise<Metadata> {
   const { locale, beach } = await loadBeach(lang, section, slug);
   const t = getDictionary(locale, config.brandName).booking;
   const languages: Record<string, string> = { 'x-default': config.siteUrl + beachPath('it', beach.slug) };
   for (const other of locales) languages[other] = config.siteUrl + beachPath(other, beach.slug);
+  // A chosen day or spot is one view of the same page: only the plain address is indexed.
+  const filtered = Object.keys(query).length > 0;
   return {
     title: t.beachTitle(beach.name, beach.locality),
     description: t.beachDescription(beach.name, beach.locality),
     alternates: { canonical: config.siteUrl + beachPath(locale, beach.slug), languages },
     // Sample data must never reach a search engine.
-    ...(beach.demo ? { robots: { index: false, follow: false } } : {}),
+    ...(beach.demo ? { robots: { index: false, follow: false } } : filtered ? { robots: { index: false, follow: true } } : {}),
   };
 }
 
 export const privateMetadata: Metadata = { robots: { index: false, follow: true } };
 
-function SpotCard({ locale, beach, spot, day }: { locale: Locale; beach: ApiBeach; spot: ApiSpot; day: string }) {
+function SpotCard({ locale, beach, spot, day, selected }: { locale: Locale; beach: ApiBeach; spot: ApiSpot; day: string; selected: boolean }) {
   const t = getDictionary(locale, config.brandName).booking;
   const href = `${bookPath(locale, beach.slug)}?spot=${spot.spotId}&day=${day}`;
   return (
-    <li className="spot">
+    <li className={selected ? 'spot plan-chosen' : 'spot'} aria-current={selected ? 'true' : undefined}>
       <span className="spot__code">{spot.code}</span>
       <p>{t.equipment(spot.umbrellas, spot.sunbeds)}</p>
       <p>{t.guests(spot.maxGuests)}</p>
-      {spot.shared ? (
-        <p>
-          <span className="badge">{t.sharedDay}</span>
+      {spot.shared || selected ? (
+        <p className="plan-tags">
+          {spot.shared ? <span className="badge">{t.sharedDay}</span> : null}
+          {selected ? <span className="badge">{t.status.selected}</span> : null}
         </p>
       ) : null}
       <span className="spot__price">{formatMoney(spot.priceCents, locale)}</span>
-      <Link className="button" href={href}>
+      <Link className="button button--secondary" href={href}>
         {t.choose(spot.code)}
       </Link>
     </li>
+  );
+}
+
+// Corners of an umbrella seen from above: eight sides, flat at the top.
+const canopy = [
+  [41.55, 31.27],
+  [31.27, 41.55],
+  [16.73, 41.55],
+  [6.45, 31.27],
+  [6.45, 16.73],
+  [16.73, 6.45],
+  [31.27, 6.45],
+  [41.55, 16.73],
+] as const;
+const canopyPath = `M${canopy.map((corner) => corner.join(' ')).join('L')}Z`;
+const ribsPath = canopy.slice(0, 4).map((corner, index) => `M${corner.join(' ')}L${canopy[index + 4]!.join(' ')}`).join('');
+const stripesPath = [0, 2, 4, 6].map((index) => `M24 24L${canopy[index]!.join(' ')}L${canopy[index + 1]!.join(' ')}Z`).join('');
+
+/**
+ * The mark of a spot on the map. The state is in the drawing, not only in the colour:
+ * a full canopy is free, a canopy in alternate wedges is a shared day, a crossed one is not available.
+ */
+function UmbrellaMark({ status, selected = false }: { status: ApiMapSpot['status']; selected?: boolean }) {
+  return (
+    <svg className={`plan-mark plan-mark--${status}`} viewBox="0 0 48 48" aria-hidden="true" focusable="false">
+      <path className="plan-mark__canopy" d={canopyPath} />
+      {status === 'shared' ? (
+        <>
+          <path className="plan-mark__stripes" d={stripesPath} />
+          <path className="plan-mark__outline" d={canopyPath} />
+        </>
+      ) : null}
+      {status === 'unavailable' ? (
+        <path className="plan-mark__cross" d="M16 16l16 16M32 16L16 32" />
+      ) : (
+        <>
+          <path className="plan-mark__ribs" d={ribsPath} />
+          <circle className="plan-mark__top" cx="24" cy="24" r="3" />
+        </>
+      )}
+      {selected ? (
+        <>
+          <circle className="plan-mark__badge" cx="38" cy="10" r="8.5" />
+          <path className="plan-mark__check" d="M33.8 10.2l3 3 5.4-6" />
+        </>
+      ) : null}
+    </svg>
+  );
+}
+
+function MapSpot({ locale, beach, spot, day, selected }: { locale: Locale; beach: ApiBeach; spot: ApiMapSpot; day: string; selected: boolean }) {
+  const t = getDictionary(locale, config.brandName).booking;
+  const content = (
+    <>
+      <UmbrellaMark status={spot.status} selected={selected} />
+      <span className="plan-spot__code" aria-hidden="true">
+        {spot.code}
+      </span>
+      <span className="visually-hidden">
+        {t.mapSpot(spot.code, t.status[spot.status], spot.priceCents === null ? undefined : formatMoney(spot.priceCents, locale))}
+        {selected ? `. ${t.status.selected}` : ''}
+      </span>
+    </>
+  );
+  if (spot.status === 'unavailable') {
+    return (
+      <li>
+        <span className="plan-spot plan-spot--taken">{content}</span>
+      </li>
+    );
+  }
+  // The choice is a new address of this same page: it works without scripts and can be shared.
+  return (
+    <li>
+      <Link
+        className={`plan-spot plan-spot--${spot.status}${selected ? ' plan-spot--selected' : ''}`}
+        href={`${beachPath(locale, beach.slug)}?day=${day}&spot=${spot.spotId}#planimetria`}
+        prefetch={false}
+        aria-current={selected ? 'true' : undefined}
+      >
+        {content}
+      </Link>
+    </li>
+  );
+}
+
+function BeachMap({ locale, beach, layout, day, selected }: { locale: Locale; beach: ApiBeach; layout: ApiMapSpot[]; day: string; selected: ApiMapSpot | undefined }) {
+  const t = getDictionary(locale, config.brandName).booking;
+  const rows = [...new Set(layout.map((spot) => spot.rowNumber))].sort((a, b) => a - b);
+  const free = layout.filter((spot) => spot.status !== 'unavailable').length;
+  return (
+    <div className="plan" id="planimetria" role="group" aria-labelledby="planimetria-titolo">
+      <div className="plan__head">
+        <h3 id="planimetria-titolo">{t.planTitle}</h3>
+        <p>{t.planLead}</p>
+        <p className="plan__count">
+          <strong>{t.freeCount(free, layout.length)}</strong>
+          {free > 0 ? <a href="#elenco">{t.toList}</a> : null}
+        </p>
+      </div>
+      {selected ? (
+        <p className="plan__notice">
+          <strong>{t.selectedNotice(selected.code)}</strong> <a href="#scelta">{t.toBar}</a>
+        </p>
+      ) : null}
+      <ul className="plan-legend" aria-label={t.legendTitle}>
+        <li>
+          <UmbrellaMark status="free" />
+          {t.status.free}
+        </li>
+        <li>
+          <UmbrellaMark status="shared" />
+          {t.status.shared}
+        </li>
+        <li>
+          <UmbrellaMark status="unavailable" />
+          {t.status.unavailable}
+        </li>
+        <li>
+          <UmbrellaMark status="free" selected />
+          {t.status.selected}
+        </li>
+      </ul>
+      <div className="plan__rows">
+        {rows.map((row) => (
+          <div className="plan-row" key={row}>
+            <p className="plan-row__label" id={`planimetria-fila-${row}`}>
+              {t.row(row)}
+            </p>
+            <ol className="plan-row__spots" aria-labelledby={`planimetria-fila-${row}`}>
+              {layout
+                .filter((spot) => spot.rowNumber === row)
+                .map((spot) => (
+                  <MapSpot key={spot.code} locale={locale} beach={beach} spot={spot} day={day} selected={spot.spotId === selected?.spotId} />
+                ))}
+            </ol>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Bottom bar with the chosen spot and the one step forward. It stays in the flow of the page, so it never hides its end. */
+function SelectionBar({ locale, beach, spot, day }: { locale: Locale; beach: ApiBeach; spot: ApiMapSpot & { priceCents: number }; day: string }) {
+  const t = getDictionary(locale, config.brandName).booking;
+  return (
+    <aside className="plan-bar" id="scelta" aria-label={t.barLabel}>
+      <div className="container plan-bar__inner">
+        <p className="plan-bar__title">
+          {t.spot(spot.code)}, {t.row(spot.rowNumber)}
+        </p>
+        <p className="plan-bar__price">{formatMoney(spot.priceCents, locale)}</p>
+        <p className="plan-bar__detail">
+          {t.equipment(spot.umbrellas, spot.sunbeds)}. {t.guests(spot.maxGuests)}.{spot.status === 'shared' ? ` ${t.sharedDay}.` : ''}
+        </p>
+        <Link className="button plan-bar__go" href={`${bookPath(locale, beach.slug)}?spot=${spot.spotId}&day=${day}`}>
+          {t.barContinue}
+        </Link>
+      </div>
+    </aside>
   );
 }
 
@@ -106,13 +270,20 @@ export async function BeachView({ lang, section, slug, query }: { lang: string; 
   const t = getDictionary(locale, config.brandName).booking;
   const texts = site ? site.content[locale] : null;
   const asked = first(query.day);
-  const day = asked && dayPattern.test(asked) ? asked : nextDay;
+  const day = isDay(asked) ? asked : nextDay;
   const availability = day ? await api.availability(beach.slug, day) : null;
   const spots = availability?.ok ? availability.data.spots : [];
+  const layout = availability?.ok ? availability.data.layout : [];
   const rows = [...new Set(spots.map((spot) => spot.rowNumber))].sort((a, b) => a - b);
+  const taken = layout.filter((spot) => spot.status === 'unavailable').map((spot) => spot.code);
+
+  const askedSpot = first(query.spot);
+  const picked = askedSpot && uuidPattern.test(askedSpot) ? layout.find((spot) => spot.spotId === askedSpot) : undefined;
+  const selected = picked && picked.priceCents !== null ? { ...picked, priceCents: picked.priceCents } : undefined;
+  const alternateQuery = isDay(asked) ? `?day=${asked}${selected ? `&spot=${selected.spotId}` : ''}` : '';
 
   return (
-    <PageShell locale={locale} page="explore" alternatePath={beachPath(otherLocale(locale), beach.slug)} crumbs={crumbsFor(locale, beach)}>
+    <PageShell locale={locale} page="explore" alternatePath={beachPath(otherLocale(locale), beach.slug) + alternateQuery} crumbs={crumbsFor(locale, beach)}>
       <PageHead title={beach.name} lead={t.beachLead(beach.locality)} />
       <DemoBadge locale={locale} beach={beach} />
       {site && texts ? (
@@ -126,6 +297,7 @@ export async function BeachView({ lang, section, slug, query }: { lang: string; 
       <section className="section">
         <div className="container">
           {first(query.taken) ? <p className="alert" role="alert">{t.takenNotice}</p> : null}
+          {picked && !selected ? <p className="alert" role="alert">{t.selectionGone}</p> : null}
           {!day ? (
             <div className="empty">
               <h2>{t.noDayTitle}</h2>
@@ -148,31 +320,41 @@ export async function BeachView({ lang, section, slug, query }: { lang: string; 
                   <h3>{t.unavailableTitle}</h3>
                   <p>{t.unavailableText}</p>
                 </div>
-              ) : spots.length === 0 ? (
-                <div className="empty">
-                  <h3>{t.noSpotsTitle}</h3>
-                  <p>{t.noSpotsText}</p>
-                </div>
               ) : (
-                <div className="spot-rows" style={{ width: '100%' }}>
-                  {rows.map((row) => (
-                    <div className="spot-row" key={row}>
-                      <h3>{t.row(row)}</h3>
-                      <ul className="spots">
-                        {spots
-                          .filter((spot) => spot.rowNumber === row)
-                          .map((spot) => (
-                            <SpotCard key={spot.spotId} locale={locale} beach={beach} spot={spot} day={day} />
-                          ))}
-                      </ul>
+                <>
+                  {layout.length > 0 ? <BeachMap locale={locale} beach={beach} layout={layout} day={day} selected={selected} /> : null}
+                  {spots.length === 0 ? (
+                    <div className="empty">
+                      <h3>{t.noSpotsTitle}</h3>
+                      <p>{t.noSpotsText}</p>
                     </div>
-                  ))}
-                </div>
+                  ) : (
+                    <div className="plan-list" id="elenco">
+                      <h2>{t.listTitle}</h2>
+                      <div className="spot-rows">
+                        {rows.map((row) => (
+                          <div className="spot-row" key={row}>
+                            <h3>{t.row(row)}</h3>
+                            <ul className="spots">
+                              {spots
+                                .filter((spot) => spot.rowNumber === row)
+                                .map((spot) => (
+                                  <SpotCard key={spot.spotId} locale={locale} beach={beach} spot={spot} day={day} selected={spot.spotId === selected?.spotId} />
+                                ))}
+                            </ul>
+                          </div>
+                        ))}
+                      </div>
+                      {taken.length > 0 ? <p className="plan-list__taken">{t.unavailableList(taken.join(', '))}</p> : null}
+                    </div>
+                  )}
+                </>
               )}
             </div>
           )}
         </div>
       </section>
+      {selected && day ? <SelectionBar locale={locale} beach={beach} spot={selected} day={day} /> : null}
     </PageShell>
   );
 }

@@ -1,1 +1,574 @@
 /* Stili del portale: ricerca in evidenza, schede degli stabilimenti, planimetria, barra di riepilogo. */
+
+/* ---- Apertura della pagina iniziale: illustrazione di fondo e pannello di ricerca ---- */
+.portal-hero {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  padding-block: 3.5rem var(--spazio-8);
+  background: var(--spuma);
+}
+
+/* Su schermi stretti l'illustrazione resta una fascia in alto, così non viene tagliata troppo. */
+.portal-hero__art {
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: -1;
+  height: 10rem;
+}
+
+.portal-hero__art svg {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+}
+
+/* Il testo sta sempre su un fondo pieno: il contrasto non dipende dall'illustrazione. */
+.portal-hero__panel {
+  max-width: 46rem;
+  padding: var(--spazio-6) var(--spazio-4);
+  background: var(--carta);
+  border: 1px solid var(--bordo);
+  border-radius: var(--raggio-grande);
+  box-shadow: 0 1rem 2.5rem color-mix(in srgb, var(--abisso) 14%, transparent);
+}
+
+.portal-hero__panel h1 {
+  max-width: 18ch;
+  font-size: clamp(1.875rem, 5.5vw, 3.25rem);
+}
+
+.portal-hero__panel .lead {
+  margin-top: var(--spazio-4);
+}
+
+.portal-hero__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--spazio-6);
+  margin-top: var(--spazio-3);
+}
+
+.portal-hero__links a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tocco);
+  font-weight: 700;
+}
+
+@media (min-width: 48rem) {
+  .portal-hero {
+    padding-block: clamp(3rem, 7vw, 5rem);
+  }
+
+  .portal-hero__art {
+    inset: 0;
+    height: auto;
+  }
+
+  .portal-hero__panel {
+    padding: var(--spazio-8);
+  }
+}
+
+/* ---- Modulo di ricerca: funziona senza script, i campi restano nell'ordine in cui si leggono ---- */
+.portal-search {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+  gap: var(--spazio-3);
+  margin-top: var(--spazio-6);
+}
+
+.portal-search .field input {
+  width: 100%;
+  min-width: 0;
+  padding-inline: var(--spazio-3);
+}
+
+.portal-search__place,
+.portal-search__shared,
+.portal-search__submit {
+  grid-column: 1 / -1;
+}
+
+.portal-check {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spazio-2);
+  min-height: var(--tocco);
+  color: var(--abisso);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.portal-check input {
+  flex: none;
+  width: 1.5rem;
+  height: 1.5rem;
+  margin: 0;
+  accent-color: var(--oceano);
+}
+
+.portal-search__hint {
+  max-width: 60ch;
+  color: var(--testo-secondario);
+  font-size: 0.9375rem;
+}
+
+@media (min-width: 48rem) {
+  .portal-search {
+    grid-template-columns: minmax(0, 1.7fr) minmax(0, 1.1fr) minmax(0, 0.8fr);
+    align-items: end;
+  }
+
+  .portal-search__place {
+    grid-column: auto;
+  }
+
+  .portal-search__shared {
+    grid-column: 1 / span 2;
+  }
+
+  .portal-search__submit {
+    grid-column: 3;
+    align-self: start;
+  }
+}
+
+/* ---- Esplora: ricerca, risultati, schede ---- */
+.portal-explore {
+  padding-top: var(--spazio-4);
+}
+
+.portal-results {
+  display: grid;
+  gap: var(--spazio-6);
+}
+
+.portal-results > .alert {
+  margin-bottom: 0;
+}
+
+.portal-search-panel {
+  max-width: 46rem;
+  padding: var(--spazio-4);
+  background: var(--carta);
+  border: 1px solid var(--bordo);
+  border-radius: var(--raggio-grande);
+}
+
+.portal-search-panel .portal-search {
+  margin-top: 0;
+}
+
+.portal-results__head p {
+  max-width: 65ch;
+  margin-top: var(--spazio-2);
+  color: var(--testo-secondario);
+}
+
+.portal-club .portal-club__offer {
+  display: grid;
+  gap: var(--spazio-1);
+  margin-block: var(--spazio-4);
+  padding-top: var(--spazio-4);
+  border-top: 1px solid var(--bordo);
+}
+
+/* Il pallino è un segno grafico; il testo accanto usa il colore di stato leggibile. */
+.portal-club__free {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spazio-2);
+  color: var(--libero-testo);
+  font-weight: 700;
+}
+
+.portal-club__free::before {
+  content: '';
+  flex: none;
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 50%;
+  background: var(--libero);
+}
+
+.portal-club__price {
+  color: var(--abisso);
+  font-size: 1.5rem;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.portal-club__price-note {
+  display: block;
+  color: var(--testo-secondario);
+  font-size: 0.875rem;
+  font-weight: 400;
+}
+
+.portal-results__full {
+  color: var(--testo-secondario);
+}
+
+.portal-results__full ul {
+  margin-top: var(--spazio-1);
+}
+
+.portal-results__full a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tocco);
+  font-weight: 700;
+}
+
+/* ---- Planimetria ---- */
+.plan {
+  display: grid;
+  gap: var(--spazio-4);
+  width: 100%;
+  padding: var(--spazio-4);
+  background: var(--carta);
+  border: 1px solid var(--bordo);
+  border-radius: var(--raggio-grande);
+  scroll-margin-top: 5rem;
+}
+
+.plan__head p {
+  max-width: 65ch;
+  margin-top: var(--spazio-1);
+  color: var(--testo-secondario);
+}
+
+.plan__head .plan__count {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 var(--spazio-4);
+  color: var(--abisso);
+}
+
+.plan__count a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tocco);
+}
+
+.plan__notice {
+  padding: var(--spazio-3) var(--spazio-4);
+  border: 1.5px solid var(--abisso);
+  border-radius: var(--raggio);
+  color: var(--abisso);
+}
+
+.plan-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spazio-2) var(--spazio-4);
+  padding-block: var(--spazio-3);
+  border-block: 1px solid var(--bordo);
+  color: var(--abisso);
+  font-size: 0.9375rem;
+}
+
+.plan-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spazio-2);
+}
+
+.plan-legend .plan-mark {
+  width: 1.75rem;
+  height: 1.75rem;
+}
+
+.plan__rows {
+  display: grid;
+  gap: var(--spazio-4);
+}
+
+.plan-row {
+  display: grid;
+  gap: var(--spazio-2);
+}
+
+.plan-row__label {
+  color: var(--testo-secondario);
+  font-size: 0.9375rem;
+  font-weight: 700;
+}
+
+/* Le postazioni vanno a capo: la pagina non scorre mai in orizzontale. */
+.plan-row__spots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spazio-2);
+}
+
+@media (min-width: 40rem) {
+  .plan {
+    padding: var(--spazio-6);
+  }
+
+  .plan-row {
+    grid-template-columns: 4.5rem minmax(0, 1fr);
+    align-items: center;
+  }
+}
+
+.plan-spot {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: var(--spazio-1);
+  width: 4.25rem;
+  min-height: 5rem;
+  padding: var(--spazio-2) var(--spazio-1);
+  border: 1.5px solid transparent;
+  border-radius: var(--raggio);
+  color: var(--abisso);
+  line-height: 1.2;
+  text-decoration: none;
+}
+
+a.plan-spot {
+  background: var(--carta);
+  border-color: var(--bordo);
+  box-shadow: 0 0.125rem 0.25rem color-mix(in srgb, var(--abisso) 10%, transparent);
+  transition: transform 100ms ease-out, border-color 200ms ease;
+}
+
+a.plan-spot:hover {
+  border-color: var(--oceano);
+  color: var(--abisso);
+}
+
+a.plan-spot:active {
+  transform: scale(0.96);
+}
+
+/* Non acquistabile: nessun riquadro, nessun collegamento. */
+.plan-spot--taken {
+  color: var(--testo-secondario);
+}
+
+a.plan-spot--selected,
+a.plan-spot--selected:hover {
+  border-color: var(--abisso);
+  box-shadow: 0 0 0 2px var(--abisso);
+}
+
+.plan-spot--selected .plan-mark {
+  animation: plan-scelta 180ms ease-out both;
+}
+
+.plan-spot__code {
+  font-size: 0.9375rem;
+  font-weight: 800;
+}
+
+/* Ombrellone visto dall'alto. I colori di stato riempiono il segno; lo stato si legge anche dalla forma. */
+.plan-mark {
+  flex: none;
+  width: 2.5rem;
+  height: 2.5rem;
+}
+
+.plan-mark__canopy,
+.plan-mark__outline {
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+
+.plan-mark__outline {
+  fill: none;
+}
+
+.plan-mark--free .plan-mark__canopy {
+  fill: var(--libero);
+  stroke: var(--libero);
+}
+
+.plan-mark--shared .plan-mark__canopy,
+.plan-mark--shared .plan-mark__outline {
+  fill: var(--condiviso);
+  stroke: var(--condiviso);
+}
+
+.plan-mark--shared .plan-mark__outline {
+  fill: none;
+}
+
+.plan-mark--unavailable .plan-mark__canopy {
+  fill: var(--occupato);
+  stroke: var(--occupato);
+}
+
+.plan-mark__stripes,
+.plan-mark__top {
+  fill: var(--carta);
+}
+
+.plan-mark__ribs {
+  fill: none;
+  stroke: var(--carta);
+  stroke-width: 1.25;
+}
+
+.plan-mark__cross {
+  fill: none;
+  stroke: var(--carta);
+  stroke-width: 4.5;
+  stroke-linecap: round;
+}
+
+.plan-mark__badge {
+  fill: var(--abisso);
+  stroke: var(--carta);
+  stroke-width: 2;
+}
+
+.plan-mark__check {
+  fill: none;
+  stroke: var(--carta);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* ---- Elenco equivalente alla planimetria ---- */
+.plan-list {
+  display: grid;
+  gap: var(--spazio-6);
+  width: 100%;
+  scroll-margin-top: 5rem;
+}
+
+.plan-list__taken {
+  color: var(--testo-secondario);
+}
+
+.plan-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spazio-2);
+}
+
+.plan-chosen {
+  border-color: var(--abisso);
+  box-shadow: 0 0 0 2px var(--abisso);
+}
+
+/* ---- Barra di riepilogo della postazione scelta ----
+   Resta agganciata al fondo dello schermo finché si scorre la pagina e alla fine torna
+   al suo posto nel flusso: non copre l'ultimo contenuto né il piè di pagina. */
+.plan-bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  padding-block: var(--spazio-3) calc(var(--spazio-3) + env(safe-area-inset-bottom, 0px));
+  background: var(--carta);
+  border-top: 1px solid var(--bordo);
+  box-shadow: 0 -0.5rem 1.5rem color-mix(in srgb, var(--abisso) 14%, transparent);
+  animation: plan-barra 180ms ease-out both;
+}
+
+.plan-bar .plan-bar__inner {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 0 var(--spazio-4);
+  padding-left: max(1.25rem, env(safe-area-inset-left, 0px));
+  padding-right: max(1.25rem, env(safe-area-inset-right, 0px));
+}
+
+.plan-bar__title,
+.plan-bar__price {
+  color: var(--abisso);
+  font-weight: 800;
+}
+
+.plan-bar__title {
+  font-size: 1.0625rem;
+}
+
+.plan-bar__price {
+  font-size: 1.25rem;
+  text-align: end;
+}
+
+.plan-bar__detail {
+  grid-column: 1 / -1;
+  color: var(--testo-secondario);
+  font-size: 0.9375rem;
+}
+
+.plan-bar__go {
+  grid-column: 1 / -1;
+  margin-top: var(--spazio-2);
+}
+
+@media (min-width: 48rem) {
+  .plan-bar .plan-bar__inner {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 0 var(--spazio-6);
+  }
+
+  .plan-bar__price {
+    grid-row: 1 / span 2;
+    grid-column: 2;
+  }
+
+  .plan-bar__detail {
+    grid-row: 2;
+    grid-column: 1;
+  }
+
+  .plan-bar__go {
+    grid-row: 1 / span 2;
+    grid-column: 3;
+    margin-top: 0;
+  }
+}
+
+/* Quello che riceve il fuoco o è raggiunto da un collegamento interno non finisce sotto la barra. */
+html:has(.plan-bar) {
+  scroll-padding-bottom: 10rem;
+}
+
+/* Schermo basso, per esempio con la tastiera aperta: la barra torna nel flusso e non copre i campi. */
+@media (max-height: 28rem) {
+  .plan-bar {
+    position: static;
+  }
+
+  html:has(.plan-bar) {
+    scroll-padding-bottom: 0;
+  }
+}
+
+@keyframes plan-barra {
+  from {
+    opacity: 0;
+    transform: translateY(100%);
+  }
+}
+
+@keyframes plan-scelta {
+  from {
+    opacity: 0.4;
+    transform: scale(0.85);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .plan-bar,
+  .plan-spot--selected .plan-mark {
+    animation: none;
+  }
+
+  a.plan-spot:active {
+    transform: none;
+  }
+}

@@ -9,6 +9,8 @@ export interface Operation {
   auth: 'none' | 'session' | 'booking-token' | 'provider-signature';
   request?: z.ZodType;
   query?: Record<string, string>;
+  /** Query parameters the caller may leave out. */
+  optionalQuery?: Record<string, string>;
   headers?: Record<string, string>;
   /** Success status, followed by the error codes this operation can answer with. */
   success: 200 | 201 | 204;
@@ -32,7 +34,10 @@ export function buildOpenApi(operations: readonly Operation[], info: { title: st
   for (const operation of operations) {
     const openApiPath = operation.path.replace(/:([A-Za-z]+)/g, '{$1}');
     const pathParameters = [...operation.path.matchAll(/:([A-Za-z]+)/g)].map((match) => ({ name: match[1], in: 'path', required: true, schema: { type: 'string' } }));
-    const queryParameters = Object.entries(operation.query ?? {}).map(([name, description]) => ({ name, in: 'query', required: true, description, schema: { type: 'string' } }));
+    const queryParameters = [
+      ...Object.entries(operation.query ?? {}).map(([name, description]) => ({ name, in: 'query', required: true, description, schema: { type: 'string' } })),
+      ...Object.entries(operation.optionalQuery ?? {}).map(([name, description]) => ({ name, in: 'query', required: false, description, schema: { type: 'string' } })),
+    ];
     const headerParameters = Object.entries(operation.headers ?? {}).map(([name, description]) => ({ name, in: 'header', required: true, description, schema: { type: 'string' } }));
     const responses: Record<string, unknown> = { [operation.success]: { description: operation.success === 204 ? 'Done, no content' : 'Success' } };
     for (const status of operation.errors) {

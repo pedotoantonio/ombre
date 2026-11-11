@@ -45,6 +45,67 @@ describe.skipIf(!testAdminUrl)('API /v1 on the demo beach club', () => {
     expect(data.spots.find((spot) => spot.code === 'B02')?.shared).toBe(true);
   });
 
+  interface MapSpot {
+    code: string;
+    rowNumber: number;
+    status: string;
+    priceCents: number | null;
+  }
+  const layoutOf = async (day: string) => (await (await app.request(`/v1/beaches/${demoBeach.slug}/availability?day=${day}`)).json()) as { spots: unknown[]; layout: MapSpot[] };
+  const search = async (query: string) => {
+    const response = await app.request(`/v1/beaches${query}`);
+    return { status: response.status, body: (await response.json()) as { beaches?: { slug: string; freeSpots?: number; priceFromCents?: number | null }[] } & Record<string, unknown> };
+  };
+
+  it('describes every spot of the day for the map: free, shared or unavailable', async () => {
+    const { layout } = await layoutOf(demoBeach.day);
+    expect(layout.map((spot) => `${spot.code}:${spot.rowNumber}:${spot.status}:${spot.priceCents}`)).toEqual([
+      'A01:1:free:3000',
+      'A02:1:free:3000',
+      'A03:1:free:3000',
+      'A04:1:free:3000',
+      'B01:2:free:3000',
+      'B02:2:shared:3000',
+      'B03:2:free:3000',
+      'B04:2:free:3000',
+    ]);
+    expect(layout[0]).toMatchObject({ umbrellas: 1, sunbeds: 2, maxGuests: 2 });
+
+    // A day never published and a day that has passed: every spot is there, none can be bought.
+    for (const day of ['2027-06-18', '2020-06-17']) {
+      const other = await layoutOf(day);
+      expect(other.spots).toEqual([]);
+      expect(other.layout).toHaveLength(8);
+      expect(other.layout.every((spot) => spot.status === 'unavailable' && spot.priceCents === null)).toBe(true);
+    }
+  });
+
+  it('searches beach clubs by day, guests, place and shared days, with a price that can be paid', async () => {
+    const beach = { slug: 'bagno-delle-dune', name: 'Bagno delle Dune', locality: 'Lido di Pomposa', timezone: 'Europe/Rome', demo: true };
+    expect((await search(`?day=${demoBeach.day}`)).body).toEqual({
+      day: demoBeach.day,
+      guests: 1,
+      sharedOnly: false,
+      currency: 'EUR',
+      beaches: [{ ...beach, freeSpots: 8, priceFromCents: 3000 }],
+    });
+    expect((await search(`?day=${demoBeach.day}&guests=2`)).body).toMatchObject({ guests: 2, beaches: [{ freeSpots: 8, priceFromCents: 3000 }] });
+    expect((await search(`?day=${demoBeach.day}&guests=3`)).body.beaches).toEqual([{ ...beach, freeSpots: 0, priceFromCents: null }]);
+    expect((await search(`?day=${demoBeach.day}&sharedOnly=true`)).body).toMatchObject({ sharedOnly: true, beaches: [{ freeSpots: 1, priceFromCents: 3000 }] });
+    expect((await search(`?day=${demoBeach.day}&sharedOnly=false`)).body).toMatchObject({ sharedOnly: false, beaches: [{ freeSpots: 8 }] });
+    expect((await search('?day=2020-06-17')).body.beaches).toEqual([{ ...beach, freeSpots: 0, priceFromCents: null }]);
+
+    expect((await search(`?day=${demoBeach.day}&locality=pomposa`)).body.beaches).toHaveLength(1);
+    expect((await search(`?day=${demoBeach.day}&locality=Rimini`)).body.beaches).toEqual([]);
+    expect((await search('?locality=DUNE')).body).toEqual({ beaches: [beach] });
+    expect((await search('?locality=%25')).body).toEqual({ beaches: [] });
+
+    for (const bad of ['?day=domani', `?day=${demoBeach.day}&guests=0`, `?day=${demoBeach.day}&guests=due`, `?day=${demoBeach.day}&guests=21`, `?day=${demoBeach.day}&sharedOnly=si`, '?guests=2', '?sharedOnly=true', '?locality=']) {
+      const refused = await search(bad);
+      expect([bad, refused.status, (refused.body.error as { code: string } | undefined)?.code]).toEqual([bad, 400, 'invalid_request']);
+    }
+  });
+
   it('quotes B02 with MARE10 at 27.00 and ignores any price sent by the client', async () => {
     const spotId = await spotByCode('B02');
     const response = await post('/v1/quotes', { beachSlug: demoBeach.slug, spotId, day: demoBeach.day, promoCode: 'MARE10', totalCents: 1 });
@@ -73,6 +134,12 @@ describe.skipIf(!testAdminUrl)('API /v1 on the demo beach club', () => {
 
     const codes = ((await (await app.request(availabilityPath)).json()) as { spots: { code: string }[] }).spots.map((spot) => spot.code);
     expect(codes).not.toContain('B02');
+
+    // The map and the search say the same: B02 is still drawn, but nobody can buy it.
+    const onMap = (await layoutOf(demoBeach.day)).layout.find((spot) => spot.code === 'B02');
+    expect(onMap).toMatchObject({ status: 'unavailable', priceCents: null });
+    expect((await search(`?day=${demoBeach.day}&sharedOnly=true`)).body.beaches).toMatchObject([{ freeSpots: 0, priceFromCents: null }]);
+    expect((await search(`?day=${demoBeach.day}&guests=2`)).body.beaches).toMatchObject([{ freeSpots: 7, priceFromCents: 3000 }]);
   });
 
   it('describes a beach club with its next free day and shows a hold by its identifier', async () => {
