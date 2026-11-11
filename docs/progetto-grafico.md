@@ -66,7 +66,7 @@ non compaiono:
 
 | Elemento del progetto | Stato |
 |---|---|
-| Fotografie della costa e degli stabilimenti | Non fornite. Al loro posto illustrazioni vettoriali originali. Le foto arriveranno con il caricamento dei media |
+| Fotografie | L'apertura della pagina iniziale usa la fotografia della costa fornita dal committente, ricavata dal suo bozzetto (1960×713 px, titolo e pulsante rimossi per ricostruzione): va sostituita con l'originale ad alta risoluzione, e il committente deve confermarne provenienza e diritti. Per gli stabilimenti restano le illustrazioni dimostrative finché non esiste il caricamento dei media |
 | Punteggio da recensioni | Nessuna recensione esiste: non si mostra alcun punteggio |
 | Distanza dalla spiaggia | Dato non raccolto: non si mostra |
 | Mappa interattiva | Richiede un fornitore di mappe e le coordinate degli stabilimenti: rimandata |

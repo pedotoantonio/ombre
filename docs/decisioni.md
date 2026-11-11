@@ -175,3 +175,16 @@ il sito dello stabilimento può scegliere solo tra quelle finché non esiste il
 caricamento di foto proprie. Lo stabilimento «Lido Aurora» è di fantasia e segnalato in
 ogni pagina.
 
+## D22 — Fotografia di apertura e icone del committente — accettata (11/11/2026)
+
+La pagina iniziale usa la fotografia della costa e le cinque icone che il committente ha
+fornito in un bozzetto ([grafica/icone-e-sfondo-riferimento.jpg](grafica/icone-e-sfondo-riferimento.jpg)).
+La fotografia è stata estratta dal bozzetto e ripulita dal titolo e dal pulsante che vi
+erano stampati sopra; le icone sono ricalcate in vettoriale con i loro due colori
+originali (`#378192` e `#F47B60`), che non fanno parte della palette e restano confinati
+alle icone. Il corallo ha contrasto 2,68:1 sul bianco: va bene per un'icona accanto alla
+sua etichetta, non per testo o pulsanti, che restano in verde oceano. Dal bozzetto non
+sono stati ripresi la scritta «Ombrè» con le grazie (vale il logo della scheda del
+committente) né il pulsante corallo con testo bianco (3,09:1). Prima di una
+pubblicazione il committente deve confermare provenienza e diritti della fotografia.
+

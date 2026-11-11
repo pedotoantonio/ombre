@@ -13,6 +13,8 @@ indicizzato.
 
 - Grafica «Solar & Fresh» del committente su tutto il sito, con il suo logo ridisegnato
   in vettoriale ([progetto-grafico.md](progetto-grafico.md), [marchio](marchio/marchio.md)).
+  La pagina iniziale si apre con la fotografia della costa fornita dal committente e
+  presenta le cinque funzioni con le sue icone.
 - Sito pubblico in italiano e inglese: sei pagine per lingua, più «Esplora» e la scheda
   di ogni stabilimento. Ricerca per località, giorno, ospiti e giornate condivise, con
   postazioni libere e prezzo «da» reale; planimetria a colori con barra di riepilogo.
@@ -53,7 +55,7 @@ indicizzato.
 ## Collaudo
 
 Esito completo in [collaudo.md](collaudo.md). In sintesi, l'11/11/2026, dopo il nuovo
-progetto grafico: 102 test e 462 controlli sul sistema in esecuzione superati, backup
+progetto grafico: 102 test e 469 controlli sul sistema in esecuzione superati, backup
 ripristinato. Una revisione indipendente di grafica e accessibilità ha trovato venti
 rilievi, nessuno bloccante: quindici corretti, gli altri registrati tra i limiti. Dei 15 scenari di
 accettazione del progetto, 12 sono superati e 3 lo sono in parte (rimborsi eseguiti,

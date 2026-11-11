@@ -3,7 +3,7 @@
 Esito del collaudo dell'11/11/2026, eseguito con `pnpm collaudo` su container creati da
 zero e rimossi alla fine. Il comando esegue lint e controllo dei tipi, 102 test (72 su un
 PostgreSQL vero), costruisce le immagini, avvia database, API, worker e sito, percorre
-sette verifiche sul sistema in esecuzione (462 controlli) e ripristina un backup.
+sette verifiche sul sistema in esecuzione (469 controlli) e ripristina un backup.
 
 Tutti i dati sono dimostrativi: lo stabilimento «Bagno delle Dune» è fittizio e il
 pagamento passa da un fornitore di prova che non muove denaro.
@@ -14,7 +14,7 @@ pagamento passa da un fornitore di prova che non muove denaro.
 |---|---|---|
 | Lint e tipi | tutto il codice | Superati |
 | Test | 102 | Superati |
-| Pagine pubbliche e pagina «non trovata» (`smoke`) | 264 | Superati |
+| Pagine pubbliche e pagina «non trovata» (`smoke`) | 271 | Superati |
 | Ricerca, planimetria e percorso di riserva sul sito (`smoke:flow`) | 68 | Superati |
 | Aree riservate sul sito (`smoke:areas`) | 67 | Superati |
 | Sito dello stabilimento (`smoke:site`) | 24 | Superati |
