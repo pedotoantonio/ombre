@@ -1,5 +1,8 @@
 import { config, getDictionary, type Locale, type SiteTemplate, type SiteTexts } from '@ombre/shared';
 import type { ApiBeach } from '@/lib/api';
+import '@ombre/ui/media.css';
+
+const galleryLabel: Record<Locale, string> = { it: 'Galleria', en: 'Gallery' };
 
 /** The beach club's own texts, drawn by one of the three templates. */
 export function BeachSite({ locale, template, texts }: { locale: Locale; template: SiteTemplate; texts: SiteTexts }) {
@@ -14,6 +17,9 @@ export function BeachSite({ locale, template, texts }: { locale: Locale; templat
   const filled = facts.filter(([, value]) => value !== '');
   return (
     <div className={`site-block tpl-${template}`}>
+      {texts.images?.cover ? (
+        <img className="site-cover" src={texts.images.cover.src} alt={texts.images.cover.alt} width={1200} height={800} fetchPriority="high" />
+      ) : null}
       <div className="site-hero">
         {texts.tagline ? <p className="site-tagline">{texts.tagline}</p> : null}
         <p>{texts.description}</p>
@@ -43,6 +49,15 @@ export function BeachSite({ locale, template, texts }: { locale: Locale; templat
           </div>
         ) : null}
       </div>
+      {texts.images && texts.images.gallery.length > 0 ? (
+        <ul className="site-gallery" aria-label={galleryLabel[locale]}>
+          {texts.images.gallery.map((image) => (
+            <li key={image.src}>
+              <img src={image.src} alt={image.alt} width={1200} height={800} loading="lazy" />
+            </li>
+          ))}
+        </ul>
+      ) : null}
     </div>
   );
 }

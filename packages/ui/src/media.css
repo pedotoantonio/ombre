@@ -1,0 +1,33 @@
+/* Immagini del sito dello stabilimento: copertina e galleria. */
+.site-cover {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: var(--raggio-grande);
+  background: var(--spuma);
+}
+
+@media (min-width: 48rem) {
+  .site-cover {
+    aspect-ratio: 21 / 9;
+  }
+}
+
+.site-gallery {
+  display: grid;
+  gap: var(--spazio-3);
+  grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr));
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.site-gallery img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 3 / 2;
+  object-fit: cover;
+  border-radius: var(--raggio);
+  background: var(--spuma);
+}

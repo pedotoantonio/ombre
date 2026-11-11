@@ -43,6 +43,9 @@ services:
       OMBRE_DB_APP_PASSWORD: ${OMBRE_DB_APP_PASSWORD:-dev_app_only}
       OMBRE_SEED_DEMO: ${OMBRE_SEED_DEMO:-false}
       OMBRE_DEMO_PASSWORD: ${OMBRE_DEMO_PASSWORD:-}
+      # A larger fictional beach club with pictures, season passes and bookings to manage.
+      OMBRE_SEED_SHOWCASE: ${OMBRE_SEED_SHOWCASE:-false}
+      OMBRE_SIGNING_SECRET: ${OMBRE_SIGNING_SECRET:-dev_only_signing_secret_not_for_production}
       OMBRE_ADMIN_EMAIL: ${OMBRE_ADMIN_EMAIL:-}
       OMBRE_ADMIN_PASSWORD: ${OMBRE_ADMIN_PASSWORD:-}
     depends_on:

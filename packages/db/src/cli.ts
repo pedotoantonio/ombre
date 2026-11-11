@@ -2,6 +2,7 @@ import path from 'node:path';
 import { runMigrations, setAppPassword } from './migrate';
 import { upsertUser } from './auth';
 import { demoAccounts, demoHolderEmail, seedDemo } from './seed';
+import { seedShowcase, showcaseHolders } from './showcase';
 
 // Applies migrations, then the optional steps asked for through the environment.
 const adminUrl = process.env.OMBRE_DB_ADMIN_URL;
@@ -40,5 +41,18 @@ if (process.env.OMBRE_SEED_DEMO === 'true') {
     }
     await upsertUser(adminUrl, { email: demoHolderEmail, name: 'Stagionale dimostrativo', password });
     console.log('Demo accounts ready');
+  }
+
+  if (process.env.OMBRE_SEED_SHOWCASE === 'true') {
+    const signingSecret = process.env.OMBRE_SIGNING_SECRET ?? '';
+    if (signingSecret.length < 32) {
+      console.error('OMBRE_SIGNING_SECRET (at least 32 characters) is required to create the showcase beach club');
+      process.exit(1);
+    }
+    const showcase = await seedShowcase(adminUrl, signingSecret);
+    if (password) {
+      for (const account of showcaseHolders) await upsertUser(adminUrl, { email: account.email, name: account.name, password });
+    }
+    console.log(showcase.created ? 'Showcase beach club created' : 'Showcase beach club already present');
   }
 }

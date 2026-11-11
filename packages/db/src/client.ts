@@ -12,8 +12,9 @@ export interface Connection {
   close: () => Promise<void>;
 }
 
-export function connect(url: string, options: { max?: number } = {}): Connection {
-  const pool = new pg.Pool({ connectionString: url, max: options.max ?? 10 });
+export function connect(url: string, options: { max?: number; role?: string } = {}): Connection {
+  // `role` makes a privileged login act as a restricted role, so row level security applies to it too.
+  const pool = new pg.Pool({ connectionString: url, max: options.max ?? 10, ...(options.role ? { options: `-c role=${options.role}` } : {}) });
   return { db: drizzle(pool, { schema }), pool, close: () => pool.end() };
 }
 
