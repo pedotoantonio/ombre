@@ -40,19 +40,26 @@ Aggiornato all'11/11/2026.
     della prenotazione per posta nella lingua dell'ospite (senza un fornitore reale la
     notifica è registrata come non inviata), pulizia delle riserve scadute, chiusura
     automatica delle giornate passate con maturazione delle quote;
+  - aree riservate nel sito, in italiano e inglese e senza bisogno di script: dati
+    dell'ospite, pagamento di prova e pagina della prenotazione con il pass (codice QR e
+    codice breve); accesso con sessione; area dello stagionale (proposte con ricorrenza,
+    ritiro, rendiconto); gestione dello stabilimento (giornata, blocchi, prezzi,
+    proposte, regole, abbonamenti, riepilogo economico); reception (verifica del pass,
+    prenotazioni del giorno). Ogni ruolo vede solo ciò che gli spetta;
   - `Dockerfile` e compose con database, migrazioni, API, worker e sito.
-- **Non fatto**: secondo fattore di accesso, inviti e recupero password, aree riservate (ospite, stagionale, gestione,
-  reception, console), annullamento da parte dell'ospite, pagamenti e liquidazioni
-  reali, inviti agli stagionali (oggi l'utente deve già esistere), worker. Dopo la riserva il percorso si ferma: il pagamento non esiste
-  ancora e la pagina lo dice. Nessun dominio registrato, nessuna pubblicazione. Il sito dichiara che il
-  servizio è in preparazione e chiede di non essere indicizzato.
+- **Non fatto**: secondo fattore di accesso, inviti e recupero password (oggi gli accessi
+  li crea l'amministratore da riga di comando), console centrale della piattaforma,
+  annullamento da parte dell'ospite, sito del bagno con modelli e revisioni, pagamenti
+  e liquidazioni reali, invio reale della posta. Nessun dominio registrato, nessuna
+  pubblicazione. Il sito dichiara che il servizio è in preparazione e chiede di non
+  essere indicizzato.
 
 ## Controlli eseguiti l'11/11/2026
 
 | Controllo | Esito |
 |---|---|
 | Lint e controllo dei tipi | Superati |
-| Test (65, di cui 42 su un PostgreSQL vero) | Superati |
+| Test (67, di cui 42 su un PostgreSQL vero) | Superati |
 | Due acquisti sulla stessa giornata | Dodici richieste simultanee, una sola riserva; ripetuto sull'API in container con dieci richieste: un 201 e nove 409 |
 | Prezzo manipolato nel browser | L'importo inviato dal client è ignorato: vale quello del server |
 | MARE10 su €30 | Totale €27, salvato nella riserva e immutato se il listino cambia |
@@ -69,6 +76,7 @@ Aggiornato all'11/11/2026.
 | Ripartizione | Vendita condivisa a €27: 13,50 / 10,80 / 2,70. Giornata ordinaria: nessuna quota stagionale. Somma delle quote sempre uguale al totale. Registro non modificabile nemmeno dal proprietario del database |
 | Worker | Ogni elemento della coda trattato una volta anche con due worker insieme; un errore viene ritentato e abbandonato al quinto tentativo; riserve scadute liberate; giornate passate chiuse; una giornata passata non si può più vendere |
 | Percorso completo sui container (20 verifiche) | Riserva, prenotazione, pagamento di prova firmato, conferma `OM-270617-001`, notifica dal worker, quote 13,50 / 10,80 / 2,70, ruoli e rendiconto dello stagionale |
+| Aree riservate sul sito in container (37 verifiche) | Ospite: dati, pagamento di prova, pass con QR, pagina non apribile con un token errato. Gestore: pubblica, blocca, autorizza. Reception: verifica i pass, non cambia i prezzi. Stagionale: propone, vede la quota di 13,50 senza dati dell'ospite, ritira. Uscita e ruoli rispettati |
 | Chiave di idempotenza | Stessa richiesta, stessa riserva; richiesta diversa, errore esplicito |
 | Pagine servite dal container (192 verifiche su 12 pagine) | Superate |
 | Percorso di riserva sul sito in container (24 verifiche) | Superato: MARE10 da 30,00 a 27,00, doppio invio del modulo senza doppia riserva, secondo acquirente rimandato alla scelta, modulo inviato da un altro sito rifiutato, dati dimostrativi non indicizzabili |
@@ -86,12 +94,13 @@ sito. Il preventivo non è ancora salvato con una scadenza propria.
 Un incremento operativo verificabile in ambiente di prova che colleghi:
 sito personale → autorizzazione stagionale → acquisto → inventario → reception →
 rendiconto. Inventario, riserva e percorso nel sito ci sono; il prossimo anello sono
-le aree riservate nel sito: pagamento e pass per l'ospite, poi stagionale, gestione e reception.
+il sito del bagno con modelli e revisioni, poi sicurezza e collaudo finale.
 
 ## Passi successivi in ordine
 
-1. Aree riservate nel sito, sito del bagno con modelli e revisioni.
-2. In parallelo, fuori dal codice: chiudere le decisioni di avvio (marchio e domini,
+1. Sito del bagno con modelli e revisioni.
+2. Sicurezza e contratti: OpenAPI, limiti alle richieste, CSP, backup, secondo fattore.
+3. In parallelo, fuori dal codice: chiudere le decisioni di avvio (marchio e domini,
    soggetto venditore, provider pagamenti, condizioni) e scegliere i partner pilota.
 
 ## Dipendenze esterne aperte

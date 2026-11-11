@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
-import { config, getDictionary, locales, pathFor, type InnerPageId, type Locale, type PageId } from '@ombre/shared';
+import { accountPath, config, getDictionary, locales, pathFor, type InnerPageId, type Locale, type PageId } from '@ombre/shared';
 import { Logo } from '@ombre/ui';
 
 const navPages: readonly InnerPageId[] = ['explore', 'howItWorks', 'forBeachClubs', 'forSeasonHolders', 'help'];
@@ -12,8 +12,10 @@ export interface Crumb {
 
 interface PageShellProps {
   locale: Locale;
-  /** Section highlighted in the navigation. */
+  /** Fixed page this is, or the one whose section it belongs to. */
   page: PageId;
+  /** False when the page belongs to no section of the navigation, like the reserved area. */
+  highlight?: boolean;
   /** Address of this same page in the other language, when it is not a fixed page. */
   alternatePath?: string;
   /** Trail after the home page, when it is not a fixed page. */
@@ -21,7 +23,7 @@ interface PageShellProps {
   children: ReactNode;
 }
 
-export function PageShell({ locale, page, alternatePath, crumbs, children }: PageShellProps) {
+export function PageShell({ locale, page, highlight = true, alternatePath, crumbs, children }: PageShellProps) {
   const t = getDictionary(locale, config.brandName);
   const otherLocale = locales.find((candidate) => candidate !== locale) ?? locale;
 
@@ -41,7 +43,7 @@ export function PageShell({ locale, page, alternatePath, crumbs, children }: Pag
             <ul>
               {navPages.map((id) => (
                 <li key={id}>
-                  <Link href={pathFor(id, locale)} aria-current={id === page ? 'page' : undefined}>
+                  <Link href={pathFor(id, locale)} aria-current={highlight && id === page ? 'page' : undefined}>
                     {t.nav[id]}
                   </Link>
                 </li>
@@ -95,6 +97,9 @@ export function PageShell({ locale, page, alternatePath, crumbs, children }: Pag
                   <Link href={pathFor(id, locale)}>{t.nav[id]}</Link>
                 </li>
               ))}
+              <li>
+                <Link href={accountPath(locale, 'signIn')}>{t.nav.reservedArea}</Link>
+              </li>
             </ul>
           </nav>
         </div>

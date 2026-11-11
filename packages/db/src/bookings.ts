@@ -183,6 +183,8 @@ export interface BookingView {
   code: string;
   status: (typeof booking.$inferSelect)['status'];
   paymentStatus: (typeof payment.$inferSelect)['status'];
+  paymentProvider: string;
+  paymentReference: string;
   presence: (typeof booking.$inferSelect)['presence'];
   guestName: string;
   day: string;
@@ -199,7 +201,7 @@ export function getBooking(db: Database, beachId: string, bookingId: string, acc
   }
   return withBeach(db, beachId, async (tx) => {
     const [row] = await tx
-      .select({ booking, paymentStatus: payment.status, day: inventoryDay.day, spot, passId: pass.id, revoked: pass.revoked })
+      .select({ booking, paymentStatus: payment.status, paymentProvider: payment.provider, paymentReference: payment.providerRef, day: inventoryDay.day, spot, passId: pass.id, revoked: pass.revoked })
       .from(booking)
       .innerJoin(payment, eq(payment.bookingId, booking.id))
       .innerJoin(inventoryDay, eq(inventoryDay.id, booking.inventoryDayId))
@@ -213,6 +215,8 @@ export function getBooking(db: Database, beachId: string, bookingId: string, acc
       code: row.booking.code,
       status: row.booking.status,
       paymentStatus: row.paymentStatus,
+      paymentProvider: row.paymentProvider,
+      paymentReference: row.paymentReference,
       presence: row.booking.presence,
       guestName: row.booking.guestName,
       day: row.day,

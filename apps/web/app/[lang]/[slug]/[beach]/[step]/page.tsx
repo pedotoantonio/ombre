@@ -1,3 +1,4 @@
+import { AccountRoute, isAccountSection } from '@/components/account';
 import { BookView, privateMetadata } from '@/components/beach';
 
 interface Props {
@@ -9,5 +10,7 @@ export const metadata = privateMetadata;
 
 export default async function Page({ params, searchParams }: Props) {
   const { lang, slug, beach, step } = await params;
-  return <BookView lang={lang} section={slug} slug={beach} step={step} query={await searchParams} />;
+  const query = await searchParams;
+  if (isAccountSection(lang, slug)) return <AccountRoute locale={lang} segments={[beach, step]} query={query} />;
+  return <BookView lang={lang} section={slug} slug={beach} step={step} query={query} />;
 }

@@ -29,6 +29,7 @@ const nextConfig: NextConfig = {
     return [
       { source: '/', destination: '/it' },
       { source: '/bagni/:path*', destination: '/it/bagni/:path*' },
+      { source: '/area/:path*', destination: '/it/area/:path*' },
       { source: '/:slug((?!(?:it|en|_next|api)$)[^/.]+)', destination: '/it/:slug' },
     ];
   },

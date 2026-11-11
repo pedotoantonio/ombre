@@ -24,12 +24,12 @@ function first(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
 }
 
-function otherLocale(locale: Locale): Locale {
+export function otherLocale(locale: Locale): Locale {
   return locales.find((candidate) => candidate !== locale) ?? locale;
 }
 
 /** Checks the localized segments and loads the beach club, or answers 404. */
-async function loadBeach(lang: string, section: string, slug: string): Promise<{ locale: Locale; beach: ApiBeach; nextDay: string | null }> {
+export async function loadBeach(lang: string, section: string, slug: string): Promise<{ locale: Locale; beach: ApiBeach; nextDay: string | null }> {
   if (!isLocale(lang) || section !== beachSection[lang] || !slugPattern.test(slug)) notFound();
   const result = await api.beach(slug);
   if (!result.ok) {
@@ -39,7 +39,7 @@ async function loadBeach(lang: string, section: string, slug: string): Promise<{
   return { locale: lang, beach: result.data.beach, nextDay: result.data.nextAvailableDay };
 }
 
-function crumbsFor(locale: Locale, beach: ApiBeach, last?: string): Crumb[] {
+export function crumbsFor(locale: Locale, beach: ApiBeach, last?: string): Crumb[] {
   const t = getDictionary(locale, config.brandName);
   const trail: Crumb[] = [{ label: t.nav.explore, href: pathFor('explore', locale) }];
   if (last) trail.push({ label: beach.name, href: beachPath(locale, beach.slug) }, { label: last });
@@ -47,7 +47,7 @@ function crumbsFor(locale: Locale, beach: ApiBeach, last?: string): Crumb[] {
   return trail;
 }
 
-function DemoBadge({ locale, beach }: { locale: Locale; beach: ApiBeach }) {
+export function DemoBadge({ locale, beach }: { locale: Locale; beach: ApiBeach }) {
   if (!beach.demo) return null;
   return (
     <p className="container">
@@ -160,7 +160,7 @@ export async function BeachView({ lang, section, slug, query }: { lang: string; 
   );
 }
 
-function PriceSummary({ locale, rows, quote }: { locale: Locale; rows: [string, string][]; quote: { listPriceCents: number; discountCents: number; totalCents: number; promoCode: string | null } }) {
+export function PriceSummary({ locale, rows, quote }: { locale: Locale; rows: [string, string][]; quote: { listPriceCents: number; discountCents: number; totalCents: number; promoCode: string | null } }) {
   const t = getDictionary(locale, config.brandName).booking;
   return (
     <dl className="summary">
@@ -282,6 +282,7 @@ export async function HoldView({ lang, section, slug, step, holdId }: { lang: st
   }
   const held = result.data;
   const active = held.status === 'active';
+  const c = getDictionary(locale, config.brandName).checkout;
   const alternate = `${beachPath(otherLocale(locale), beach.slug)}/${holdSegment[otherLocale(locale)]}/${holdId}`;
 
   return (
@@ -305,7 +306,21 @@ export async function HoldView({ lang, section, slug, step, holdId }: { lang: st
                 ]}
               />
               <p className="prose">{t.holdNotConfirmation}</p>
-              <p className="alert alert--info">{t.paymentMissing}</p>
+              <form method="post" action="/azioni/prenotazione" className="stack">
+                <input type="hidden" name="lang" value={locale} />
+                <input type="hidden" name="beach" value={beach.slug} />
+                <input type="hidden" name="hold" value={held.holdId} />
+                <h2>{c.title}</h2>
+                <div className="field">
+                  <label htmlFor="nome">{c.name}</label>
+                  <input id="nome" name="name" autoComplete="name" maxLength={120} required />
+                </div>
+                <div className="field">
+                  <label htmlFor="email">{c.email}</label>
+                  <input id="email" name="email" type="email" autoComplete="email" maxLength={200} required />
+                </div>
+                <button className="button" type="submit">{c.button}</button>
+              </form>
             </>
           ) : null}
           <Link className="button button--secondary" href={`${beachPath(locale, beach.slug)}?day=${held.day}`}>

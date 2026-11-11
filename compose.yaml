@@ -118,6 +118,8 @@ services:
         OMBRE_CONTACT_EMAIL: ${OMBRE_CONTACT_EMAIL:-}
     environment:
       OMBRE_API_URL: http://api:3000
+      # Shows the test payment page. Empty in production.
+      OMBRE_SANDBOX_WEBHOOK_SECRET: ${OMBRE_SANDBOX_WEBHOOK_SECRET:-}
     depends_on:
       - api
     networks:
@@ -129,6 +131,19 @@ services:
       - /app/apps/web/.next/cache
     cpus: 1.0
     mem_limit: 512m
+
+  # Temporary public address for demonstrations: start it with "--profile tunnel".
+  # The address is random, changes at every start and is printed in this service's log.
+  tunnel:
+    profiles:
+      - tunnel
+    image: cloudflare/cloudflared:latest
+    command: tunnel --no-autoupdate --url http://web:3000
+    depends_on:
+      - web
+    networks:
+      - backend
+    restart: unless-stopped
 
 networks:
   backend:

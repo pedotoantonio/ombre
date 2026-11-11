@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
-import { beachMetadata, BeachView } from '@/components/beach';
+import { AccountRoute, isAccountSection } from '@/components/account';
+import { beachMetadata, BeachView, privateMetadata } from '@/components/beach';
 
 interface Props {
   params: Promise<{ lang: string; slug: string; beach: string }>;
@@ -8,10 +9,12 @@ interface Props {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { lang, slug, beach } = await params;
-  return beachMetadata(lang, slug, beach);
+  return isAccountSection(lang, slug) ? { ...privateMetadata, robots: { index: false, follow: false } } : beachMetadata(lang, slug, beach);
 }
 
 export default async function Page({ params, searchParams }: Props) {
   const { lang, slug, beach } = await params;
-  return <BeachView lang={lang} section={slug} slug={beach} query={await searchParams} />;
+  const query = await searchParams;
+  if (isAccountSection(lang, slug)) return <AccountRoute locale={lang} segments={[beach]} query={query} />;
+  return <BeachView lang={lang} section={slug} slug={beach} query={query} />;
 }

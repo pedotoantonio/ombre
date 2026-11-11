@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatMoney, percentOf, quoteDay, splitAmount } from '../src/index';
+import { formatMoney, parseEuro, percentOf, quoteDay, splitAmount } from '../src/index';
 
 const shares = [
   { party: 'seasonHolder', bps: 5000 },
@@ -60,5 +60,18 @@ describe('formatMoney', () => {
   it('formats cents for each language', () => {
     expect(formatMoney(2700, 'it').replace(/\s/g, ' ')).toBe('27,00 €');
     expect(formatMoney(2700, 'en')).toBe('€27.00');
+  });
+});
+
+describe('parseEuro', () => {
+  it('reads amounts typed with a comma or a dot as whole cents', () => {
+    expect(parseEuro('30')).toBe(3000);
+    expect(parseEuro(' 30,5 ')).toBe(3050);
+    expect(parseEuro('27.05')).toBe(2705);
+    expect(parseEuro('0')).toBe(0);
+  });
+
+  it('refuses anything that is not a plain amount', () => {
+    for (const text of ['', '-3', '30,555', 'trenta', '1e3', '30,']) expect(parseEuro(text)).toBeNull();
   });
 });

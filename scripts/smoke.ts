@@ -117,7 +117,7 @@ await expectStatus('/fr', 404);
 const robots = await fetch(`${base}/robots.txt`);
 const robotsText = await robots.text();
 check(robots.status === 200 && robotsText.includes(`Sitemap: ${siteUrl}/sitemap.xml`), 'robots.txt: missing or without sitemap');
-check(robotsText.includes('Disallow: /gestione'), 'robots.txt: reserved areas not listed');
+check(robotsText.includes('Disallow: /area') && robotsText.includes('Disallow: /en/account'), 'robots.txt: reserved areas not listed');
 
 const sitemap = await fetch(`${base}/sitemap.xml`);
 const sitemapText = await sitemap.text();

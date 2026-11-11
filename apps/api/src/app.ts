@@ -13,10 +13,12 @@ import {
   findActiveBeach,
   getBooking,
   getHold,
+  getSharingSettings,
   holderStatement,
   listActiveBeaches,
   listAvailability,
   listBookings,
+  listContracts,
   listInventory,
   listMyContracts,
   listProposals,
@@ -330,6 +332,16 @@ export function createApp(options: AppOptions): Hono {
     const { status } = parse(z.object({ status: z.enum(['active', 'suspended']) }), await body(c.req.raw), 'request');
     await setContractStatus(db, actor, parse(z.uuid(), c.req.param('contractId'), 'season pass'), status);
     return c.body(null, 204);
+  });
+
+  app.get('/v1/manage/beaches/:slug/contracts', async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'sharing.manage');
+    return c.json({ contracts: await listContracts(db, actor) });
+  });
+
+  app.get('/v1/manage/beaches/:slug/sharing-settings', async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'sharing.manage');
+    return c.json({ currency: 'EUR', ...(await getSharingSettings(db, actor)) });
   });
 
   app.put('/v1/manage/beaches/:slug/sharing-settings', async (c) => {

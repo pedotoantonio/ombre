@@ -64,3 +64,18 @@ export const bookingSegment: Record<Locale, string> = { it: 'prenotazione', en: 
 export function bookingPath(locale: Locale, beachSlug: string, bookingId: string): string {
   return `${beachPath(locale, beachSlug)}/${bookingSegment[locale]}/${bookingId}`;
 }
+
+export const accountSection: Record<Locale, string> = { it: 'area', en: 'account' };
+export const accountPages = {
+  signIn: { it: 'accesso', en: 'sign-in' },
+  overview: { it: 'profilo', en: 'overview' },
+  manage: { it: 'gestione', en: 'manage' },
+  season: { it: 'stagionale', en: 'season' },
+} as const satisfies Record<string, Record<Locale, string>>;
+export type AccountPage = keyof typeof accountPages;
+
+/** Address of a page of the reserved area, with an optional identifier after it. */
+export function accountPath(locale: Locale, page: AccountPage, id?: string): string {
+  const base = `${localePrefix(locale)}/${accountSection[locale]}/${accountPages[page][locale]}`;
+  return id ? `${base}/${id}` : base;
+}

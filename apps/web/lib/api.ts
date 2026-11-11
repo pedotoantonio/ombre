@@ -44,9 +44,10 @@ function baseUrl(): string {
 async function call<T>(path: string, init?: RequestInit): Promise<ApiResult<T>> {
   try {
     const response = await fetch(baseUrl() + path, { ...init, cache: 'no-store', signal: AbortSignal.timeout(5000) });
-    const body = (await response.json()) as unknown;
+    const text = await response.text();
+    const body = (text ? JSON.parse(text) : null) as unknown;
     if (response.ok) return { ok: true, data: body as T };
-    const code = (body as { error?: { code?: string } }).error?.code ?? 'unknown';
+    const code = (body as { error?: { code?: string } } | null)?.error?.code ?? 'unknown';
     return { ok: false, status: response.status, code };
   } catch {
     return { ok: false, status: 0, code: 'unreachable' };
@@ -79,6 +80,36 @@ export const api = {
   getHold: (slug: string, holdId: string) =>
     call<ApiHold>(`/v1/beaches/${encodeURIComponent(slug)}/holds/${encodeURIComponent(holdId)}`),
 };
+
+/** Call for the reserved area: any method, optional body, optional session or booking token. */
+export function apiCall<T>(method: string, path: string, options: { body?: unknown; token?: string } = {}): Promise<ApiResult<T>> {
+  return call<T>(path, {
+    method,
+    headers: {
+      ...(options.body === undefined ? {} : { 'Content-Type': 'application/json' }),
+      ...(options.token ? { Authorization: `Bearer ${options.token}` } : {}),
+    },
+    ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) }),
+  });
+}
+
+/** Sends the outcome of a test payment, signed as the test provider would. */
+export async function sandboxNotify(reference: string, outcome: 'succeeded' | 'failed', secret: string): Promise<boolean> {
+  const { createHmac, randomUUID } = await import('node:crypto');
+  const raw = JSON.stringify({ eventId: `evt_${randomUUID()}`, reference, outcome });
+  try {
+    const response = await fetch(`${baseUrl()}/v1/payment-webhooks/sandbox`, {
+      method: 'POST',
+      headers: { 'X-Ombre-Signature': createHmac('sha256', secret).update(raw).digest('hex') },
+      body: raw,
+      cache: 'no-store',
+      signal: AbortSignal.timeout(5000),
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
 
 export const dayPattern = /^\d{4}-\d{2}-\d{2}$/;
 export const slugPattern = /^[a-z0-9]+(-[a-z0-9]+)*$/;

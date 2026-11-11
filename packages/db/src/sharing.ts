@@ -50,6 +50,32 @@ export function setSharingSettings(db: Database, actor: Actor, input: { dailySha
   });
 }
 
+export function getSharingSettings(db: Database, actor: Actor): Promise<{ dailySharedCap: number | null; sharedPriceCents: number | null }> {
+  return withActor(db, actor.beachId, actor.userId, async (tx) => {
+    const [row] = await tx.select({ dailySharedCap: beach.dailySharedCap, sharedPriceCents: beach.sharedPriceCents }).from(beach).where(eq(beach.id, actor.beachId));
+    return row ?? { dailySharedCap: null, sharedPriceCents: null };
+  });
+}
+
+export interface ContractRow {
+  contractId: string;
+  spotCode: string;
+  validFrom: string;
+  validTo: string;
+  status: (typeof seasonContract.$inferSelect)['status'];
+  sharingMode: (typeof seasonContract.$inferSelect)['sharingMode'];
+}
+
+export function listContracts(db: Database, actor: Actor): Promise<ContractRow[]> {
+  return withActor(db, actor.beachId, actor.userId, (tx) =>
+    tx
+      .select({ contractId: seasonContract.id, spotCode: spot.code, validFrom: seasonContract.validFrom, validTo: seasonContract.validTo, status: seasonContract.status, sharingMode: seasonContract.sharingMode })
+      .from(seasonContract)
+      .innerJoin(spot, eq(spot.id, seasonContract.spotId))
+      .orderBy(asc(spot.code), asc(seasonContract.validFrom)),
+  );
+}
+
 interface ProposalRef {
   id: string;
   contractId: string;
