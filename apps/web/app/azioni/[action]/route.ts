@@ -134,6 +134,18 @@ const actions: Record<string, (request: Request, form: Form, lang: Locale) => Pr
     manage(request, form, lang, '/contracts', 'POST', { holderEmail: form('email'), spotId: form('spot'), validFrom: form('from'), validTo: form('to'), sharingMode: form('mode') || 'per_day' }),
   'gestione-stato-abbonamento': (request, form, lang) =>
     manage(request, form, lang, `/contracts/${encodeURIComponent(form('contract'))}/status`, 'POST', { status: form('status') }),
+  'banco-prenota': async (request, form, lang) => {
+    const { getDictionary, config } = await import('@ombre/shared');
+    return manage(request, form, lang, '/desk-bookings', 'POST', { spotId: form('spot'), day: form('day'), guestName: form('name') }, (data) =>
+      getDictionary(lang, config.brandName).account.deskDone((data as { code: string }).code),
+    );
+  },
+  'banco-sposta': (request, form, lang) =>
+    manage(request, form, lang, `/bookings/${encodeURIComponent(form('code'))}/move`, 'POST', { spotId: form('spot') }),
+  'gestione-annulla': async (request, form, lang) => {
+    const { getDictionary, config } = await import('@ombre/shared');
+    return manage(request, form, lang, `/bookings/${encodeURIComponent(form('code'))}/cancel`, 'POST', { reason: getDictionary(lang, config.brandName).account.cancelReason });
+  },
   'reception-accesso': (request, form, lang) =>
     manage(request, form, lang, '/access-events', 'POST', { credential: form('credential'), kind: form('kind') }, (data) => {
       const entry = data as { code: string; spotCode: string; guestName: string };

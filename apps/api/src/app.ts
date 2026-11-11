@@ -7,10 +7,12 @@ import {
   applyPaymentOutcome,
   authorize,
   beginTwoFactor,
+  cancelByBeachClub,
   checkAccess,
   confirmTwoFactor,
   createContract,
   decideProposal,
+  deskBooking,
   DomainError,
   findActiveBeach,
   getBooking,
@@ -29,6 +31,7 @@ import {
   listMemberships,
   login,
   logout,
+  moveBooking,
   nextAvailableDay,
   proposeDays,
   publishDraft,
@@ -163,6 +166,8 @@ const siteDraftSchema = z.object({
   template: z.enum(siteTemplates),
   content: z.object({ it: siteTextsSchema.refine((texts) => texts.description.length > 0), en: siteTextsSchema.nullable() }),
 });
+const deskSchema = z.object({ spotId: z.uuid(), day: daySchema, guestName: z.string().trim().min(1).max(120) });
+const bookingCodeSchema = z.string().regex(/^OM-\d{6}-\d{3}$/i);
 const idempotencyKeySchema = z.string().min(8).max(200).regex(/^[\x21-\x7e]+$/);
 
 function parse<T>(schema: z.ZodType<T>, value: unknown, what: string): T {
@@ -356,6 +361,25 @@ export function createApp(options: AppOptions): Hono {
   route({ method: 'post', path: '/v1/manage/beaches/:slug/access-events', summary: 'Register an entry or an exit from a pass', tag: 'Beach club', auth: 'session', request: accessSchema, success: 201, errors: [400, 401, 403, 409, 422] }, async (c) => {
     const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'access.check');
     return c.json(await checkAccess(db, actor, parse(accessSchema, await body(c.req.raw), 'request'), signingSecret), 201);
+  });
+
+  route({ method: 'post', path: '/v1/manage/beaches/:slug/desk-bookings', summary: 'Book a spot at the front desk, paid there', tag: 'Beach club', auth: 'session', request: deskSchema, success: 201, errors: [400, 401, 403, 404, 409] }, async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'bookings.create');
+    return c.json(await deskBooking(db, actor, parse(deskSchema, await body(c.req.raw), 'request'), signingSecret), 201);
+  });
+
+  route({ method: 'post', path: '/v1/manage/beaches/:slug/bookings/:code/move', summary: 'Move a confirmed booking to another spot of the same day', tag: 'Beach club', auth: 'session', request: z.object({ spotId: z.uuid() }), success: 204, errors: [400, 401, 403, 404, 409] }, async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'bookings.move');
+    const { spotId } = parse(z.object({ spotId: z.uuid() }), await body(c.req.raw), 'request');
+    await moveBooking(db, actor, { code: parse(bookingCodeSchema, c.req.param('code'), 'booking code'), spotId });
+    return c.body(null, 204);
+  });
+
+  route({ method: 'post', path: '/v1/manage/beaches/:slug/bookings/:code/cancel', summary: 'Cancel a confirmed booking and record its refund', tag: 'Beach club', auth: 'session', request: z.object({ reason: z.string().trim().min(3).max(200) }), success: 204, errors: [400, 401, 403, 404, 409] }, async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'bookings.cancel');
+    const { reason } = parse(z.object({ reason: z.string().trim().min(3).max(200) }), await body(c.req.raw), 'request');
+    await cancelByBeachClub(db, actor, { code: parse(bookingCodeSchema, c.req.param('code'), 'booking code'), reason });
+    return c.body(null, 204);
   });
 
   route({ method: 'get', path: '/v1/manage/beaches/:slug/bookings', summary: 'Bookings of a day for the front desk', tag: 'Beach club', auth: 'session', query: { day: 'YYYY-MM-DD' }, success: 200, errors: [400, 401, 403] }, async (c) => {

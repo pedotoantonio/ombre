@@ -71,7 +71,7 @@ export async function insertBeach(admin: pg.Client, slug: string, options: { spo
   for (let number = 1; number <= (options.spots ?? 3); number += 1) {
     const spot = await admin.query<{ id: string }>(
       'INSERT INTO spot (beach_id, code, row_number) VALUES ($1, $2, 1) RETURNING id',
-      [beachId, `A0${number}`],
+      [beachId, `A${String(number).padStart(2, '0')}`],
     );
     const spotId = spot.rows[0]!.id;
     spotIds.push(spotId);

@@ -127,3 +127,29 @@ firmati con `OMBRE_SIGNING_SECRET`, così non serve conservare un segreto per ri
 pass non si può indovinare. Manca ancora il secondo fattore per gestore e
 amministratore, richiesto dal template.
 
+## D17 — Sito dello stabilimento: revisioni, tre modelli, solo testo — accettata (11/11/2026)
+
+Ogni salvataggio lavora su una bozza con numero di versione; la pubblicazione archivia
+la revisione precedente e il ripristino crea una nuova bozza, senza riscrivere la storia.
+L'anteprima è la bozza resa nell'editor, visibile solo a chi ha accesso allo
+stabilimento: non esistono collegamenti di anteprima pubblici. I contenuti sono testo
+semplice convalidato; immagini e dominio personalizzato sono rimandati perché richiedono
+archiviazione dei file e gestione dei DNS.
+
+## D18 — Stessa coda per sito e banco; l'annullamento è dello stabilimento — accettata (11/11/2026)
+
+La prenotazione al banco passa dalla stessa riserva e dallo stesso blocco di riga di un
+acquisto online. Lo spostamento acquisisce la nuova postazione prima di rilasciare la
+precedente e non ricalcola l'economia della vendita. L'annullamento oggi può farlo solo
+il gestore: libera la postazione, invalida il pass, registra il rimborso da eseguire e
+storna le quote con nuovi movimenti. L'annullamento da parte dell'ospite resta fuori
+finché le condizioni di cancellazione non sono definite.
+
+## D19 — Ambiente dimostrativo con indirizzo temporaneo — accettata (11/11/2026)
+
+Su richiesta del committente esiste un ambiente dimostrativo separato (progetto compose
+`ombre-demo`, porte 3220 e 3221, segreti generati in `.env.demo`, non versionato)
+raggiungibile da un indirizzo temporaneo creato dal profilo `tunnel`. Contiene solo dati
+dimostrativi e il fornitore di pagamento di prova. Non è un rilascio: il sito resta non
+indicizzabile e dichiara che il servizio è in preparazione.
+

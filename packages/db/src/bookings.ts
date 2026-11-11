@@ -1,12 +1,12 @@
-import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import { createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { and, asc, eq, sql } from 'drizzle-orm';
 import { canTransition } from '@ombre/shared';
 import { withActor, withBeach, type Database, type Transaction } from './client';
-import { DomainError } from './inventory';
+import { acquireHold, DomainError } from './inventory';
 import { enqueue } from './jobs';
 import { recordRefundDue, recordSale } from './ledger';
 import type { Actor } from './manage';
-import { accessEvent, auditEvent, beach, booking, hold, inventoryDay, pass, payment, promotion, providerEvent, refund, spot } from './schema';
+import { accessEvent, allocation, auditEvent, beach, booking, hold, inventoryDay, ledgerEntry, pass, payment, promotion, providerEvent, refund, spot } from './schema';
 
 /** Signs identifiers so that links and passes cannot be guessed and need no stored secret per row. */
 function sign(secret: string, purpose: string, id: string): string {
@@ -24,6 +24,7 @@ const passCredential = (secret: string, passId: string): string => `${passId}.${
 
 export interface CheckoutResult {
   bookingId: string;
+  code: string;
   /** Lets the guest read the booking without an account. */
   accessToken: string;
   status: (typeof booking.$inferSelect)['status'];
@@ -34,8 +35,10 @@ export interface CheckoutResult {
 export interface CheckoutRequest {
   holdId: string;
   guestName: string;
-  guestEmail: string;
+  /** Missing only for bookings made at the front desk. */
+  guestEmail: string | null;
   locale?: 'it' | 'en';
+  source?: 'online' | 'desk';
 }
 
 /**
@@ -55,6 +58,7 @@ export function startCheckout(db: Database, beachId: string, request: CheckoutRe
       if (!paid) throw new Error('booking without payment');
       return {
         bookingId: existing.id,
+        code: existing.code,
         accessToken: bookingAccessToken(secret, existing.id),
         status: existing.status,
         payment: { provider: paid.provider, reference: paid.providerRef, amountCents: paid.amountCents },
@@ -87,7 +91,8 @@ export function startCheckout(db: Database, beachId: string, request: CheckoutRe
         code,
         status: 'under_review',
         guestName: request.guestName,
-        guestEmail: request.guestEmail.toLowerCase(),
+        guestEmail: request.guestEmail?.toLowerCase() ?? null,
+        source: request.source ?? 'online',
         locale: request.locale ?? 'it',
         listPriceCents: held.listPriceCents,
         discountCents: held.discountCents,
@@ -97,13 +102,15 @@ export function startCheckout(db: Database, beachId: string, request: CheckoutRe
       .returning();
     if (!created) throw new Error('booking was not created');
 
-    const reference = `sbx_${randomBytes(12).toString('hex')}`;
-    await tx.insert(payment).values({ beachId, bookingId: created.id, provider: 'sandbox', providerRef: reference, status: 'in_progress', amountCents: held.totalCents });
+    const provider = request.source === 'desk' ? 'desk' : 'sandbox';
+    const reference = `${provider === 'desk' ? 'desk' : 'sbx'}_${randomBytes(12).toString('hex')}`;
+    await tx.insert(payment).values({ beachId, bookingId: created.id, provider, providerRef: reference, status: 'in_progress', amountCents: held.totalCents });
     return {
       bookingId: created.id,
+      code: created.code,
       accessToken: bookingAccessToken(secret, created.id),
       status: created.status,
-      payment: { provider: 'sandbox', reference, amountCents: held.totalCents },
+      payment: { provider, reference, amountCents: held.totalCents },
       replayed: false,
     };
   });
@@ -299,4 +306,87 @@ export function listBookings(db: Database, actor: Actor, day: string): Promise<B
       .where(eq(inventoryDay.day, day))
       .orderBy(asc(booking.code)),
   );
+}
+
+/**
+ * Booking taken at the front desk and paid there. It goes through the same hold and the
+ * same row lock as a purchase on the website: no channel can jump the queue.
+ */
+export async function deskBooking(db: Database, actor: Actor, input: { spotId: string; day: string; guestName: string }, secret: string): Promise<{ code: string }> {
+  const held = await acquireHold(db, actor.beachId, { spotId: input.spotId, day: input.day, idempotencyKey: `desk-${randomUUID()}`, ttlSeconds: 120 });
+  const started = await startCheckout(db, actor.beachId, { holdId: held.holdId, guestName: input.guestName, guestEmail: null, source: 'desk' }, secret);
+  const outcome = await applyPaymentOutcome(db, { provider: 'desk', eventId: `desk-${started.bookingId}`, reference: started.payment.reference, outcome: 'succeeded' });
+  if (outcome !== 'confirmed') throw new DomainError('inventory_conflict', 'This spot has just been taken');
+  await withActor(db, actor.beachId, actor.userId, (tx) =>
+    tx.insert(auditEvent).values({ beachId: actor.beachId, actorUserId: actor.userId, action: 'booking.desk', target: started.code, detail: { totalCents: started.payment.amountCents } }),
+  );
+  return { code: started.code };
+}
+
+async function confirmedByCode(tx: Transaction, code: string) {
+  const [found] = await tx.select({ id: booking.id, inventoryDayId: booking.inventoryDayId }).from(booking).where(eq(booking.code, code.toUpperCase()));
+  if (!found) throw new DomainError('not_found', 'Booking not found');
+  return found;
+}
+
+/**
+ * Moves a confirmed booking to another spot on the same day. The new spot is taken and the
+ * old one released in one transaction; rows are locked in a fixed order to avoid deadlocks.
+ */
+export function moveBooking(db: Database, actor: Actor, input: { code: string; spotId: string }): Promise<void> {
+  return withActor(db, actor.beachId, actor.userId, async (tx) => {
+    const found = await confirmedByCode(tx, input.code);
+    const [current] = await tx.select({ day: inventoryDay.day, spotId: inventoryDay.spotId }).from(inventoryDay).where(eq(inventoryDay.id, found.inventoryDayId));
+    if (!current) throw new DomainError('not_found', 'Booking not found');
+    if (current.spotId === input.spotId) return;
+
+    const rows = await tx
+      .select()
+      .from(inventoryDay)
+      .where(and(eq(inventoryDay.day, current.day), sql`${inventoryDay.spotId} in (${current.spotId}, ${input.spotId})`))
+      .orderBy(asc(inventoryDay.id))
+      .for('update');
+    const from = rows.find((row) => row.spotId === current.spotId);
+    const to = rows.find((row) => row.spotId === input.spotId);
+    if (!to) throw new DomainError('not_found', 'The new spot is not published on this day');
+    const [reserved] = await tx.select().from(booking).where(eq(booking.id, found.id)).for('update');
+    if (!from || !reserved || reserved.status !== 'confirmed' || reserved.inventoryDayId !== from.id) throw new DomainError('invalid_state', 'Only a confirmed booking can be moved');
+    if (to.state !== 'available') throw new DomainError('inventory_conflict', 'The new spot is not free');
+
+    await tx.update(inventoryDay).set({ state: 'occupied', updatedAt: sql`now()` }).where(eq(inventoryDay.id, to.id));
+    await tx.update(booking).set({ inventoryDayId: to.id }).where(eq(booking.id, reserved.id));
+    await tx.update(inventoryDay).set({ state: 'available', updatedAt: sql`now()` }).where(eq(inventoryDay.id, from.id));
+    await tx.insert(auditEvent).values({ beachId: actor.beachId, actorUserId: actor.userId, action: 'booking.move', target: reserved.code, detail: { from: from.spotId, to: to.spotId } });
+  });
+}
+
+/**
+ * The beach club cancels a confirmed booking (closure, bad weather, a mistake). The spot is
+ * free again, the pass stops working, the refund is recorded and the shares are reversed
+ * with new ledger entries.
+ */
+export function cancelByBeachClub(db: Database, actor: Actor, input: { code: string; reason: string }): Promise<void> {
+  return withActor(db, actor.beachId, actor.userId, async (tx) => {
+    const found = await confirmedByCode(tx, input.code);
+    const [day] = await tx.select().from(inventoryDay).where(eq(inventoryDay.id, found.inventoryDayId)).for('update');
+    const [reserved] = await tx.select().from(booking).where(eq(booking.id, found.id)).for('update');
+    if (!day || !reserved || reserved.status !== 'confirmed' || reserved.inventoryDayId !== day.id) throw new DomainError('invalid_state', 'Only a confirmed booking can be cancelled');
+
+    await tx.update(booking).set({ status: 'cancelled' }).where(eq(booking.id, reserved.id));
+    await tx.update(pass).set({ revoked: true }).where(eq(pass.bookingId, reserved.id));
+    await tx.update(inventoryDay).set({ state: 'available', updatedAt: sql`now()` }).where(eq(inventoryDay.id, day.id));
+    if (reserved.promotionId) {
+      await tx.update(promotion).set({ committedUses: sql`${promotion.committedUses} - 1` }).where(eq(promotion.id, reserved.promotionId));
+    }
+
+    const [paid] = await tx.select().from(payment).where(eq(payment.bookingId, reserved.id));
+    if (paid) await tx.insert(refund).values({ beachId: actor.beachId, paymentId: paid.id, amountCents: paid.amountCents, reason: input.reason });
+    const reversed = await tx.update(allocation).set({ state: 'adjusted' }).where(eq(allocation.bookingId, reserved.id)).returning({ party: allocation.party, amountCents: allocation.amountCents });
+    await tx.insert(ledgerEntry).values([
+      ...reversed.map((row) => ({ beachId: actor.beachId, bookingId: reserved.id, kind: 'adjustment', party: row.party, amountCents: -row.amountCents })),
+      { beachId: actor.beachId, bookingId: reserved.id, kind: 'refund_due', amountCents: -reserved.totalCents },
+    ]);
+    await enqueue(tx, actor.beachId, 'booking.cancelled', { bookingId: reserved.id });
+    await tx.insert(auditEvent).values({ beachId: actor.beachId, actorUserId: actor.userId, action: 'booking.cancel', target: reserved.code, detail: { reason: input.reason } });
+  });
 }

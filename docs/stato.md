@@ -4,115 +4,81 @@ Aggiornato all'11/11/2026.
 
 ## Dove siamo
 
-- **Documentazione**: concept Beach Sharing Network consolidato nel progetto
-  professionale v3.0; template SweetHost applicato (catalogo dei moduli, schede,
-  requisiti trasversali, checklist); stesura in [progetto.md](progetto.md); registro delle
-  decisioni; schema della struttura logica ([struttura-logica.png](struttura-logica.png));
-  requisiti di design, accessibilità, prestazioni, SEO, AEO e GEO in
-  [qualita-web.md](qualita-web.md).
-- **Codice, provato in container**:
-  - sito pubblico bilingue (italiano e inglese) con sei pagine per lingua;
-  - nucleo condiviso con calcoli in centesimi e le cinque macchine a stati;
-  - database PostgreSQL con stabilimenti, postazioni, riga unica `inventory_day`,
-    riserve e promozioni, isolato per stabilimento con RLS;
-  - API `/v1`: elenco degli stabilimenti attivi, disponibilità di una giornata,
-    preventivo calcolato dal server, riserva con chiave di idempotenza;
-  - percorso di riserva nel sito, nelle due lingue e senza bisogno di script: pagina
-    «Esplora» con gli stabilimenti attivi, scheda del bagno con le postazioni libere per
-    fila, riepilogo con prezzo e codice promozionale, riserva e pagina della riserva;
-  - accessi e ruoli nell'API: password verificate dentro il database, blocco dopo cinque
-    tentativi, sessioni revocabili, ruoli gestore, reception e contabilità per
-    stabilimento, registro delle azioni;
-  - gestione dell'inventario nell'API: pubblicazione di una giornata, blocco operativo,
-    cambio di prezzo, vista completa delle postazioni;
-  - prenotazione nell'API: dalla riserva alla prenotazione in verifica, pagamento con un
-    fornitore di prova, conferma solo a pagamento riuscito, codice `OM-AAMMGG-NNN`, pass
-    firmato, rimborso registrato quando la giornata non è più disponibile;
-  - reception nell'API: ingresso, uscita e rientro con il testo del QR o il codice breve,
-    elenco delle prenotazioni del giorno;
-  - condivisione stagionale nell'API: abbonamenti registrati dal gestore, proposte dello
-    stagionale anche con ricorrenza, autorizzazione giornata per giornata o automatica,
-    limite giornaliero, ritiro delle date libere, sospensione dell'abbonamento;
-  - economia nell'API: ripartizione di ogni vendita secondo le percentuali in vigore,
-    registro che si può solo estendere, maturazione a fine giornata, riepilogo per lo
-    stabilimento e rendiconto dello stagionale senza dati dell'ospite;
-  - worker: coda affidabile scritta nella stessa transazione delle modifiche, conferma
-    della prenotazione per posta nella lingua dell'ospite (senza un fornitore reale la
-    notifica è registrata come non inviata), pulizia delle riserve scadute, chiusura
-    automatica delle giornate passate con maturazione delle quote;
-  - aree riservate nel sito, in italiano e inglese e senza bisogno di script: dati
-    dell'ospite, pagamento di prova e pagina della prenotazione con il pass (codice QR e
-    codice breve); accesso con sessione; area dello stagionale (proposte con ricorrenza,
-    ritiro, rendiconto); gestione dello stabilimento (giornata, blocchi, prezzi,
-    proposte, regole, abbonamenti, riepilogo economico); reception (verifica del pass,
-    prenotazioni del giorno). Ogni ruolo vede solo ciò che gli spetta;
-  - sito dello stabilimento: testi in italiano e, se compilati, in inglese; tre modelli
-    grafici sullo stesso contenuto; bozza con anteprima, pubblicazione, archivio delle
-    revisioni e ripristino; conflitto segnalato se due persone modificano insieme; solo
-    testo semplice, nessun codice accettato;
-  - contratti e protezioni: documento OpenAPI costruito dalle stesse regole che
-    convalidano le richieste, limiti alle richieste per indirizzo sui punti più esposti,
-    intestazione Content-Security-Policy, salvataggio del database e prova di ripristino;
-  - `Dockerfile` e compose con database, migrazioni, API, worker e sito.
-- **Non fatto**: secondo fattore di accesso, inviti e recupero password (oggi gli accessi
-  li crea l'amministratore da riga di comando), console centrale della piattaforma,
-  annullamento da parte dell'ospite, immagini e dominio personalizzato nel sito del bagno, pagamenti
-  e liquidazioni reali, invio reale della posta. Nessun dominio registrato, nessuna
-  pubblicazione. Il sito dichiara che il servizio è in preparazione e chiede di non
-  essere indicizzato.
+Il primo rilascio è costruito e collaudato in ambiente di prova, con dati dimostrativi.
+Non è in produzione: nessun dominio, nessun pagamento reale, nessun dato di stabilimenti o
+clienti veri. Il sito dichiara che il servizio è in preparazione e chiede di non essere
+indicizzato.
 
-## Controlli eseguiti l'11/11/2026
+**Fatto e provato in container**
 
-| Controllo | Esito |
-|---|---|
-| Lint e controllo dei tipi | Superati |
-| Test (76, di cui 47 su un PostgreSQL vero) | Superati |
-| Due acquisti sulla stessa giornata | Dodici richieste simultanee, una sola riserva; ripetuto sull'API in container con dieci richieste: un 201 e nove 409 |
-| Prezzo manipolato nel browser | L'importo inviato dal client è ignorato: vale quello del server |
-| MARE10 su €30 | Totale €27, salvato nella riserva e immutato se il listino cambia |
-| Ultimo utilizzo di una promozione conteso | Limite rispettato; l'utilizzo torna disponibile al rilascio |
-| Riserva scaduta | La giornata torna acquistabile anche senza job di pulizia |
-| Accesso a un altro stabilimento | Zero righe lette e zero scritte dal database, qualunque sia la query |
-| Ruoli | La reception blocca ma non cambia i prezzi; la contabilità non tocca l'inventario; un gestore non entra in un altro stabilimento; ogni azione finisce nel registro |
-| Accessi | Risposta identica per password errata e utente inesistente; blocco al quinto errore; uscita e rimozione dell'appartenenza hanno effetto immediato |
-| Pagamento riuscito tardivo | Giornata ancora libera: prenotazione confermata. Giornata presa da un altro: nessuna prenotazione e rimborso registrato |
-| Notifica del fornitore ripetuta o fuori ordine | Applicata una volta sola: nessuna conferma o pass duplicato; firma errata rifiutata |
-| Pagamento fallito | Prenotazione annullata, postazione di nuovo libera, utilizzo della promozione restituito |
-| Due scansioni del pass | Sei scansioni simultanee, un solo ingresso; uscita e rientro controllati; pass contraffatto, di un altro giorno o annullato rifiutato |
-| Condivisione stagionale | Giornata visibile solo dopo l'autorizzazione; limite giornaliero rispettato anche con due autorizzazioni simultanee; ritiro rifiutato su una data riservata; la sospensione ferma le vendite e non tocca le prenotazioni confermate |
-| Ripartizione | Vendita condivisa a €27: 13,50 / 10,80 / 2,70. Giornata ordinaria: nessuna quota stagionale. Somma delle quote sempre uguale al totale. Registro non modificabile nemmeno dal proprietario del database |
-| Worker | Ogni elemento della coda trattato una volta anche con due worker insieme; un errore viene ritentato e abbandonato al quinto tentativo; riserve scadute liberate; giornate passate chiuse; una giornata passata non si può più vendere |
-| Percorso completo sui container (20 verifiche) | Riserva, prenotazione, pagamento di prova firmato, conferma `OM-270617-001`, notifica dal worker, quote 13,50 / 10,80 / 2,70, ruoli e rendiconto dello stagionale |
-| Aree riservate sul sito in container (37 verifiche) | Ospite: dati, pagamento di prova, pass con QR, pagina non apribile con un token errato. Gestore: pubblica, blocca, autorizza. Reception: verifica i pass, non cambia i prezzi. Stagionale: propone, vede la quota di 13,50 senza dati dell'ospite, ritira. Uscita e ruoli rispettati |
-| Sito dello stabilimento (20 verifiche sui container) | La bozza non è visibile al pubblico; pubblicazione e ripristino conservano la storia; cambio di modello senza perdita di contenuti; pagina inglese senza testi italiani quando manca la traduzione; salvataggio su versione vecchia rifiutato; la reception legge ma non modifica |
-| Documento OpenAPI | Un test confronta il documento con le rotte servite: 35 su 35, nessuna in più |
-| Limiti alle richieste | Undicesimo tentativo di accesso in un minuto dallo stesso indirizzo rifiutato con l'attesa indicata; altri indirizzi non toccati |
-| Backup e ripristino | Salvataggio ripristinato su un PostgreSQL vuoto: stesse righe in tutte le 24 tabelle e 26 regole di isolamento presenti |
-| Chiave di idempotenza | Stessa richiesta, stessa riserva; richiesta diversa, errore esplicito |
-| Pagine servite dal container (204 verifiche su 12 pagine) | Superate, intestazioni di sicurezza comprese |
-| Percorso di riserva sul sito in container (24 verifiche) | Superato: MARE10 da 30,00 a 27,00, doppio invio del modulo senza doppia riserva, secondo acquirente rimandato alla scelta, modulo inviato da un altro sito rifiutato, dati dimostrativi non indicizzabili |
-| Container | Sito e API non root, in sola lettura; database non pubblicato; ruolo dell'API senza privilegi |
-| Riavvio | Migrazioni e seed ripetibili senza effetti |
+- Sito pubblico in italiano e inglese: sei pagine per lingua, più «Esplora» e la scheda
+  di ogni stabilimento.
+- Prenotazione dell'ospite: scelta della postazione, riepilogo con codice promozionale,
+  riserva, dati, pagamento di prova, pass con codice QR e codice breve.
+- Reception: verifica del pass con ingresso, uscita e rientro, prenotazione al banco,
+  spostamento di postazione, elenco del giorno.
+- Gestione dello stabilimento: giornate, prezzi, blocchi, annullamento con rimborso
+  registrato, proposte degli stagionali, regole della condivisione, abbonamenti,
+  riepilogo economico, sito con tre modelli, bozze e revisioni.
+- Stagionale: proposte anche ricorrenti, ritiro delle date libere, rendiconto con la
+  propria quota e senza dati dell'ospite.
+- Economia: ripartizione di ogni vendita, registro che si può solo estendere,
+  maturazione a fine giornata, storni con movimenti compensativi.
+- Piattaforma: isolamento tra stabilimenti nel database, accessi con blocco dei
+  tentativi e verifica in due passaggi, ruoli, registro delle azioni, limiti alle
+  richieste, documento OpenAPI, worker con coda affidabile, backup con ripristino provato.
+- Docker: database, migrazioni, API, worker e sito partono con un comando; sito, API e
+  worker girano non root e in sola lettura.
 
-Verifiche ancora aperte: Core Web Vitals misurati, prove con lettore di schermo e da
-tastiera, controllo automatico di accessibilità, immagine per le anteprime social,
-pagina 404 con la grafica del sito. La Content-Security-Policy ammette ancora gli script
-in linea, perché il framework scrive in linea i dati delle pagine. I limiti alle
-richieste vivono nella memoria di un solo processo dell'API. Il preventivo non è salvato
-con una scadenza propria.
+**Non fatto**
 
-## Prossimo risultato da costruire
+- Pagamenti, rimborsi e liquidazioni con un fornitore reale.
+- Invio reale della posta e delle notifiche.
+- Inviti e recupero della password: oggi gli accessi li crea l'amministratore da riga di
+  comando.
+- Console centrale della piattaforma, gruppi e cooperative, piani in `plan_feature`.
+- Annullamento da parte dell'ospite: aspetta le condizioni di cancellazione.
+- Chiusura di un'intera giornata con annullamento di tutte le prenotazioni.
+- Immagini e dominio personalizzato nel sito dello stabilimento.
+- Pagine di località, «Chi siamo», mappa.
+- Metriche, allarmi, backup pianificato, CI collegata a un repository.
 
-Un incremento operativo verificabile in ambiente di prova che colleghi:
-sito personale → autorizzazione stagionale → acquisto → inventario → reception →
-rendiconto. Inventario, riserva e percorso nel sito ci sono; il prossimo anello sono
-sicurezza e contratti dell'API, poi il collaudo finale.
+## Collaudo
 
-## Passi successivi in ordine
+Esito completo in [collaudo.md](collaudo.md). In sintesi, l'11/11/2026: 85 test e 332
+controlli sul sistema in esecuzione superati, backup ripristinato. Dei 15 scenari di
+accettazione del progetto, 12 sono superati e 3 lo sono in parte (rimborsi eseguiti,
+chiusura di un'intera giornata, prove di accessibilità con persone).
 
-1. Sicurezza e contratti: OpenAPI, limiti alle richieste, CSP, backup, secondo fattore.
-2. In parallelo, fuori dal codice: chiudere le decisioni di avvio (marchio e domini,
-   soggetto venditore, provider pagamenti, condizioni) e scegliere i partner pilota.
+Limiti noti del codice: la Content-Security-Policy ammette gli script in linea, perché
+il framework scrive in linea i dati delle pagine; i limiti alle richieste vivono nella
+memoria di un solo processo dell'API; il preventivo non è salvato con una scadenza
+propria; il segreto della verifica in due passaggi è salvato in chiaro nel database.
+
+## Ambiente dimostrativo
+
+Progetto compose `ombre-demo`, porte 3220 (sito) e 3221 (API), segreti in `.env.demo`
+(non versionato). Si avvia e si ferma così, dalla cartella `ombre/`:
+
+```bash
+docker compose --env-file .env.demo -p ombre-demo --profile tunnel up -d
+docker compose --env-file .env.demo -p ombre-demo --profile tunnel down
+```
+
+L'indirizzo pubblico temporaneo è nel registro del servizio `tunnel` e cambia a ogni
+avvio. Vedi la decisione D19.
+
+## Passi successivi
+
+1. Decisioni che spettano al committente: marchio e dominio, soggetto venditore,
+   fornitore di pagamento, condizioni di cancellazione, piani e commissioni, zona e
+   partner del pilota. Elenco in
+   [qualita-web.md §8](qualita-web.md#8-dati-e-decisioni-che-servono-dal-proprietario).
+2. Con quelle decisioni: fornitore di pagamento reale, posta reale, annullamento
+   dell'ospite, pagine di località, contenuti definitivi.
+3. Prima del pilota: repository dedicato con CI, proxy pubblico con HTTPS, Docker
+   secrets, backup pianificato, metriche e allarmi, verifica di sicurezza indipendente,
+   prove di accessibilità con persone, formazione della reception.
 
 ## Dipendenze esterne aperte
 
@@ -120,6 +86,3 @@ sicurezza e contratti dell'API, poi il collaudo finale.
 - Validazione del provider di pagamento sul modello a tre beneficiari.
 - Pareri professionali: fiscalità delle quote, privacy, contratti degli stabilimenti.
 - Selezione dei partner pilota e dei referenti.
-- Dati per i contenuti pubblici: soggetto che pubblica, piani confermati, condizioni di
-  annullamento, canali di assistenza, indirizzi proposti e scelta sui crawler AI (elenco
-  completo in [qualita-web.md §8](qualita-web.md#8-dati-e-decisioni-che-servono-dal-proprietario)).

@@ -257,6 +257,7 @@ async function ManageView({ locale, beachSlug, query }: { locale: Locale; beachS
     can(role, 'sharing.manage') ? apiCall<{ contracts: (Omit<Contract, 'beachSlug' | 'beachName'>)[] }>('GET', `${base}/contracts`, { token }) : null,
     can(role, 'reports.read') ? apiCall<Report>('GET', `${base}/reports/summary?from=${month}&to=${monthEnd}`, { token }) : null,
   ]);
+  const freeSpots = inventory?.ok ? inventory.data.spots.filter((row) => row.state === 'available') : [];
   const euro = (cents: number | null) => (cents === null ? '' : (cents / 100).toFixed(2).replace('.', locale === 'it' ? ',' : '.'));
 
   return (
@@ -295,6 +296,32 @@ async function ManageView({ locale, beachSlug, query }: { locale: Locale; beachS
                 <button className="button" type="submit" name="kind" value="entry">{t.entry}</button>
                 <button className="button button--secondary" type="submit" name="kind" value="exit">{t.exit}</button>
               </form>
+              {can(role, 'bookings.create') && inventory?.ok ? (
+                <>
+                  <h2>{t.deskTitle}</h2>
+                  <p className="prose">{t.deskLead}</p>
+                  {freeSpots.length === 0 ? (
+                    <p className="prose">{t.noFreeSpots}</p>
+                  ) : (
+                    <form method="post" action="/azioni/banco-prenota" className="form-row">
+                      <Hidden values={common} />
+                      <div className="field">
+                        <label htmlFor="banco-postazione">{t.spot}</label>
+                        <select id="banco-postazione" name="spot" required>
+                          {freeSpots.map((row) => (
+                            <option key={row.spotId} value={row.spotId}>{`${row.code} · ${row.priceCents === null ? '' : formatMoney(row.priceCents, locale)}`}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="field">
+                        <label htmlFor="banco-ospite">{t.deskGuest}</label>
+                        <input id="banco-ospite" name="name" maxLength={120} required />
+                      </div>
+                      <button className="button button--secondary" type="submit">{t.deskBook}</button>
+                    </form>
+                  )}
+                </>
+              ) : null}
               <h2>{t.bookingsTitle}</h2>
               {bookings.data.bookings.length === 0 ? (
                 <p className="prose">{t.noBookings}</p>
@@ -302,12 +329,33 @@ async function ManageView({ locale, beachSlug, query }: { locale: Locale; beachS
                 <div className="table-wrap">
                   <table className="table">
                     <thead>
-                      <tr><th>{t.code}</th><th>{t.spot}</th><th>{t.guest}</th><th>{t.booking}</th><th>{t.presence}</th></tr>
+                      <tr><th>{t.code}</th><th>{t.spot}</th><th>{t.guest}</th><th>{t.booking}</th><th>{t.presence}</th><th>{t.actions}</th></tr>
                     </thead>
                     <tbody>
                       {bookings.data.bookings.map((row) => (
                         <tr key={row.code}>
                           <td>{row.code}</td><td>{row.spotCode}</td><td>{row.guestName}</td><td>{t.bookingStates[row.status]}</td><td>{t.presences[row.presence]}</td>
+                          <td>
+                            {row.status === 'confirmed' && can(role, 'bookings.move') && freeSpots.length > 0 ? (
+                              <form method="post" action="/azioni/banco-sposta" className="inline-form">
+                                <Hidden values={{ ...common, code: row.code }} />
+                                <select name="spot" aria-label={`${t.moveTo}, ${row.code}`} required>
+                                  {freeSpots.map((free) => (
+                                    <option key={free.spotId} value={free.spotId}>{free.code}</option>
+                                  ))}
+                                </select>
+                                <button className="button button--secondary button--small" type="submit">{t.move}</button>
+                              </form>
+                            ) : null}
+                            {row.status === 'confirmed' && can(role, 'bookings.cancel') ? (
+                              <form method="post" action="/azioni/gestione-annulla" className="inline-form">
+                                <Hidden values={{ ...common, code: row.code }} />
+                                <button className="button button--secondary button--small" type="submit">
+                                  {t.cancelBooking} <span className="visually-hidden">{row.code}</span>
+                                </button>
+                              </form>
+                            ) : null}
+                          </td>
                         </tr>
                       ))}
                     </tbody>

@@ -11,7 +11,7 @@ e non sono ripetuti qui.
 
 - **Id**: `marketplace_search`
 - **Strato**: Canali
-- **Stato**: in arrivo
+- **Stato**: in prova (funziona nell'ambiente dimostrativo, non in produzione)
 - **Chiave di piano**: tutti i piani (la visibilità sul portale è parte dell'adesione)
 - **Piano minimo**: —
 - **Limite**: nessuno
@@ -41,7 +41,7 @@ parametri non indicizzabili ([qualita-web.md §5](qualita-web.md#5-seo-tecnica-d
 
 - **Id**: `inventory`
 - **Strato**: Dominio
-- **Stato**: in arrivo
+- **Stato**: in prova (funziona nell'ambiente dimostrativo, non in produzione)
 - **Chiave di piano**: tutti i piani
 - **Piano minimo**: —
 - **Limite**: postazioni per struttura secondo piano
@@ -69,7 +69,7 @@ stessa protezione; job che non libera righe riacquisite.
 
 - **Id**: `season_sharing`
 - **Strato**: Dominio (specifico di Ombrè)
-- **Stato**: in arrivo
+- **Stato**: in prova (funziona nell'ambiente dimostrativo, non in produzione)
 - **Chiave di piano**: `season_sharing`
 - **Piano minimo**: tutti i piani del pilota
 - **Limite**: massimo giornaliero di postazioni condivise per struttura
@@ -102,7 +102,7 @@ contingente rispettato sotto concorrenza.
 
 - **Id**: `booking_checkout`
 - **Strato**: Dominio
-- **Stato**: in arrivo
+- **Stato**: in prova (funziona nell'ambiente dimostrativo, non in produzione)
 - **Chiave di piano**: tutti i piani
 - **Piano minimo**: —
 - **Limite**: nessuno
@@ -133,7 +133,7 @@ riacquisizione o rimborso; webhook duplicato senza effetti.
 
 - **Id**: `promotions`
 - **Strato**: Dominio
-- **Stato**: in arrivo
+- **Stato**: in prova (funziona nell'ambiente dimostrativo, non in produzione)
 - **Chiave di piano**: `promotions`
 - **Piano minimo**: tutti i piani del pilota
 - **Limite**: cap di utilizzi per promozione; una fruizione per account verificato
@@ -163,7 +163,7 @@ motivo specifico e prezzo da riaccettare.
 
 - **Id**: `pass_reception`
 - **Strato**: Operazioni
-- **Stato**: in arrivo
+- **Stato**: in prova (funziona nell'ambiente dimostrativo, non in produzione)
 - **Chiave di piano**: tutti i piani
 - **Piano minimo**: —
 - **Limite**: nessuno
@@ -194,7 +194,7 @@ spostamento acquisisce prima di rilasciare.
 
 - **Id**: `site_builder`
 - **Strato**: Canali
-- **Stato**: in arrivo
+- **Stato**: in prova (funziona nell'ambiente dimostrativo, non in produzione)
 - **Chiave di piano**: `site_builder`; `custom_domain` separata
 - **Piano minimo**: tutti i piani (dominio personalizzato: da definire)
 - **Limite**: MB di media per piano
@@ -229,7 +229,7 @@ sitemap; i tre template entro le soglie di prestazione e contrasto
 
 - **Id**: `ledger_payouts`
 - **Strato**: Soldi e adempimenti
-- **Stato**: in arrivo
+- **Stato**: in prova (funziona nell'ambiente dimostrativo, non in produzione)
 - **Chiave di piano**: tutti i piani
 - **Piano minimo**: —
 - **Limite**: nessuno

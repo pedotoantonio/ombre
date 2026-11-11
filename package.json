@@ -20,7 +20,8 @@
     "smoke:booking": "node scripts/smoke-booking.ts",
     "smoke:areas": "node scripts/smoke-areas.ts",
     "smoke:site": "node scripts/smoke-site.ts",
-    "smoke:2fa": "node scripts/smoke-2fa.ts"
+    "smoke:2fa": "node scripts/smoke-2fa.ts",
+    "collaudo": "sh scripts/collaudo.sh"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

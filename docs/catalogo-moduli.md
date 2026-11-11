@@ -109,14 +109,14 @@ Le prime cinque voci si completano **prima** di scrivere codice di dominio.
 - [x] Ruoli definiti con cosa ciascuno può e non può fare ([progetto.md §Ruoli](progetto.md#ruoli-e-responsabilità)); da applicare dall'API
 - [ ] Piani e limiti in `plan_feature`, catalogo unico per portale e pannello
 - [x] Una scheda modulo per ogni modulo adottato, con "cosa resta manuale" ([schede-moduli.md](schede-moduli.md))
-- [ ] `tenant_id` e RLS su ogni tabella, test di isolamento tra stabilimenti verde (fatto per le prime cinque tabelle, con la colonna `beach_id`; da ripetere a ogni nuova tabella)
-- [ ] Autenticazione con 2FA per gestore e admin, blocco tentativi, sessioni revocabili
-- [ ] Registro attività e accesso di supporto con motivo
-- [ ] Segreti fuori dal repository, Docker secrets in produzione
-- [ ] Container non root e read-only, reti separate, solo il proxy su 80/443
-- [ ] Backup automatico con almeno una prova di ripristino riuscita
-- [ ] Health, metriche interne e allarmi
-- [ ] OpenAPI generata e controllata in CI
+- [x] `tenant_id` e RLS su ogni tabella, test di isolamento tra stabilimenti verde (colonna `beach_id`; 26 regole su 24 tabelle, verificate anche dopo un ripristino)
+- [x] Autenticazione con 2FA per gestore e admin, blocco tentativi, sessioni revocabili (2FA disponibile per tutti e resa obbligatoria per il gestore con `OMBRE_REQUIRE_2FA=true`; per l'amministratore manca ancora la console)
+- [ ] Registro attività e accesso di supporto con motivo (registro delle azioni fatto; l'accesso di supporto della piattaforma non esiste ancora)
+- [ ] Segreti fuori dal repository, Docker secrets in produzione (nessun segreto nel repository; il compose di sviluppo usa variabili, i Docker secrets vanno configurati al rilascio)
+- [ ] Container non root e read-only, reti separate, solo il proxy su 80/443 (sito, API e worker non root e in sola lettura; database non pubblicato; il proxy pubblico va configurato al rilascio)
+- [ ] Backup automatico con almeno una prova di ripristino riuscita (salvataggio e prova di ripristino riusciti l'11/11/2026 con `scripts/backup.sh` e `scripts/restore-check.sh`; manca la pianificazione automatica)
+- [ ] Health, metriche interne e allarmi (controlli di salute su API, sito, worker e database; metriche e allarmi mancano)
+- [x] OpenAPI generata e controllata in CI (documento costruito dalle rotte e confrontato da un test; la CI esterna va collegata al repository definitivo)
 - [x] Stabilimento demo dal seed (`OMBRE_SEED_DEMO=true`: Bagno delle Dune, 17/06/2027, MARE10)
-- [ ] Testi in italiano e inglese (fatto per il sito pubblico, con test di parità dei dizionari; da estendere a ogni nuova interfaccia)
+- [x] Testi in italiano e inglese (sito pubblico, percorso di prenotazione, aree riservate e posta, con test di parità dei dizionari)
 - [x] Registro delle decisioni e documento di stato aperti

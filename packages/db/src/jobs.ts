@@ -85,7 +85,7 @@ export interface BookingMailData {
   code: string;
   locale: 'it' | 'en';
   guestName: string;
-  guestEmail: string;
+  guestEmail: string | null;
   totalCents: number;
   day: string;
   spotCode: string;

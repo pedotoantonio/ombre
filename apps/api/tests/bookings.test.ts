@@ -24,11 +24,11 @@ describe.skipIf(!testAdminUrl)('booking, test payment, pass and front desk', () 
       "SELECT (now() AT TIME ZONE 'Europe/Rome')::date::text AS today, ((now() AT TIME ZONE 'Europe/Rome')::date + 1)::text AS tomorrow",
     );
     ({ today, tomorrow } = dates.rows[0]!);
-    beach = await insertBeach(database.admin, slug, { spots: 9, day: today });
+    beach = await insertBeach(database.admin, slug, { spots: 16, day: today });
     await database.admin.query("INSERT INTO promotion (beach_id, code, percent_bps, max_uses) VALUES ($1, 'MARE10', 1000, 50)", [beach.beachId]);
     await database.admin.query(
       "INSERT INTO inventory_day (beach_id, spot_id, day, state, price_cents) VALUES ($1, $2, $3, 'available', 3000)",
-      [beach.beachId, beach.spotIds[8], tomorrow],
+      [beach.beachId, beach.spotIds[15], tomorrow],
     );
     for (const role of ['manager', 'reception', 'accounting'] as const) {
       await upsertUser(database.adminUrl, { email: `${role}@oggi.example`, name: role, password }, [{ beachId: beach.beachId, role }]);
@@ -213,12 +213,71 @@ describe.skipIf(!testAdminUrl)('booking, test payment, pass and front desk', () 
     expect((await scan(pass, 'entry', 'accounting')).status).toBe(403);
     expect((await json('POST', `/v1/manage/beaches/${slug}/access-events`, { credential: pass, kind: 'entry' })).status).toBe(401);
 
-    const future = await confirmedBooking(tomorrow, beach.spotIds[8]!);
+    const future = await confirmedBooking(tomorrow, beach.spotIds[15]!);
     const early = await scan(future.passCredential!, 'entry');
     expect((early.body as { error: { code: string } }).error.code).toBe('wrong_day');
 
     await database.admin.query("UPDATE booking SET status = 'cancelled' WHERE id = $1", [booked.bookingId]);
     expect((await scan(pass, 'entry')).status).toBe(422);
+  });
+
+  it('books at the front desk on the same inventory as the website, with no channel jumping the queue', async () => {
+    const spotId = beach.spotIds[nextSpot++]!;
+    const desk = (token: string, guestName = 'Cliente al banco') => json('POST', `/v1/manage/beaches/${slug}/desk-bookings`, { spotId, day: today, guestName }, bearer(token));
+    expect((await desk(tokens.accounting!)).status).toBe(403);
+
+    const online = () => json('POST', '/v1/holds', { beachSlug: slug, spotId, day: today }, { 'Idempotency-Key': `test-${randomUUID()}` });
+    const race = await Promise.all([desk(tokens.reception!), online(), online(), desk(tokens.manager!)]);
+    expect(race.filter((result) => result.status === 201)).toHaveLength(1);
+    expect(race.filter((result) => result.status === 409)).toHaveLength(3);
+
+    const free = beach.spotIds[nextSpot++]!;
+    const booked = await json('POST', `/v1/manage/beaches/${slug}/desk-bookings`, { spotId: free, day: today, guestName: 'Cliente al banco' }, bearer(tokens.reception!));
+    expect(booked.status).toBe(201);
+    const code = (booked.body as { code: string }).code;
+    expect(await stateOf(free)).toBe('occupied');
+    const saved = await database.admin.query<{ source: string; guest_email: string | null; status: string; provider: string }>(
+      'SELECT b.source, b.guest_email, b.status, p.provider FROM booking b JOIN payment p ON p.booking_id = b.id WHERE b.code = $1',
+      [code],
+    );
+    expect(saved.rows[0]).toEqual({ source: 'desk', guest_email: null, status: 'confirmed', provider: 'desk' });
+    expect((await scan(code, 'entry')).status).toBe(201);
+  });
+
+  it('moves a booking by taking the new spot before releasing the old one', async () => {
+    const booked = await confirmedBooking();
+    const from = beach.spotIds[nextSpot - 1]!;
+    const taken = beach.spotIds[0]!;
+    const to = beach.spotIds[nextSpot++]!;
+    const move = (spotId: string, role = 'reception') => json('POST', `/v1/manage/beaches/${slug}/bookings/${booked.code}/move`, { spotId }, bearer(tokens[role]!));
+
+    expect((await move(to, 'accounting')).status).toBe(403);
+    const refused = await move(taken);
+    expect(refused.status).toBe(409);
+    expect(await stateOf(from)).toBe('occupied');
+
+    expect((await move(to)).status).toBe(204);
+    expect([await stateOf(from), await stateOf(to)]).toEqual(['available', 'occupied']);
+    const listed = (await json('GET', `/v1/manage/beaches/${slug}/bookings?day=${today}`, undefined, bearer(tokens.reception!))).body as { bookings: { code: string; spotCode: string }[] };
+    expect(listed.bookings.find((row) => row.code === booked.code)?.spotCode).toBe(`A${String(beach.spotIds.indexOf(to) + 1).padStart(2, '0')}`);
+    expect((await scan(booked.passCredential!, 'entry')).status).toBe(201);
+  });
+
+  it('lets the manager cancel a booking: spot free, pass void, refund recorded, shares reversed', async () => {
+    const spotId = beach.spotIds[nextSpot]!;
+    const booked = await confirmedBooking();
+    const cancel = (role: string) => json('POST', `/v1/manage/beaches/${slug}/bookings/${booked.code}/cancel`, { reason: 'Chiusura per maltempo' }, bearer(tokens[role]!));
+    expect((await cancel('reception')).status).toBe(403);
+    expect((await cancel('manager')).status).toBe(204);
+    expect((await cancel('manager')).status).toBe(409);
+
+    expect(await stateOf(spotId)).toBe('available');
+    expect(await view(booked)).toMatchObject({ status: 'cancelled', passCredential: null });
+    expect((await scan(booked.passCredential!, 'entry')).status).toBe(422);
+    const refunds = await database.admin.query<{ amount_cents: number; reason: string }>("SELECT amount_cents, reason FROM refund WHERE reason = 'Chiusura per maltempo'");
+    expect(refunds.rows).toEqual([{ amount_cents: 3000, reason: 'Chiusura per maltempo' }]);
+    const balance = await database.admin.query<{ total: string }>('SELECT sum(amount_cents) AS total FROM ledger_entry WHERE booking_id = $1', [booked.bookingId]);
+    expect(Number(balance.rows[0]!.total)).toBe(0);
   });
 
   it('shows the front desk the bookings of the day without the guests email', async () => {

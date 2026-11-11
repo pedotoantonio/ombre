@@ -117,6 +117,23 @@ const scan = await reception.post('reception-accesso', { lang: 'it', beach, day,
 check(scan.includes('err=wrong_day'), `front desk: a pass for ${day} was accepted today (${scan})`);
 check((await reception.get(scan)).html.includes('Questa prenotazione è per un altro giorno'), 'front desk: the refusal is not explained');
 
+// ---- Front desk booking, move, cancellation by the manager ----
+const deskPage = await reception.get(`/area/gestione/${beach}?day=${newDay}`);
+const freeSpot = /id="banco-postazione"[^>]*>\s*<option value="([0-9a-f-]{36})"/.exec(deskPage.html)?.[1] ?? '';
+const booked = await reception.post('banco-prenota', { lang: 'it', beach, day: newDay, spot: freeSpot, name: 'Cliente al banco' });
+const deskCode = /OM-270620-\d{3}/.exec(decodeURIComponent(booked))?.[0] ?? '';
+check(deskCode !== '', `front desk: the desk booking was not registered (${booked})`);
+check(((await guest.get(`/bagni/${beach}?day=${newDay}`)).html.match(/class="spot__code"/g) ?? []).length === 6, 'public page: a spot booked at the desk is still on sale');
+
+const afterDesk = await reception.get(`/area/gestione/${beach}?day=${newDay}`);
+const otherSpot = new RegExp(`name="code" value="${deskCode}"[^]*?<option value="([0-9a-f-]{36})"`).exec(afterDesk.html)?.[1] ?? '';
+check((await reception.post('banco-sposta', { lang: 'it', beach, day: newDay, code: deskCode, spot: otherSpot })).includes('ok=1'), 'front desk: the booking was not moved');
+check(((await guest.get(`/bagni/${beach}?day=${newDay}`)).html.match(/class="spot__code"/g) ?? []).length === 6, 'public page: moving a booking changed the number of free spots');
+check((await reception.post('gestione-annulla', { lang: 'it', beach, day: newDay, code: deskCode })).includes('err=forbidden'), 'front desk: was allowed to cancel a booking');
+check((await manager.post('gestione-annulla', { lang: 'it', beach, day: newDay, code: deskCode })).includes('ok=1'), 'management: the booking was not cancelled');
+check(((await guest.get(`/bagni/${beach}?day=${newDay}`)).html.match(/class="spot__code"/g) ?? []).length === 7, 'public page: a cancelled booking did not free its spot');
+check((await manager.get(`/area/gestione/${beach}?day=${newDay}`)).html.includes('Annullata'), 'management: the cancellation is not shown');
+
 // ---- Season holder: propose, wait for approval, withdraw ----
 const holder = new Visitor();
 await holder.signIn('stagionale@bagnodelledune.example');

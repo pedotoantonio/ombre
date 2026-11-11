@@ -18,6 +18,8 @@ export function createHandler({ db, brand, siteUrl, signingSecret, mail }: Handl
     if (!bookingId) throw new Error('booking.confirmed without bookingId');
     const data = await bookingMailData(db, item.beachId, bookingId);
     if (!data) throw new Error('booking not found');
+    // A booking taken at the front desk has no address to write to.
+    if (!data.guestEmail) return;
 
     const bookingUrl = `${siteUrl}${bookingPath(data.locale, data.beachSlug, data.bookingId)}?t=${bookingAccessToken(signingSecret, data.bookingId)}`;
     const message = bookingConfirmedMail(data.guestEmail, {
