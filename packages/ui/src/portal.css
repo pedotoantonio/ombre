@@ -5,8 +5,12 @@
   position: relative;
   isolation: isolate;
   overflow: hidden;
-  padding-block: 3.5rem var(--spazio-8);
+  padding-block: 6.5rem var(--spazio-8);
   background: var(--spuma);
+}
+
+.portal-hero__art {
+  background: var(--mare-foto);
 }
 
 /* Su schermi stretti l'illustrazione resta una fascia in alto, così non viene tagliata troppo. */
@@ -14,13 +18,21 @@
   position: absolute;
   inset: 0 0 auto;
   z-index: -1;
-  height: 10rem;
+  height: 11rem;
 }
 
-.portal-hero__art svg {
+.portal-hero__art svg,
+.portal-hero__art img {
+  display: block;
   width: 100%;
   height: 100%;
   max-width: none;
+}
+
+/* The photograph keeps its right side, where the shore and the umbrellas are. */
+.portal-hero__art img {
+  object-fit: cover;
+  object-position: right center;
 }
 
 /* Il testo sta sempre su un fondo pieno: il contrasto non dipende dall'illustrazione. */
@@ -64,6 +76,12 @@
   .portal-hero__art {
     inset: 0;
     height: auto;
+  }
+
+  .portal-hero {
+    min-height: 34rem;
+    display: grid;
+    align-items: center;
   }
 
   .portal-hero__panel {
@@ -681,4 +699,100 @@ html:has(.plan-bar) {
     radial-gradient(circle at 78% 30%, var(--ambra) 0 1.1rem, transparent 1.15rem),
     linear-gradient(to top, var(--oceano) 0 22%, var(--spuma) 22% 100%);
   opacity: 0.55;
+}
+
+/* ---- Le cinque funzioni, con le icone del committente ---- */
+.portal-features {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--spazio-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Con cinque riquadri su due colonne l'ultimo occupa tutta la riga. */
+.portal-features > li:last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+}
+
+.portal-feature {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spazio-2);
+  height: 100%;
+  padding: var(--spazio-6) var(--spazio-4);
+  border: 1px solid var(--bordo);
+  border-radius: var(--raggio-grande);
+  background: var(--carta);
+  box-shadow: 0 0.5rem 1.5rem color-mix(in srgb, var(--abisso) 8%, transparent);
+  color: var(--abisso);
+  text-align: center;
+  text-decoration: none;
+  transition: transform var(--normale) ease;
+}
+
+.portal-feature:hover {
+  color: var(--abisso);
+  transform: translateY(-0.125rem);
+}
+
+.portal-feature:active {
+  transform: scale(0.98);
+}
+
+.portal-feature__icon {
+  display: block;
+  width: 5.5rem;
+  height: 5.5rem;
+}
+
+.portal-feature__icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+.portal-feature__title {
+  font-size: 0.9375rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.portal-feature__text {
+  color: var(--testo-secondario);
+  font-size: 0.9375rem;
+  line-height: 1.4;
+}
+
+@media (min-width: 40rem) {
+  .portal-features {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .portal-features > li:last-child:nth-child(odd) {
+    grid-column: auto;
+  }
+}
+
+@media (min-width: 62rem) {
+  .portal-features {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: var(--spazio-4);
+  }
+
+  .portal-feature__icon {
+    width: 6.5rem;
+    height: 6.5rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .portal-feature,
+  .portal-feature:hover,
+  .portal-feature:active {
+    transform: none;
+    transition: none;
+  }
 }

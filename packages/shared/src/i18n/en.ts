@@ -336,6 +336,14 @@ export function makeEn(brand: string): Dictionary {
         lead: `With ${brand} you book a day at a beach club online. Pick your spot, see the final price before you pay and get a pass to show on arrival.`,
         ctaHowItWorks: 'See how it works',
         ctaBeachClubs: 'For beach clubs',
+        featuresTitle: 'Everything in one place',
+        features: [
+          { title: 'Find a spot', text: 'By place, day and number of guests.' },
+          { title: 'Beach map', text: 'Pick your spot on the map.' },
+          { title: 'Your QR pass', text: 'Show it at the front desk on arrival.' },
+          { title: 'Share your days', text: 'If you have a season pass.' },
+          { title: 'Manager area', text: 'Website, bookings and front desk.' },
+        ],
         stepsTitle: 'Three steps, from your phone',
         steps: [
           {

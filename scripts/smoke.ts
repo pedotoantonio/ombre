@@ -174,6 +174,15 @@ check(noticeIt.count === 0 || noticeIt.kind !== 'none', 'notice: a notice with a
 if (demoMode === 'true') check(noticeIt.kind === 'demo', `notice: OMBRE_DEMO_MODE is true but the site shows "${noticeIt.kind}"`);
 if (demoMode === 'false') check(noticeIt.kind !== 'demo', 'notice: OMBRE_DEMO_MODE is false but the site shows the demonstration notice');
 
+// Home page: the client's photograph behind the search and the five feature tiles.
+const homeHtml = await (await fetch(`${base}/`)).text();
+check(/<img[^>]*src="\/img\/costa-1400\.jpg"[^>]*alt=""/.test(homeHtml) && /width="1400"/.test(homeHtml), 'home: the opening photograph is missing, or lacks an empty alt and its size');
+check((homeHtml.match(/class="portal-feature"/g) ?? []).length === 5, 'home: expected five feature tiles');
+for (const file of ['costa-1400.jpg', 'costa-1400.webp', 'costa-1400.avif', 'costa-mobile.jpg', 'costa-2100.jpg']) {
+  const picture = await fetch(`${base}/img/${file}`);
+  check(picture.status === 200 && (picture.headers.get('content-type') ?? '').startsWith('image/'), `home: /img/${file} is not served as an image`);
+}
+
 const robots = await fetch(`${base}/robots.txt`);
 const robotsText = await robots.text();
 check(robots.status === 200 && robotsText.includes(`Sitemap: ${siteUrl}/sitemap.xml`), 'robots.txt: missing or without sitemap');

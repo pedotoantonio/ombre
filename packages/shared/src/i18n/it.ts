@@ -348,6 +348,14 @@ export function makeIt(brand: string) {
         lead: `Con ${brand} prenoti online una giornata in uno stabilimento balneare. Scegli la postazione, vedi il prezzo finale prima di pagare e ricevi un pass da mostrare all'arrivo.`,
         ctaHowItWorks: 'Scopri come funziona',
         ctaBeachClubs: 'Per gli stabilimenti',
+        featuresTitle: 'Tutto in un posto solo',
+        features: [
+          { title: 'Ricerca postazione', text: 'Per località, giorno e numero di ospiti.' },
+          { title: 'Mappa spiaggia', text: 'Scegli la postazione sulla planimetria.' },
+          { title: 'Il tuo pass QR', text: 'Lo mostri alla reception quando arrivi.' },
+          { title: 'Condividi giornate', text: 'Se hai un abbonamento stagionale.' },
+          { title: 'Area gestore', text: 'Sito, prenotazioni e reception.' },
+        ],
         stepsTitle: 'Tre passi, dal telefono',
         steps: [
           {

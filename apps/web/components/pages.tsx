@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { connection } from 'next/server';
 import { beachPath, config, formatMoney, getDictionary, pathFor, type InnerPageId, type Locale } from '@ombre/shared';
 import { api, formatDay, isDay, today, type ApiBeachOffer } from '@/lib/api';
-import { CoastScene } from '@ombre/ui';
+import { FeatureIcon, type FeatureIconName } from '@ombre/ui';
 import { breadcrumbData, JsonLd, pageUrl } from '@/lib/seo';
 import { Contact, NextStep, PageHead } from './PageShell';
 
@@ -102,6 +102,14 @@ export function HomePage({ locale }: PageProps) {
   const t = getDictionary(locale, config.brandName);
   const copy = t.pages.home;
   const audienceLinks: readonly InnerPageId[] = ['howItWorks', 'forSeasonHolders', 'forBeachClubs'];
+  const featureLinks: readonly { icon: FeatureIconName; page: InnerPageId }[] = [
+    { icon: 'search', page: 'explore' },
+    { icon: 'map', page: 'howItWorks' },
+    { icon: 'pass', page: 'howItWorks' },
+    { icon: 'share', page: 'forSeasonHolders' },
+    { icon: 'manager', page: 'forBeachClubs' },
+  ];
+
 
   return (
     <>
@@ -116,7 +124,24 @@ export function HomePage({ locale }: PageProps) {
       />
       <section className="portal-hero">
         <div className="portal-hero__art">
-          <CoastScene />
+          {/* Decorative: the photograph says nothing the text does not say. */}
+          <picture>
+            <source media="(max-width: 47.99rem)" type="image/avif" srcSet="/img/costa-mobile.avif" />
+            <source media="(max-width: 47.99rem)" type="image/webp" srcSet="/img/costa-mobile.webp" />
+            <source media="(max-width: 47.99rem)" srcSet="/img/costa-mobile.jpg" />
+            <source type="image/avif" srcSet="/img/costa-1400.avif 1400w, /img/costa-2100.avif 1960w" sizes="100vw" />
+            <source type="image/webp" srcSet="/img/costa-1400.webp 1400w, /img/costa-2100.webp 1960w" sizes="100vw" />
+            <img
+              src="/img/costa-1400.jpg"
+              srcSet="/img/costa-1400.jpg 1400w, /img/costa-2100.jpg 1960w"
+              sizes="100vw"
+              alt=""
+              width={1400}
+              height={509}
+              fetchPriority="high"
+              decoding="async"
+            />
+          </picture>
         </div>
         <div className="container">
           <div className="portal-hero__panel">
@@ -128,6 +153,24 @@ export function HomePage({ locale }: PageProps) {
               <Link href={pathFor('forBeachClubs', locale)}>{copy.ctaBeachClubs}</Link>
             </p>
           </div>
+        </div>
+      </section>
+      <section className="section">
+        <div className="container">
+          <h2>{copy.featuresTitle}</h2>
+          <ul className="portal-features">
+            {copy.features.map((feature, index) => (
+              <li key={feature.title}>
+                <Link className="portal-feature" href={pathFor(featureLinks[index]?.page ?? 'explore', locale)}>
+                  <span className="portal-feature__icon">
+                    <FeatureIcon name={featureLinks[index]?.icon ?? 'search'} />
+                  </span>
+                  <span className="portal-feature__title">{feature.title}</span>
+                  <span className="portal-feature__text">{feature.text}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
         </div>
       </section>
       <section className="section section--tinted">

@@ -5,6 +5,8 @@
   --ambra: #ee9b00; /* Sand Amber: accento. Mai testo bianco sopra */
   --abisso: #1d3557; /* Slate Abyss: testi e superfici scure */
   --avorio: #f8f9fa; /* Ivory Sand: fondo delle pagine */
+  /* Mare della fotografia di apertura: fa da fondo mentre l'immagine si carica. */
+  --mare-foto: #0d89b2;
   --carta: #ffffff;
   --bordo: #cfdedd;
   --testo: var(--abisso);
