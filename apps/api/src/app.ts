@@ -152,6 +152,8 @@ const proposeSchema = z
   .refine((value) => Boolean(value.days) !== Boolean(value.recurrence));
 // Website texts are plain text: anything that looks like markup is refused.
 const plain = (max: number) => z.string().trim().max(max).regex(/^[^<>]*$/);
+// Pictures can only come from the sample library shipped with the site: no outside addresses.
+const siteImageSchema = z.object({ src: z.string().regex(/^\/demo\/[a-z0-9-]+\.svg$/), alt: plain(160).min(1) });
 const siteTextsSchema = z.object({
   tagline: plain(siteTextLimits.tagline),
   description: plain(siteTextLimits.description),
@@ -161,6 +163,7 @@ const siteTextsSchema = z.object({
   address: plain(siteTextLimits.line),
   phone: z.string().trim().max(siteTextLimits.phone).regex(/^[+0-9 ()./-]*$/),
   accessibility: plain(siteTextLimits.accessibility),
+  images: z.object({ cover: siteImageSchema.nullable(), gallery: z.array(siteImageSchema).max(12) }).optional(),
 });
 const siteDraftSchema = z.object({
   expectedVersion: z.number().int().min(1).nullable(),
@@ -231,6 +234,16 @@ export function createApp(options: AppOptions): Hono {
       }
       return handler(c);
     });
+  }
+
+  /** A beach club as shown in a list: with the cover picture of its published website, if any. */
+  async function listedBeach(beach: PublicBeach) {
+    const site = await getPublishedSite(db, beach.id);
+    const cover = site?.content.it.images?.cover ?? null;
+    return {
+      ...publicBeach(beach),
+      cover: cover ? { src: cover.src, alt: { it: cover.alt, en: site?.content.en?.images?.cover?.alt ?? null } } : null,
+    };
   }
 
   async function beachBySlug(slug: string): Promise<PublicBeach> {
@@ -539,7 +552,7 @@ export function createApp(options: AppOptions): Hono {
     },
     async (c) => {
       const search = parse(beachSearchSchema, c.req.query(), 'search');
-      if (!search.day) return c.json({ beaches: (await listActiveBeaches(db, search.locality)).map(publicBeach) });
+      if (!search.day) return c.json({ beaches: await Promise.all((await listActiveBeaches(db, search.locality)).map(listedBeach)) });
       const guests = search.guests ?? 1;
       const sharedOnly = search.sharedOnly === 'true';
       const offers = await searchBeaches(db, { day: search.day, guests, sharedOnly, place: search.locality });
@@ -548,7 +561,7 @@ export function createApp(options: AppOptions): Hono {
         guests,
         sharedOnly,
         currency: 'EUR',
-        beaches: offers.map((offer) => ({ ...publicBeach(offer), freeSpots: offer.freeSpots, priceFromCents: offer.priceFromCents })),
+        beaches: await Promise.all(offers.map(async (offer) => ({ ...(await listedBeach(offer)), freeSpots: offer.freeSpots, priceFromCents: offer.priceFromCents }))),
       });
     },
   );

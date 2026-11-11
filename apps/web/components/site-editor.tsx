@@ -1,5 +1,5 @@
 import { notFound, redirect } from 'next/navigation';
-import { accountPath, can, config, getDictionary, locales, siteTemplates, siteTextLimits, type Locale, type MembershipRole, type SiteContent, type SiteTemplate, type SiteTexts } from '@ombre/shared';
+import { accountPath, can, config, demoMedia, getDictionary, locales, siteTemplates, siteTextLimits, type DemoMediaId, type Locale, type MembershipRole, type SiteContent, type SiteTemplate, type SiteTexts } from '@ombre/shared';
 import { apiCall, slugPattern } from '@/lib/api';
 import { sessionToken } from '@/lib/session';
 import { PageHead, PageShell } from './PageShell';
@@ -74,6 +74,11 @@ export async function SiteEditorView({ locale, beachSlug, query }: { locale: Loc
   const error = Array.isArray(query.err) ? query.err[0] : query.err;
   const errors = dictionary.account.errors as Record<string, string>;
   const preview = state.data.draft ? state.data.draft.content[locale] : null;
+  const library = Object.keys(demoMedia) as DemoMediaId[];
+  const idOf = (src: string | undefined) => library.find((id) => src === `/demo/${id}.svg`) ?? '';
+  const coverId = idOf(content.it.images?.cover?.src);
+  const galleryIds = (content.it.images?.gallery ?? []).map((image) => idOf(image.src));
+
 
   return (
     <PageShell
@@ -103,6 +108,27 @@ export async function SiteEditorView({ locale, beachSlug, query }: { locale: Loc
                   ))}
                 </select>
               </div>
+              <fieldset className="group">
+                <legend>{t.imagesTitle}</legend>
+                <p className="prose">{t.imagesNote}</p>
+                <div className="field">
+                  <label htmlFor="copertina">{t.cover}</label>
+                  <select id="copertina" name="cover" defaultValue={coverId}>
+                    <option value="">{t.noCover}</option>
+                    {library.map((id) => (
+                      <option key={id} value={id}>{demoMedia[id][locale]}</option>
+                    ))}
+                  </select>
+                </div>
+                <fieldset className="checks">
+                  <legend>{t.gallery}</legend>
+                  {library.map((id) => (
+                    <label key={id}>
+                      <input type="checkbox" name="gallery" value={id} defaultChecked={galleryIds.includes(id)} /> {demoMedia[id][locale]}
+                    </label>
+                  ))}
+                </fieldset>
+              </fieldset>
               <TextFields prefix="it" legend={t.italian} texts={content.it} labels={t} required />
               <TextFields prefix="en" legend={t.english} texts={content.en ?? empty} labels={t} required={false} />
               <button className="button" type="submit">{t.saveDraft}</button>

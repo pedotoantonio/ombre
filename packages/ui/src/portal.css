@@ -572,3 +572,23 @@ html:has(.plan-bar) {
     transform: none;
   }
 }
+
+/* Cover picture of a beach club card: it reaches the card edges. */
+.portal-club__cover {
+  display: block;
+  width: calc(100% + var(--spazio-6) * 2);
+  max-width: none;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  margin: calc(var(--spazio-6) * -1) calc(var(--spazio-6) * -1) var(--spazio-4);
+  object-fit: cover;
+  border-radius: var(--raggio-grande) var(--raggio-grande) 0 0;
+  background: var(--spuma);
+}
+
+.portal-club__cover--empty {
+  background:
+    radial-gradient(circle at 78% 30%, var(--ambra) 0 1.1rem, transparent 1.15rem),
+    linear-gradient(to top, var(--oceano) 0 22%, var(--spuma) 22% 100%);
+  opacity: 0.55;
+}

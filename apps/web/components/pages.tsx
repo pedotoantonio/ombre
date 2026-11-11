@@ -63,7 +63,7 @@ function StepList({ steps }: { steps: readonly { title: string; text: string }[]
 }
 
 /** Plain form that opens the explore page with the search in the address. It works without scripts. */
-function SearchForm({ locale, search }: { locale: Locale; search: ExploreSearch }) {
+function SearchForm({ locale, search, minDay }: { locale: Locale; search: ExploreSearch; minDay?: string }) {
   const t = getDictionary(locale, config.brandName).search;
   return (
     <form className="portal-search" method="get" action={pathFor('explore', locale)} role="search" aria-label={t.title}>
@@ -73,7 +73,7 @@ function SearchForm({ locale, search }: { locale: Locale; search: ExploreSearch 
       </div>
       <div className="field">
         <label htmlFor="cerca-giorno">{t.day}</label>
-        <input id="cerca-giorno" name="day" type="date" min={today()} defaultValue={search.day ?? ''} />
+        <input id="cerca-giorno" name="day" type="date" min={minDay} defaultValue={search.day ?? ''} />
       </div>
       <div className="field">
         <label htmlFor="cerca-ospiti">{t.guests}</label>
@@ -95,9 +95,7 @@ function SearchForm({ locale, search }: { locale: Locale; search: ExploreSearch 
   );
 }
 
-export async function HomePage({ locale }: PageProps) {
-  // The search accepts days from today on, so the page is rendered at request time.
-  await connection();
+export function HomePage({ locale }: PageProps) {
   const t = getDictionary(locale, config.brandName);
   const copy = t.pages.home;
   const audienceLinks: readonly InnerPageId[] = ['howItWorks', 'forSeasonHolders', 'forBeachClubs'];
@@ -168,6 +166,11 @@ function BeachCard({ locale, beach, day }: { locale: Locale; beach: ApiBeachOffe
   const copy = t.pages.explore;
   return (
     <li className="card portal-club">
+      {beach.cover ? (
+        <img className="portal-club__cover" src={beach.cover.src} alt={beach.cover.alt[locale] ?? ''} width={1200} height={800} loading="lazy" />
+      ) : (
+        <div className="portal-club__cover portal-club__cover--empty" aria-hidden="true" />
+      )}
       <h3>{beach.name}</h3>
       <p>{beach.locality}</p>
       {day && beach.freeSpots ? (
@@ -216,7 +219,7 @@ async function ExplorePage({ locale, query = {} }: PageProps & { query?: Query }
       <section className="section portal-explore">
         <div className="container portal-results">
           <div className="portal-search-panel">
-            <SearchForm locale={locale} search={search} />
+            <SearchForm locale={locale} search={search} minDay={today()} />
           </div>
           {dayPast ? (
             <p className="alert" role="alert">

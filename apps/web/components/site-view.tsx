@@ -2,8 +2,6 @@ import { config, getDictionary, type Locale, type SiteTemplate, type SiteTexts }
 import type { ApiBeach } from '@/lib/api';
 import '@ombre/ui/media.css';
 
-const galleryLabel: Record<Locale, string> = { it: 'Galleria', en: 'Gallery' };
-
 /** The beach club's own texts, drawn by one of the three templates. */
 export function BeachSite({ locale, template, texts }: { locale: Locale; template: SiteTemplate; texts: SiteTexts }) {
   const t = getDictionary(locale, config.brandName).site;
@@ -50,7 +48,7 @@ export function BeachSite({ locale, template, texts }: { locale: Locale; templat
         ) : null}
       </div>
       {texts.images && texts.images.gallery.length > 0 ? (
-        <ul className="site-gallery" aria-label={galleryLabel[locale]}>
+        <ul className="site-gallery" aria-label={t.gallery}>
           {texts.images.gallery.map((image) => (
             <li key={image.src}>
               <img src={image.src} alt={image.alt} width={1200} height={800} loading="lazy" />

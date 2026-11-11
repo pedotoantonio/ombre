@@ -3,6 +3,8 @@ import type { SiteContent, SiteTemplate } from '@ombre/shared';
 // Server-side client of the Ombrè API. The address is read at request time.
 
 export interface ApiBeach {
+  /** Cover picture of the published website, when there is one. Present in lists only. */
+  cover?: { src: string; alt: { it: string; en: string | null } } | null;
   slug: string;
   name: string;
   locality: string;

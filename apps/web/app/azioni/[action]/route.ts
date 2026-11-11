@@ -153,6 +153,14 @@ const actions: Record<string, (request: Request, form: Form, lang: Locale) => Pr
     }),
 
   async 'sito-salva'(request, form, lang) {
+    const { demoImage, demoMedia } = await import('@ombre/shared');
+    const known = (id: string): id is keyof typeof demoMedia => Object.hasOwn(demoMedia, id);
+    const coverId = form('cover');
+    const galleryIds = form('gallery').split(',').filter(known);
+    const images = (locale: Locale) => ({
+      cover: known(coverId) ? demoImage(coverId, locale) : null,
+      gallery: galleryIds.map((id) => demoImage(id, locale)),
+    });
     const texts = (prefix: string) => ({
       tagline: form(`${prefix}_tagline`),
       description: form(`${prefix}_description`),
@@ -169,7 +177,7 @@ const actions: Record<string, (request: Request, form: Form, lang: Locale) => Pr
     return site(request, form, lang, '/site/draft', 'PUT', {
       expectedVersion: version === '' ? null : Number(version),
       template: form('template'),
-      content: { it: texts('it'), en: hasEnglish ? en : null },
+      content: { it: { ...texts('it'), images: images('it') }, en: hasEnglish ? { ...en, images: images('en') } : null },
     });
   },
   'sito-pubblica': (request, form, lang) => site(request, form, lang, '/site/publish', 'POST', { expectedVersion: Number(form('version')) }),
@@ -217,7 +225,7 @@ export async function POST(request: Request, context: { params: Promise<{ action
   const form: Form = (name) => {
     // Checkboxes with the same name arrive as several values: they are joined.
     const values = data.getAll(name === 'weekdays' ? 'weekday' : name).filter((value): value is string => typeof value === 'string');
-    return name === 'weekdays' ? values.join(',') : (values[0] ?? '');
+    return name === 'weekdays' || name === 'gallery' ? values.join(',') : (values[0] ?? '');
   };
   const lang = form('lang');
   if (!isLocale(lang)) return bad();
