@@ -5,13 +5,23 @@ import { Logo } from '@ombre/ui';
 
 const navPages: readonly InnerPageId[] = ['explore', 'howItWorks', 'forBeachClubs', 'forSeasonHolders', 'help'];
 
+export interface Crumb {
+  label: string;
+  href?: string;
+}
+
 interface PageShellProps {
   locale: Locale;
+  /** Section highlighted in the navigation. */
   page: PageId;
+  /** Address of this same page in the other language, when it is not a fixed page. */
+  alternatePath?: string;
+  /** Trail after the home page, when it is not a fixed page. */
+  crumbs?: Crumb[];
   children: ReactNode;
 }
 
-export function PageShell({ locale, page, children }: PageShellProps) {
+export function PageShell({ locale, page, alternatePath, crumbs, children }: PageShellProps) {
   const t = getDictionary(locale, config.brandName);
   const otherLocale = locales.find((candidate) => candidate !== locale) ?? locale;
 
@@ -38,7 +48,7 @@ export function PageShell({ locale, page, children }: PageShellProps) {
               ))}
             </ul>
           </nav>
-          <Link className="lang-switch" href={pathFor(page, otherLocale)} hrefLang={otherLocale} lang={otherLocale}>
+          <Link className="lang-switch" href={alternatePath ?? pathFor(page, otherLocale)} hrefLang={otherLocale} lang={otherLocale}>
             <span className="visually-hidden">{t.nav.languageLabel}: </span>
             {t.nav.switchLanguage}
           </Link>
@@ -51,7 +61,17 @@ export function PageShell({ locale, page, children }: PageShellProps) {
               <li>
                 <Link href={pathFor('home', locale)}>{config.brandName}</Link>
               </li>
-              <li aria-current="page">{t.pages[page].h1}</li>
+              {(crumbs ?? [{ label: t.pages[page].h1 }]).map((crumb, index, all) =>
+                index === all.length - 1 || !crumb.href ? (
+                  <li key={crumb.label} aria-current={index === all.length - 1 ? 'page' : undefined}>
+                    {crumb.label}
+                  </li>
+                ) : (
+                  <li key={crumb.label}>
+                    <Link href={crumb.href}>{crumb.label}</Link>
+                  </li>
+                ),
+              )}
             </ol>
           </nav>
         )}

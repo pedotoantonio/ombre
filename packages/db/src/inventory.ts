@@ -79,6 +79,69 @@ export function listAvailability(db: Database, beachId: string, day: string): Pr
   );
 }
 
+/** First day, from today in the beach club's time zone, with at least one free spot. */
+export async function nextAvailableDay(db: Database, target: PublicBeach): Promise<string | null> {
+  return withBeach(db, target.id, async (tx) => {
+    const [row] = await tx
+      .select({ day: sql<string | null>`min(${inventoryDay.day})::text` })
+      .from(inventoryDay)
+      .leftJoin(hold, eq(hold.id, inventoryDay.activeHoldId))
+      .where(and(sql`${inventoryDay.day} >= (now() at time zone ${target.timezone})::date`, isFree));
+    return row?.day ?? null;
+  });
+}
+
+export interface HoldView {
+  holdId: string;
+  status: (typeof hold.$inferSelect)['status'];
+  /** False once the time is up, even if the row still says active. */
+  live: boolean;
+  expiresAt: Date;
+  day: string;
+  spotCode: string;
+  rowNumber: number;
+  umbrellas: number;
+  sunbeds: number;
+  quote: DayQuote;
+}
+
+export async function getHold(db: Database, beachId: string, holdId: string): Promise<HoldView> {
+  return withBeach(db, beachId, async (tx) => {
+    const [row] = await tx
+      .select({
+        hold,
+        live: sql<boolean>`${hold.status} = 'active' and ${hold.expiresAt} > now()`,
+        day: inventoryDay.day,
+        spotCode: spot.code,
+        rowNumber: spot.rowNumber,
+        umbrellas: spot.umbrellas,
+        sunbeds: spot.sunbeds,
+      })
+      .from(hold)
+      .innerJoin(inventoryDay, eq(inventoryDay.id, hold.inventoryDayId))
+      .innerJoin(spot, eq(spot.id, inventoryDay.spotId))
+      .where(eq(hold.id, holdId));
+    if (!row) throw new DomainError('not_found', 'Hold not found');
+    return {
+      holdId: row.hold.id,
+      status: row.hold.status,
+      live: row.live,
+      expiresAt: row.hold.expiresAt,
+      day: row.day,
+      spotCode: row.spotCode,
+      rowNumber: row.rowNumber,
+      umbrellas: row.umbrellas,
+      sunbeds: row.sunbeds,
+      quote: {
+        listPrice: row.hold.listPriceCents,
+        discount: row.hold.discountCents,
+        total: row.hold.totalCents,
+        promoCode: row.hold.promoCode,
+      },
+    };
+  });
+}
+
 export interface DayRequest {
   spotId: string;
   day: string;

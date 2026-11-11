@@ -86,6 +86,12 @@ services:
         OMBRE_INDEXABLE: ${OMBRE_INDEXABLE:-false}
         OMBRE_BOOKINGS_OPEN: ${OMBRE_BOOKINGS_OPEN:-false}
         OMBRE_CONTACT_EMAIL: ${OMBRE_CONTACT_EMAIL:-}
+    environment:
+      OMBRE_API_URL: http://api:3000
+    depends_on:
+      - api
+    networks:
+      - backend
     ports:
       - '127.0.0.1:3210:3000'
     tmpfs:

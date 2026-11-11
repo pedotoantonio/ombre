@@ -28,6 +28,7 @@ const nextConfig: NextConfig = {
   async rewrites() {
     return [
       { source: '/', destination: '/it' },
+      { source: '/bagni/:path*', destination: '/it/bagni/:path*' },
       { source: '/:slug((?!(?:it|en|_next|api)$)[^/.]+)', destination: '/it/:slug' },
     ];
   },

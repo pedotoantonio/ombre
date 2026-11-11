@@ -17,11 +17,14 @@ Aggiornato all'11/11/2026.
     riserve e promozioni, isolato per stabilimento con RLS;
   - API `/v1`: elenco degli stabilimenti attivi, disponibilità di una giornata,
     preventivo calcolato dal server, riserva con chiave di idempotenza;
+  - percorso di riserva nel sito, nelle due lingue e senza bisogno di script: pagina
+    «Esplora» con gli stabilimenti attivi, scheda del bagno con le postazioni libere per
+    fila, riepilogo con prezzo e codice promozionale, riserva e pagina della riserva;
   - `Dockerfile` e compose con database, migrazioni, API e sito.
 - **Non fatto**: autenticazione e ruoli, aree riservate (ospite, stagionale, gestione,
   reception, console), condivisione stagionale, prenotazione confermata, pagamenti, pass,
-  rendiconto, worker. Il sito non è ancora collegato all'API: la pagina «Esplora» non
-  mostra dati. Nessun dominio registrato, nessuna pubblicazione. Il sito dichiara che il
+  rendiconto, worker. Dopo la riserva il percorso si ferma: il pagamento non esiste
+  ancora e la pagina lo dice. Nessun dominio registrato, nessuna pubblicazione. Il sito dichiara che il
   servizio è in preparazione e chiede di non essere indicizzato.
 
 ## Controlli eseguiti l'11/11/2026
@@ -38,6 +41,7 @@ Aggiornato all'11/11/2026.
 | Accesso a un altro stabilimento | Zero righe lette e zero scritte dal database, qualunque sia la query |
 | Chiave di idempotenza | Stessa richiesta, stessa riserva; richiesta diversa, errore esplicito |
 | Pagine servite dal container (192 verifiche su 12 pagine) | Superate |
+| Percorso di riserva sul sito in container (24 verifiche) | Superato: MARE10 da 30,00 a 27,00, doppio invio del modulo senza doppia riserva, secondo acquirente rimandato alla scelta, modulo inviato da un altro sito rifiutato, dati dimostrativi non indicizzabili |
 | Container | Sito e API non root, in sola lettura; database non pubblicato; ruolo dell'API senza privilegi |
 | Riavvio | Migrazioni e seed ripetibili senza effetti |
 
@@ -52,16 +56,15 @@ ripulisce le riserve scadute (oggi la scadenza è valutata al momento della rich
 
 Un incremento operativo verificabile in ambiente di prova che colleghi:
 sito personale → autorizzazione stagionale → acquisto → inventario → reception →
-rendiconto. Inventario e riserva ci sono; il prossimo anello è l'acquisto visibile:
-scheda del bagno e percorso di prenotazione nel sito, collegati all'API.
+rendiconto. Inventario, riserva e percorso nel sito ci sono; il prossimo anello sono
+gli accessi e la gestione da parte dello stabilimento.
 
 ## Passi successivi in ordine
 
-1. Scheda del bagno, planimetria con vista a elenco e riepilogo nel sito, sull'API
-   esistente, nelle due lingue.
-2. Autenticazione, ruoli e gestione (inventario, prezzi, blocchi) con i test di permesso.
-3. Prenotazione confermata con pagamento in sandbox, pass e verifica alla reception.
-4. Condivisione stagionale, worker con outbox, rendiconto.
+1. Autenticazione, ruoli e gestione (inventario, prezzi, blocchi) con i test di permesso.
+2. Prenotazione confermata con pagamento in sandbox, pass e verifica alla reception.
+3. Condivisione stagionale, worker con outbox, rendiconto.
+4. Aree riservate nel sito, sito del bagno con modelli e revisioni.
 5. In parallelo, fuori dal codice: chiudere le decisioni di avvio (marchio e domini,
    soggetto venditore, provider pagamenti, condizioni) e scegliere i partner pilota.
 

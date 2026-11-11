@@ -5,8 +5,10 @@ import {
   acquireHold,
   DomainError,
   findActiveBeach,
+  getHold,
   listActiveBeaches,
   listAvailability,
+  nextAvailableDay,
   quoteSpot,
   type Database,
   type DomainErrorCode,
@@ -94,6 +96,25 @@ export function createApp({ db, holdSeconds, log = console.error }: AppOptions):
   app.get('/v1/beaches', async (c) => {
     const beaches = await listActiveBeaches(db);
     return c.json({ beaches: beaches.map(publicBeach) });
+  });
+
+  app.get('/v1/beaches/:slug', async (c) => {
+    const beach = await beachBySlug(parse(slugSchema, c.req.param('slug'), 'beach club'));
+    return c.json({ beach: publicBeach(beach), nextAvailableDay: await nextAvailableDay(db, beach) });
+  });
+
+  app.get('/v1/beaches/:slug/holds/:holdId', async (c) => {
+    const beach = await beachBySlug(parse(slugSchema, c.req.param('slug'), 'beach club'));
+    const held = await getHold(db, beach.id, parse(z.uuid(), c.req.param('holdId'), 'hold'));
+    return c.json({
+      holdId: held.holdId,
+      status: held.live ? 'active' : held.status === 'active' ? 'expired' : held.status,
+      expiresAt: held.expiresAt.toISOString(),
+      beach: publicBeach(beach),
+      day: held.day,
+      spot: { code: held.spotCode, rowNumber: held.rowNumber, umbrellas: held.umbrellas, sunbeds: held.sunbeds },
+      ...money(held.quote),
+    });
   });
 
   app.get('/v1/beaches/:slug/availability', async (c) => {

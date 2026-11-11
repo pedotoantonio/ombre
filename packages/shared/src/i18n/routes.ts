@@ -38,3 +38,23 @@ export function pageFromSlug(locale: Locale, slug: string): InnerPageId | null {
 export function absoluteUrl(siteUrl: string, path: string): string {
   return path === '/' ? siteUrl : `${siteUrl}${path}`;
 }
+
+export const beachSection: Record<Locale, string> = { it: 'bagni', en: 'beach-clubs' };
+export const bookSegment: Record<Locale, string> = { it: 'prenota', en: 'book' };
+export const holdSegment: Record<Locale, string> = { it: 'riserva', en: 'hold' };
+
+function localePrefix(locale: Locale): string {
+  return locale === defaultLocale ? '' : `/${locale}`;
+}
+
+export function beachPath(locale: Locale, beachSlug: string): string {
+  return `${localePrefix(locale)}/${beachSection[locale]}/${beachSlug}`;
+}
+
+export function bookPath(locale: Locale, beachSlug: string): string {
+  return `${beachPath(locale, beachSlug)}/${bookSegment[locale]}`;
+}
+
+export function holdPath(locale: Locale, beachSlug: string, holdId: string): string {
+  return `${beachPath(locale, beachSlug)}/${holdSegment[locale]}/${holdId}`;
+}

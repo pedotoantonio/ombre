@@ -1,5 +1,7 @@
 import Link from 'next/link';
-import { config, getDictionary, pathFor, type InnerPageId, type Locale } from '@ombre/shared';
+import { connection } from 'next/server';
+import { beachPath, config, getDictionary, pathFor, type InnerPageId, type Locale } from '@ombre/shared';
+import { api } from '@/lib/api';
 import { BeachScene } from '@ombre/ui';
 import { breadcrumbData, JsonLd, pageUrl } from '@/lib/seo';
 import { Contact, PageHead } from './PageShell';
@@ -96,20 +98,53 @@ export function HomePage({ locale }: PageProps) {
   );
 }
 
-function ExplorePage({ locale }: PageProps) {
-  const copy = getDictionary(locale, config.brandName).pages.explore;
+async function ExplorePage({ locale }: PageProps) {
+  // The list comes from the API at request time: this page is never prerendered.
+  await connection();
+  const t = getDictionary(locale, config.brandName);
+  const copy = t.pages.explore;
+  const result = await api.beaches();
+  const beaches = result.ok ? result.data.beaches : [];
+
   return (
     <>
       <PageHead title={copy.h1} lead={copy.lead} />
       <section className="section">
         <div className="container">
-          <div className="empty">
-            <h2>{copy.emptyTitle}</h2>
-            <p>{copy.emptyText}</p>
-            <Link className="button button--secondary" href={pathFor('howItWorks', locale)}>
-              {copy.emptyLink}
-            </Link>
-          </div>
+          {!result.ok ? (
+            <div className="empty">
+              <h2>{copy.unavailableTitle}</h2>
+              <p>{copy.unavailableText}</p>
+            </div>
+          ) : beaches.length === 0 ? (
+            <div className="empty">
+              <h2>{copy.emptyTitle}</h2>
+              <p>{copy.emptyText}</p>
+              <Link className="button button--secondary" href={pathFor('howItWorks', locale)}>
+                {copy.emptyLink}
+              </Link>
+            </div>
+          ) : (
+            <>
+              <h2>{copy.listTitle}</h2>
+              <ul className="cards">
+                {beaches.map((beach) => (
+                  <li className="card" key={beach.slug}>
+                    <h3>{beach.name}</h3>
+                    <p>{beach.locality}</p>
+                    {beach.demo ? (
+                      <p>
+                        <span className="badge badge--demo">{t.booking.demoBadge}</span>
+                      </p>
+                    ) : null}
+                    <Link className="card__link" href={beachPath(locale, beach.slug)}>
+                      {copy.viewBeach}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
         </div>
       </section>
     </>
@@ -266,7 +301,7 @@ function HelpPage({ locale }: PageProps) {
   );
 }
 
-const innerPages: Record<InnerPageId, (props: PageProps) => React.ReactNode> = {
+const innerPages: Record<InnerPageId, (props: PageProps) => React.ReactNode | Promise<React.ReactNode>> = {
   explore: ExplorePage,
   howItWorks: HowItWorksPage,
   forBeachClubs: ForBeachClubsPage,

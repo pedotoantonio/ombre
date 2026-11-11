@@ -75,6 +75,18 @@ describe.skipIf(!testAdminUrl)('API /v1 on the demo beach club', () => {
     expect(codes).not.toContain('B02');
   });
 
+  it('describes a beach club with its next free day and shows a hold by its identifier', async () => {
+    const overview = (await (await app.request(`/v1/beaches/${demoBeach.slug}`)).json()) as { nextAvailableDay: string };
+    expect(overview.nextAvailableDay).toBe(demoBeach.day);
+
+    const spotId = await spotByCode('A04');
+    const created = await post('/v1/holds', { beachSlug: demoBeach.slug, spotId, day: demoBeach.day }, { 'Idempotency-Key': `test-${randomUUID()}` });
+    const { holdId } = (await created.json()) as { holdId: string };
+    const shown = await app.request(`/v1/beaches/${demoBeach.slug}/holds/${holdId}`);
+    expect(await shown.json()).toMatchObject({ holdId, status: 'active', day: demoBeach.day, spot: { code: 'A04', rowNumber: 1 }, totalCents: 3000 });
+    expect((await app.request(`/v1/beaches/${demoBeach.slug}/holds/${randomUUID()}`)).status).toBe(404);
+  });
+
   it('refuses bad requests with clear codes and no internal details', async () => {
     const spotId = await spotByCode('A01');
     const valid = { beachSlug: demoBeach.slug, spotId, day: demoBeach.day };

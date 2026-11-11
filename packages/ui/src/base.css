@@ -562,6 +562,163 @@ ol.list > li::before {
   margin-top: var(--spazio-6);
 }
 
+/* Etichette e avvisi */
+.badge {
+  display: inline-block;
+  padding: 0.125rem 0.625rem;
+  border-radius: var(--raggio-pillola);
+  background: rgb(18 103 119 / 0.12);
+  color: var(--mare);
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+.badge--demo {
+  background: var(--sole);
+  color: var(--laguna);
+}
+
+.alert {
+  max-width: var(--lettura);
+  margin-bottom: var(--spazio-6);
+  padding: var(--spazio-4);
+  border: 1.5px solid var(--errore);
+  border-radius: var(--raggio);
+  background: var(--carta);
+  color: var(--errore);
+  font-weight: 600;
+}
+
+.alert--info {
+  border-color: var(--mare);
+  color: var(--laguna);
+}
+
+/* Moduli */
+.form-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--spazio-3);
+}
+
+.field {
+  display: grid;
+  gap: var(--spazio-1);
+}
+
+.field label {
+  color: var(--laguna);
+  font-size: 0.9375rem;
+  font-weight: 700;
+}
+
+.field input {
+  min-height: 3rem;
+  padding: 0 var(--spazio-4);
+  border: 1.5px solid var(--laguna);
+  border-radius: var(--raggio);
+  background: #fff;
+  color: var(--laguna);
+  font: inherit;
+}
+
+button.button {
+  cursor: pointer;
+}
+
+/* Postazioni */
+.spot-rows {
+  display: grid;
+  gap: var(--spazio-8);
+}
+
+.spot-row > h3 {
+  margin-bottom: var(--spazio-3);
+}
+
+.spots {
+  display: grid;
+  gap: var(--spazio-3);
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+}
+
+.spot {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spazio-1);
+  padding: var(--spazio-4);
+  background: var(--carta);
+  border: 1px solid var(--bordo);
+  border-radius: var(--raggio-grande);
+}
+
+.spot__code {
+  color: var(--laguna);
+  font-size: 1.375rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.spot__price {
+  color: var(--laguna);
+  font-size: 1.125rem;
+  font-weight: 700;
+}
+
+.spot .button {
+  margin-top: var(--spazio-3);
+}
+
+.spot p {
+  color: var(--testo-secondario);
+}
+
+/* Riepilogo */
+.summary {
+  max-width: 32rem;
+  padding: var(--spazio-6);
+  background: var(--carta);
+  border: 1px solid var(--bordo);
+  border-radius: var(--raggio-grande);
+}
+
+.summary > div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--spazio-4);
+  padding-block: var(--spazio-2);
+}
+
+.summary dt {
+  color: var(--testo-secondario);
+}
+
+.summary dd {
+  color: var(--laguna);
+  font-weight: 600;
+  text-align: end;
+}
+
+.summary .summary__total {
+  margin-top: var(--spazio-2);
+  padding-top: var(--spazio-4);
+  border-top: 1px solid var(--bordo);
+}
+
+.summary__total dt,
+.summary__total dd {
+  color: var(--laguna);
+  font-size: 1.25rem;
+  font-weight: 800;
+}
+
+.stack {
+  display: grid;
+  gap: var(--spazio-6);
+  justify-items: start;
+}
+
 /* Piede */
 .site-footer {
   margin-top: clamp(2rem, 6vw, 4rem);
