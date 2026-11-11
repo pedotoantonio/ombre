@@ -147,7 +147,9 @@ check((await manager.get(`/area/gestione/${beach}?day=${newDay}`)).html.includes
 // ---- Season holder: propose, wait for approval, withdraw ----
 const holder = new Visitor();
 await holder.signIn('stagionale@bagnodelledune.example');
-const seasonUrl = /href="(\/area\/stagionale\/[0-9a-f-]{36})"/.exec((await holder.get('/area/profilo')).html)?.[1] ?? '';
+// The holder may have season passes in other beach clubs too: take the one of this beach club.
+const passCard = (await holder.get('/area/profilo')).html.split('<li class="card"').find((part) => part.includes('Bagno delle Dune') && part.includes('/area/stagionale/')) ?? '';
+const seasonUrl = /href="(\/area\/stagionale\/[0-9a-f-]{36})"/.exec(passCard)?.[1] ?? '';
 check(seasonUrl !== '', 'season holder: the season pass is not listed');
 const proposed = await holder.post('stagionale-proponi', { lang: 'it', contract: seasonUrl.split('/').at(-1)!, from: '2027-07-05', to: '2027-07-11', weekday: ['2', '4'] });
 check(decodeURIComponent(proposed.replaceAll('+', ' ')).includes('Aggiunte 2'), `season holder: proposal summary is "${proposed}"`);

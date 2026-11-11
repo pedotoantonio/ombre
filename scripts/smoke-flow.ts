@@ -35,9 +35,11 @@ const home = await page('/');
 const form = /<form class="portal-search"[^>]*>[^]*?<\/form>/.exec(home.html)?.[0] ?? '';
 check(/method="get"/.test(form) && /action="\/esplora"/.test(form) && /role="search"/.test(form), 'home: no search form that opens the explore page');
 for (const name of ['place', 'day', 'guests', 'shared']) check(form.includes(`name="${name}"`), `home: the search has no "${name}" field`);
-const firstDay = /name="day"[^>]*min="(\d{4}-\d{2}-\d{2})"|min="(\d{4}-\d{2}-\d{2})"[^>]*name="day"/.exec(form);
+// The home page is prerendered, so its form carries no date limit; the explore page, rendered per request, does.
+const exploreForm = /<form class="portal-search"[^>]*>[^]*?<\/form>/.exec((await page('/esplora')).html)?.[0] ?? '';
+const firstDay = /name="day"[^>]*min="(\d{4}-\d{2}-\d{2})"|min="(\d{4}-\d{2}-\d{2})"[^>]*name="day"/.exec(exploreForm);
 const romeToday = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome' }).format(new Date());
-check((firstDay?.[1] ?? firstDay?.[2]) === romeToday, `home: the search does not start from today (${firstDay?.[1] ?? firstDay?.[2]})`);
+check((firstDay?.[1] ?? firstDay?.[2]) === romeToday, `explore: the search does not start from today (${firstDay?.[1] ?? firstDay?.[2]})`);
 check(count(form, /type="submit"/g) === 1 && count(home.html, /class="button[ "]/g) === 1, 'home: expected exactly one main button, the search');
 check(/action="\/en\/explore"/.test((await page('/en')).html), 'english home: the search does not open the English explore page');
 

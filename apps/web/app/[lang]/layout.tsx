@@ -19,7 +19,8 @@ export const metadata: Metadata = {
   robots: config.indexable ? { index: true, follow: true } : { index: false, follow: false },
 };
 
-export const viewport: Viewport = { themeColor: '#ffffff' };
+// `cover` lets the bottom bar of the beach page respect the safe areas of phones.
+export const viewport: Viewport = { themeColor: '#ffffff', viewportFit: 'cover' };
 
 export default async function RootLayout({
   children,
