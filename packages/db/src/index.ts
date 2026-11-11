@@ -2,6 +2,7 @@ export * from './client';
 export * from './auth';
 export * from './bookings';
 export * from './inventory';
+export * from './jobs';
 export * from './ledger';
 export * from './manage';
 export * from './migrate';

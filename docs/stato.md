@@ -36,7 +36,11 @@ Aggiornato all'11/11/2026.
   - economia nell'API: ripartizione di ogni vendita secondo le percentuali in vigore,
     registro che si può solo estendere, maturazione a fine giornata, riepilogo per lo
     stabilimento e rendiconto dello stagionale senza dati dell'ospite;
-  - `Dockerfile` e compose con database, migrazioni, API e sito.
+  - worker: coda affidabile scritta nella stessa transazione delle modifiche, conferma
+    della prenotazione per posta nella lingua dell'ospite (senza un fornitore reale la
+    notifica è registrata come non inviata), pulizia delle riserve scadute, chiusura
+    automatica delle giornate passate con maturazione delle quote;
+  - `Dockerfile` e compose con database, migrazioni, API, worker e sito.
 - **Non fatto**: secondo fattore di accesso, inviti e recupero password, aree riservate (ospite, stagionale, gestione,
   reception, console), annullamento da parte dell'ospite, pagamenti e liquidazioni
   reali, inviti agli stagionali (oggi l'utente deve già esistere), worker. Dopo la riserva il percorso si ferma: il pagamento non esiste
@@ -48,7 +52,7 @@ Aggiornato all'11/11/2026.
 | Controllo | Esito |
 |---|---|
 | Lint e controllo dei tipi | Superati |
-| Test (57, di cui 36 su un PostgreSQL vero) | Superati |
+| Test (65, di cui 42 su un PostgreSQL vero) | Superati |
 | Due acquisti sulla stessa giornata | Dodici richieste simultanee, una sola riserva; ripetuto sull'API in container con dieci richieste: un 201 e nove 409 |
 | Prezzo manipolato nel browser | L'importo inviato dal client è ignorato: vale quello del server |
 | MARE10 su €30 | Totale €27, salvato nella riserva e immutato se il listino cambia |
@@ -63,6 +67,8 @@ Aggiornato all'11/11/2026.
 | Due scansioni del pass | Sei scansioni simultanee, un solo ingresso; uscita e rientro controllati; pass contraffatto, di un altro giorno o annullato rifiutato |
 | Condivisione stagionale | Giornata visibile solo dopo l'autorizzazione; limite giornaliero rispettato anche con due autorizzazioni simultanee; ritiro rifiutato su una data riservata; la sospensione ferma le vendite e non tocca le prenotazioni confermate |
 | Ripartizione | Vendita condivisa a €27: 13,50 / 10,80 / 2,70. Giornata ordinaria: nessuna quota stagionale. Somma delle quote sempre uguale al totale. Registro non modificabile nemmeno dal proprietario del database |
+| Worker | Ogni elemento della coda trattato una volta anche con due worker insieme; un errore viene ritentato e abbandonato al quinto tentativo; riserve scadute liberate; giornate passate chiuse; una giornata passata non si può più vendere |
+| Percorso completo sui container (20 verifiche) | Riserva, prenotazione, pagamento di prova firmato, conferma `OM-270617-001`, notifica dal worker, quote 13,50 / 10,80 / 2,70, ruoli e rendiconto dello stagionale |
 | Chiave di idempotenza | Stessa richiesta, stessa riserva; richiesta diversa, errore esplicito |
 | Pagine servite dal container (192 verifiche su 12 pagine) | Superate |
 | Percorso di riserva sul sito in container (24 verifiche) | Superato: MARE10 da 30,00 a 27,00, doppio invio del modulo senza doppia riserva, secondo acquirente rimandato alla scelta, modulo inviato da un altro sito rifiutato, dati dimostrativi non indicizzabili |
@@ -73,21 +79,19 @@ Verifiche ancora aperte: documento OpenAPI generato dal codice, limiti alle rich
 prova di ripristino da backup, Core Web Vitals misurati, prove con lettore di schermo e
 da tastiera, controllo automatico di accessibilità, intestazione
 Content-Security-Policy, immagine per le anteprime social, pagina 404 con la grafica del
-sito. Il preventivo non è ancora salvato con una scadenza propria e manca il job che
-ripulisce le riserve scadute (oggi la scadenza è valutata al momento della richiesta).
+sito. Il preventivo non è ancora salvato con una scadenza propria.
 
 ## Prossimo risultato da costruire
 
 Un incremento operativo verificabile in ambiente di prova che colleghi:
 sito personale → autorizzazione stagionale → acquisto → inventario → reception →
 rendiconto. Inventario, riserva e percorso nel sito ci sono; il prossimo anello sono
-il worker per i lavori in coda, poi le aree riservate nel sito.
+le aree riservate nel sito: pagamento e pass per l'ospite, poi stagionale, gestione e reception.
 
 ## Passi successivi in ordine
 
-1. Worker con outbox: pulizia delle riserve, chiusura della giornata, notifiche.
-2. Aree riservate nel sito, sito del bagno con modelli e revisioni.
-3. In parallelo, fuori dal codice: chiudere le decisioni di avvio (marchio e domini,
+1. Aree riservate nel sito, sito del bagno con modelli e revisioni.
+2. In parallelo, fuori dal codice: chiudere le decisioni di avvio (marchio e domini,
    soggetto venditore, provider pagamenti, condizioni) e scegliere i partner pilota.
 
 ## Dipendenze esterne aperte

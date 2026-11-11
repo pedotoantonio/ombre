@@ -16,7 +16,8 @@
     "smoke": "node scripts/smoke.ts",
     "test:db": "sh scripts/test-db.sh",
     "smoke:api": "node scripts/smoke-api.ts",
-    "smoke:flow": "node scripts/smoke-flow.ts"
+    "smoke:flow": "node scripts/smoke-flow.ts",
+    "smoke:booking": "node scripts/smoke-booking.ts"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

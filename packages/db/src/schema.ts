@@ -107,6 +107,7 @@ export const booking = pgTable('booking', {
   discountCents: integer('discount_cents').notNull(),
   totalCents: integer('total_cents').notNull(),
   promoCode: text('promo_code'),
+  locale: text('locale').notNull().default('it'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   confirmedAt: timestamp('confirmed_at', { withTimezone: true }),
 });
@@ -207,4 +208,21 @@ export const ledgerEntry = pgTable('ledger_entry', {
   kind: text('kind').notNull(),
   party: partyKind('party'),
   amountCents: integer('amount_cents').notNull(),
+});
+
+export const outbox = pgTable('outbox', {
+  beachId: uuid('beach_id').notNull(),
+  kind: text('kind').notNull(),
+  payload: jsonb('payload').notNull().default({}),
+});
+
+export const notification = pgTable('notification', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  beachId: uuid('beach_id').notNull(),
+  bookingId: uuid('booking_id'),
+  template: text('template').notNull(),
+  locale: text('locale').notNull(),
+  recipient: text('recipient').notNull(),
+  status: text('status').notNull(),
+  provider: text('provider').notNull(),
 });

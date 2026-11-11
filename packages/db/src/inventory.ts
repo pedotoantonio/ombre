@@ -68,7 +68,8 @@ export interface AvailableSpot {
 }
 
 // A day is free when nobody holds it, or when the hold has run out even if no job has cleaned it yet.
-const isFree = sql`(${inventoryDay.state} = 'available' or (${inventoryDay.state} = 'held' and ${hold.expiresAt} <= now()))`;
+const notPast = sql`${inventoryDay.day} >= (select (now() at time zone b.timezone)::date from beach b where b.id = ${inventoryDay.beachId})`;
+const isFree = sql`((${inventoryDay.state} = 'available' or (${inventoryDay.state} = 'held' and ${hold.expiresAt} <= now())) and ${notPast})`;
 
 export function listAvailability(db: Database, beachId: string, day: string): Promise<AvailableSpot[]> {
   return withBeach(db, beachId, (tx) =>
@@ -254,6 +255,8 @@ export async function acquireHold(db: Database, beachId: string, request: HoldRe
         return toResult(previous, true);
       }
       if (!row) throw new DomainError('not_found', 'Spot or day not found');
+      const [clock] = await tx.select({ past: sql<boolean>`${row.day}::date < (now() at time zone ${beach.timezone})::date` }).from(beach).where(eq(beach.id, beachId));
+      if (clock?.past) throw new DomainError('inventory_conflict', 'This day has already passed');
 
       let state = row.state;
       if (state === 'held' && row.activeHoldId) {

@@ -58,3 +58,9 @@ export function bookPath(locale: Locale, beachSlug: string): string {
 export function holdPath(locale: Locale, beachSlug: string, holdId: string): string {
   return `${beachPath(locale, beachSlug)}/${holdSegment[locale]}/${holdId}`;
 }
+
+export const bookingSegment: Record<Locale, string> = { it: 'prenotazione', en: 'booking' };
+
+export function bookingPath(locale: Locale, beachSlug: string, bookingId: string): string {
+  return `${beachPath(locale, beachSlug)}/${bookingSegment[locale]}/${bookingId}`;
+}

@@ -107,3 +107,23 @@ meglio in SQL. Drizzle dà i tipi alle query. La colonna del tenant si chiama `b
 L'acquisizione di una giornata blocca prima la riga `inventory_day`, poi la promozione,
 sempre in quest'ordine. API con Hono e validazione zod, distribuita come un solo file.
 La riserva dura 10 minuti, modificabile con `OMBRE_HOLD_MINUTES`.
+
+## D15 — Coda dei lavori in PostgreSQL, senza Valkey — accettata (11/11/2026)
+
+Il template SweetHost usa BullMQ su Valkey. Per il primo rilascio di Ombrè la coda è una
+tabella `outbox` nello stesso database: la riga viene scritta nella transazione che
+conferma la prenotazione, quindi una notifica non si perde e non parte per una modifica
+annullata. Il worker prende i lavori con `FOR UPDATE SKIP LOCKED`, li ritenta con attesa
+crescente e li abbandona al quinto errore. Un servizio in meno da gestire e da mettere in
+backup; il passaggio a BullMQ si valuta quando i volumi lo richiedono.
+
+## D16 — Accessi, sessioni e firme — accettata (11/11/2026)
+
+Le password sono verificate dentro il database (bcrypt di pgcrypto) da funzioni
+dedicate: il ruolo dell'API non legge mai un hash e non può aprire una sessione senza la
+password giusta. Blocco al quinto errore per 15 minuti. I token di sessione sono casuali
+e in tabella ne resta solo l'impronta. I collegamenti alle prenotazioni e i pass sono
+firmati con `OMBRE_SIGNING_SECRET`, così non serve conservare un segreto per riga e un
+pass non si può indovinare. Manca ancora il secondo fattore per gestore e
+amministratore, richiesto dal template.
+

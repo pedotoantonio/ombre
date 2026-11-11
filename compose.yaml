@@ -80,6 +80,30 @@ services:
     cpus: 1.0
     mem_limit: 256m
 
+  worker:
+    <<: *hardening
+    image: ombre-worker:dev
+    build:
+      context: .
+      target: worker
+    environment:
+      OMBRE_DB_URL: postgres://ombre_app:${OMBRE_DB_APP_PASSWORD:-dev_app_only}@db:5432/ombre
+      OMBRE_SIGNING_SECRET: ${OMBRE_SIGNING_SECRET:-dev_only_signing_secret_not_for_production}
+      OMBRE_BRAND_NAME: ${OMBRE_BRAND_NAME:-Ombrè}
+      OMBRE_SITE_URL: ${OMBRE_SITE_URL:-http://localhost:3210}
+      # "none" sends nothing; "log" writes to the log what would be sent. No real provider yet.
+      OMBRE_MAIL_PROVIDER: ${OMBRE_MAIL_PROVIDER:-none}
+      OMBRE_WORKER_INTERVAL_SECONDS: ${OMBRE_WORKER_INTERVAL_SECONDS:-15}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      - backend
+    tmpfs:
+      - /tmp
+    cpus: 0.5
+    mem_limit: 256m
+
   web:
     <<: *hardening
     image: ombre-web:dev

@@ -3,6 +3,7 @@ import { and, asc, eq, sql } from 'drizzle-orm';
 import { canTransition } from '@ombre/shared';
 import { withActor, withBeach, type Database, type Transaction } from './client';
 import { DomainError } from './inventory';
+import { enqueue } from './jobs';
 import { recordRefundDue, recordSale } from './ledger';
 import type { Actor } from './manage';
 import { accessEvent, auditEvent, beach, booking, hold, inventoryDay, pass, payment, promotion, providerEvent, refund, spot } from './schema';
@@ -34,6 +35,7 @@ export interface CheckoutRequest {
   holdId: string;
   guestName: string;
   guestEmail: string;
+  locale?: 'it' | 'en';
 }
 
 /**
@@ -86,6 +88,7 @@ export function startCheckout(db: Database, beachId: string, request: CheckoutRe
         status: 'under_review',
         guestName: request.guestName,
         guestEmail: request.guestEmail.toLowerCase(),
+        locale: request.locale ?? 'it',
         listPriceCents: held.listPriceCents,
         discountCents: held.discountCents,
         totalCents: held.totalCents,
@@ -143,6 +146,7 @@ export async function applyPaymentOutcome(db: Database, notice: ProviderNotice):
       await settle('failed');
       await tx.update(booking).set({ status: 'cancelled' }).where(eq(booking.id, reserved.id));
       if (ours) await freeDay(tx, day.id, reserved.holdId, reserved.promotionId);
+      await enqueue(tx, beachId, 'booking.cancelled', { bookingId: reserved.id });
       return 'cancelled';
     }
 
@@ -153,6 +157,7 @@ export async function applyPaymentOutcome(db: Database, notice: ProviderNotice):
       await tx.update(booking).set({ status: 'confirmed', confirmedAt: sql`now()` }).where(eq(booking.id, reserved.id));
       await tx.insert(pass).values({ beachId, bookingId: reserved.id });
       await recordSale(tx, beachId, { bookingId: reserved.id, inventoryDayId: day.id, totalCents: reserved.totalCents });
+      await enqueue(tx, beachId, 'booking.confirmed', { bookingId: reserved.id });
       return 'confirmed';
     }
 
@@ -160,6 +165,7 @@ export async function applyPaymentOutcome(db: Database, notice: ProviderNotice):
     await tx.update(booking).set({ status: 'cancelled' }).where(eq(booking.id, reserved.id));
     await tx.insert(refund).values({ beachId, paymentId: paid.id, amountCents: paid.amountCents, reason: 'inventory_unavailable' });
     await recordRefundDue(tx, beachId, reserved.id, paid.amountCents);
+    await enqueue(tx, beachId, 'refund.due', { bookingId: reserved.id });
     return 'refund_due';
   });
 }

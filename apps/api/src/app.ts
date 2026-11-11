@@ -99,6 +99,7 @@ const checkoutSchema = z.object({
   holdId: z.uuid(),
   guestName: z.string().trim().min(1).max(120),
   guestEmail: z.email().max(200),
+  locale: z.enum(['it', 'en']).default('it'),
 });
 const noticeSchema = z.object({
   eventId: z.string().min(8).max(100),
