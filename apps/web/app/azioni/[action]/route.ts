@@ -92,9 +92,17 @@ const actions: Record<string, (request: Request, form: Form, lang: Locale) => Pr
   },
 
   async accesso(_request, form, lang) {
-    const result = await apiCall<{ token: string; expiresAt: string }>('POST', '/v1/auth/login', { body: { email: form('email'), password: form('password') } });
+    const code = form('code').trim();
+    const result = await apiCall<{ token: string; expiresAt: string }>('POST', '/v1/auth/login', { body: { email: form('email'), password: form('password'), ...(code ? { code } : {}) } });
     if (!result.ok) return { to: accountPath(lang, 'signIn'), err: result.status === 0 ? 'unavailable' : result.status === 400 ? 'invalid_credentials' : result.code };
     return redirect(accountPath(lang, 'overview'), { 'Set-Cookie': sessionCookieHeader(result.data.token, result.data.expiresAt) });
+  },
+
+  async 'verifica-conferma'(request, form, lang) {
+    const result = await apiCall('POST', '/v1/auth/two-factor/confirm', { body: { code: form('code').trim() }, token: cookieToken(request) });
+    if (result.ok) return { to: accountPath(lang, 'overview'), ok: '1' };
+    if (result.status === 401) return { to: accountPath(lang, 'signIn') };
+    return { to: accountPath(lang, 'twoFactor'), err: 'totp_invalid' };
   },
 
   async uscita(request, _form, lang) {

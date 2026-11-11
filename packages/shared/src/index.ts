@@ -6,3 +6,4 @@ export * from './domain/states';
 export * from './domain/permissions';
 export * from './domain/recurrence';
 export * from './domain/site';
+export * from './domain/base32';

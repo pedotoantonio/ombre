@@ -17,7 +17,10 @@ export type DomainErrorCode =
   | 'pass_invalid'
   | 'wrong_day'
   | 'cap_reached'
-  | 'version_conflict';
+  | 'version_conflict'
+  | 'totp_required'
+  | 'totp_invalid'
+  | 'totp_setup_required';
 
 /** A refusal the caller can explain to the user. Anything else is an internal fault. */
 export class DomainError extends Error {

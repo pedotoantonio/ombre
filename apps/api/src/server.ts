@@ -26,6 +26,8 @@ const app = createApp({
   holdSeconds: Math.round(holdMinutes * 60),
   signingSecret,
   sandboxWebhookSecret: process.env.OMBRE_SANDBOX_WEBHOOK_SECRET || undefined,
+  requireTwoFactor: process.env.OMBRE_REQUIRE_2FA === 'true',
+  brand: process.env.OMBRE_BRAND_NAME || undefined,
 });
 const port = Number(process.env.PORT ?? '3211');
 const server = serve({ fetch: app.fetch, port, hostname: process.env.HOSTNAME ?? '0.0.0.0' }, () => {

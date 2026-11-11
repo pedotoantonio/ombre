@@ -27,7 +27,7 @@ class Visitor {
     const response = await fetch(`${base}/azioni/${action}`, {
       method: 'POST',
       redirect: 'manual',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded', Origin: base, ...(this.cookie ? { Cookie: this.cookie } : {}) },
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', Origin: base, 'X-Forwarded-For': '198.51.100.2', ...(this.cookie ? { Cookie: this.cookie } : {}) },
       body: new URLSearchParams(fields).toString(),
     });
     const set = response.headers.get('set-cookie');

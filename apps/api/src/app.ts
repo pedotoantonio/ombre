@@ -6,7 +6,9 @@ import {
   acquireHold,
   applyPaymentOutcome,
   authorize,
+  beginTwoFactor,
   checkAccess,
+  confirmTwoFactor,
   createContract,
   decideProposal,
   DomainError,
@@ -49,7 +51,7 @@ import {
 } from '@ombre/db';
 import { buildOpenApi, type Operation } from './openapi';
 import { createRateLimiter, type RateLimiter } from './rate-limit';
-import { expandRecurrence, siteTemplates, siteTextLimits, type Action, type DayQuote } from '@ombre/shared';
+import { base32Encode, expandRecurrence, siteTemplates, siteTextLimits, type Action, type DayQuote } from '@ombre/shared';
 
 export interface AppOptions {
   db: Database;
@@ -63,6 +65,10 @@ export interface AppOptions {
   sandboxWebhookSecret?: string;
   /** Shared counter of requests. A new one is created when not given. */
   rateLimiter?: RateLimiter;
+  /** When true, managers must switch two-step verification on before managing a beach club. */
+  requireTwoFactor?: boolean;
+  /** Name shown by authenticator apps. */
+  brand?: string;
   log?: (message: string, error: unknown) => void;
 }
 
@@ -93,6 +99,9 @@ const domainStatus: Record<DomainErrorCode, 401 | 403 | 404 | 409 | 422 | 429> =
   wrong_day: 409,
   cap_reached: 409,
   version_conflict: 409,
+  totp_required: 401,
+  totp_invalid: 422,
+  totp_setup_required: 403,
 };
 
 const slugSchema = z.string().regex(/^[a-z0-9]+(-[a-z0-9]+)*$/).max(80);
@@ -103,7 +112,8 @@ const dayRequestSchema = z.object({
   day: daySchema,
   promoCode: z.string().trim().min(1).max(40).optional(),
 });
-const loginSchema = z.object({ email: z.email().max(200), password: z.string().min(1).max(200) });
+const codeSchema = z.string().regex(/^\d{6}$/);
+const loginSchema = z.object({ email: z.email().max(200), password: z.string().min(1).max(200), code: codeSchema.optional() });
 const priceSchema = z.number().int().min(0).max(1_000_000);
 const publishSchema = z.object({ day: daySchema, priceCents: priceSchema, spotIds: z.array(z.uuid()).min(1).max(500).optional() });
 const blockSchema = z.object({ spotId: z.uuid(), day: daySchema, blocked: z.boolean(), reason: z.string().trim().max(200).optional() });
@@ -232,12 +242,16 @@ export function createApp(options: AppOptions): Hono {
   /** Signed-in person, member of the beach club, with a role that allows the action. */
   async function actorFor(authorization: string | undefined, slug: string | undefined, action: Action) {
     const user = await currentUser(authorization);
-    return authorize(db, user.userId, parse(slugSchema, slug, 'beach club'), action);
+    const actor = await authorize(db, user.userId, parse(slugSchema, slug, 'beach club'), action);
+    if (options.requireTwoFactor && actor.role === 'manager' && !user.twoFactor) {
+      throw new DomainError('totp_setup_required', 'Switch two-step verification on to manage this beach club');
+    }
+    return actor;
   }
 
   route({ method: 'post', path: '/v1/auth/login', summary: 'Sign in with email and password', tag: 'Sign-in', auth: 'none', request: loginSchema, success: 200, errors: [400, 401, 429] }, async (c) => {
     const credentials = parse(loginSchema, await body(c.req.raw), 'credentials');
-    const session = await login(db, credentials.email, credentials.password, sessionSeconds);
+    const session = await login(db, credentials.email, credentials.password, sessionSeconds, credentials.code);
     return c.json({ token: session.token, expiresAt: session.expiresAt.toISOString() });
   });
 
@@ -247,11 +261,28 @@ export function createApp(options: AppOptions): Hono {
     return c.body(null, 204);
   });
 
+  route({ method: 'post', path: '/v1/auth/two-factor/begin', summary: 'Start two-step verification setup', tag: 'Sign-in', auth: 'session', success: 200, errors: [401, 409] }, async (c) => {
+    const user = await currentUser(c.req.header('Authorization'));
+    const secret = await beginTwoFactor(db, user.token);
+    if (!secret) throw new DomainError('invalid_state', 'Two-step verification is already on');
+    const text = base32Encode(secret);
+    const label = encodeURIComponent(`${options.brand ?? 'Ombrè'}:${user.email}`);
+    const issuer = encodeURIComponent(options.brand ?? 'Ombrè');
+    return c.json({ secret: text, otpauthUri: `otpauth://totp/${label}?secret=${text}&issuer=${issuer}&algorithm=SHA1&digits=6&period=30` });
+  });
+
+  route({ method: 'post', path: '/v1/auth/two-factor/confirm', summary: 'Switch two-step verification on with a first code', tag: 'Sign-in', auth: 'session', request: z.object({ code: codeSchema }), success: 204, errors: [400, 401, 422] }, async (c) => {
+    const user = await currentUser(c.req.header('Authorization'));
+    const { code } = parse(z.object({ code: codeSchema }), await body(c.req.raw), 'code');
+    if (!(await confirmTwoFactor(db, user.token, code))) throw new DomainError('totp_invalid', 'The code is not valid');
+    return c.body(null, 204);
+  });
+
   route({ method: 'get', path: '/v1/me', summary: 'The signed-in person and the beach clubs they belong to', tag: 'Sign-in', auth: 'session', success: 200, errors: [401] }, async (c) => {
     const user = await currentUser(c.req.header('Authorization'));
     const memberships = await listMemberships(db, user.userId);
     return c.json({
-      user: { email: user.email, name: user.name, platformRole: user.platformRole },
+      user: { email: user.email, name: user.name, platformRole: user.platformRole, twoFactor: user.twoFactor },
       memberships: memberships.map(({ beachSlug, beachName, role }) => ({ beachSlug, beachName, role })),
     });
   });

@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
+import QRCode from 'qrcode';
 import { accountPages, accountPath, accountSection, can, config, formatMoney, getDictionary, isLocale, locales, type AccountPage, type Locale, type MembershipRole } from '@ombre/shared';
 import { apiCall, dayPattern, formatDay, slugPattern, uuidPattern } from '@/lib/api';
 import { sessionToken } from '@/lib/session';
@@ -11,7 +12,7 @@ const first = (value: string | string[] | undefined): string | undefined => (Arr
 const other = (locale: Locale): Locale => locales.find((candidate) => candidate !== locale) ?? locale;
 
 interface Me {
-  user: { email: string; name: string };
+  user: { email: string; name: string; twoFactor: boolean };
   memberships: { beachSlug: string; beachName: string; role: MembershipRole }[];
 }
 interface Contract {
@@ -94,6 +95,10 @@ async function SignInView({ locale, query }: { locale: Locale; query: Query }) {
               <label htmlFor="password">{t.password}</label>
               <input id="password" name="password" type="password" autoComplete="current-password" required />
             </div>
+            <div className="field">
+              <label htmlFor="codice">{t.signInCode}</label>
+              <input id="codice" name="code" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} />
+            </div>
             <button className="button" type="submit">{t.signInButton}</button>
           </form>
         </div>
@@ -141,7 +146,61 @@ async function OverviewView({ locale }: { locale: Locale }) {
               </ul>
             </div>
           ) : null}
+          <div className="panel">
+            <h2>{t.twoFactorTitle}</h2>
+            <p className="prose">{me.user.twoFactor ? t.twoFactorOn : t.twoFactorOff}</p>
+            {me.user.twoFactor ? null : (
+              <p>
+                <a className="button button--secondary" href={accountPath(locale, 'twoFactor')}>{t.twoFactorStart}</a>
+              </p>
+            )}
+          </div>
           <SignOut locale={locale} />
+        </div>
+      </section>
+    </PageShell>
+  );
+}
+
+/** Setup of two-step verification: a fresh key at every visit, active only after a first code. */
+async function TwoFactorView({ locale, query }: { locale: Locale; query: Query }) {
+  const t = getDictionary(locale, config.brandName).account;
+  const { me, token } = await requireMe(locale);
+  if (me.user.twoFactor) redirect(accountPath(locale, 'overview'));
+  const started = await apiCall<{ secret: string; otpauthUri: string }>('POST', '/v1/auth/two-factor/begin', { token });
+  if (!started.ok) redirect(accountPath(locale, 'overview'));
+  const qr = await QRCode.toString(started.data.otpauthUri, { type: 'svg', margin: 1, errorCorrectionLevel: 'M' });
+  return (
+    <PageShell
+      locale={locale}
+      page="help"
+      highlight={false}
+      alternatePath={accountPath(other(locale), 'twoFactor')}
+      crumbs={[{ label: t.overviewTitle, href: accountPath(locale, 'overview') }, { label: t.twoFactorTitle }]}
+    >
+      <PageHead title={t.twoFactorTitle} lead={t.twoFactorOff} />
+      <section className="section">
+        <div className="container stack">
+          <Notice locale={locale} query={query} />
+          <ol className="list">
+            {t.twoFactorSteps.map((step) => (
+              <li key={step}>{step}</li>
+            ))}
+          </ol>
+          <div className="pass">
+            <div role="img" aria-label={t.twoFactorQr} dangerouslySetInnerHTML={{ __html: qr }} />
+          </div>
+          <p className="prose">
+            {t.twoFactorKey}: <code>{started.data.secret.replace(/(.{4})/g, '$1 ').trim()}</code>
+          </p>
+          <form method="post" action="/azioni/verifica-conferma" className="form-row">
+            <Hidden values={{ lang: locale }} />
+            <div className="field">
+              <label htmlFor="codice">{t.twoFactorCode}</label>
+              <input id="codice" name="code" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} required />
+            </div>
+            <button className="button" type="submit">{t.twoFactorConfirm}</button>
+          </form>
         </div>
       </section>
     </PageShell>
@@ -563,6 +622,7 @@ export async function AccountRoute({ locale, segments, query }: { locale: Locale
   const page = pageFromSegment(locale, segments[0] ?? '');
   if (segments.length === 1 && page === 'signIn') return <SignInView locale={locale} query={query} />;
   if (segments.length === 1 && page === 'overview') return <OverviewView locale={locale} />;
+  if (segments.length === 1 && page === 'twoFactor') return <TwoFactorView locale={locale} query={query} />;
   if (segments.length === 2 && page === 'manage') return <ManageView locale={locale} beachSlug={segments[1]!} query={query} />;
   if (segments.length === 2 && page === 'season') return <SeasonView locale={locale} contractId={segments[1]!} query={query} />;
   if (segments.length === 2 && page === 'site') return <SiteEditorView locale={locale} beachSlug={segments[1]!} query={query} />;

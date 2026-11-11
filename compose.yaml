@@ -65,6 +65,9 @@ services:
       OMBRE_DB_URL: postgres://ombre_app:${OMBRE_DB_APP_PASSWORD:-dev_app_only}@db:5432/ombre
       OMBRE_HOLD_MINUTES: ${OMBRE_HOLD_MINUTES:-10}
       OMBRE_SIGNING_SECRET: ${OMBRE_SIGNING_SECRET:-dev_only_signing_secret_not_for_production}
+      # true in production: managers must use two-step verification.
+      OMBRE_REQUIRE_2FA: ${OMBRE_REQUIRE_2FA:-false}
+      OMBRE_BRAND_NAME: ${OMBRE_BRAND_NAME:-Ombrè}
       # Empty switches the test payment provider off.
       OMBRE_SANDBOX_WEBHOOK_SECRET: ${OMBRE_SANDBOX_WEBHOOK_SECRET:-}
     depends_on:

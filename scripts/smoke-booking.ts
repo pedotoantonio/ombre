@@ -20,7 +20,7 @@ function check(condition: boolean, message: string): void {
 async function call(method: string, path: string, payload?: unknown, headers: Record<string, string> = {}) {
   const response = await fetch(base + path, {
     method,
-    headers: { 'Content-Type': 'application/json', ...headers },
+    headers: { 'Content-Type': 'application/json', 'X-Forwarded-For': '198.51.100.3', ...headers },
     ...(payload === undefined ? {} : { body: JSON.stringify(payload) }),
   });
   const text = await response.text();

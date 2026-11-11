@@ -72,6 +72,7 @@ export const accountPages = {
   manage: { it: 'gestione', en: 'manage' },
   season: { it: 'stagionale', en: 'season' },
   site: { it: 'sito', en: 'site' },
+  twoFactor: { it: 'verifica', en: 'two-step' },
 } as const satisfies Record<string, Record<Locale, string>>;
 export type AccountPage = keyof typeof accountPages;
 

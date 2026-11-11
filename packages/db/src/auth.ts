@@ -17,13 +17,14 @@ export interface LoginResult {
   userId: string;
 }
 
-export async function login(db: Database, email: string, password: string, ttlSeconds: number): Promise<LoginResult> {
+export async function login(db: Database, email: string, password: string, ttlSeconds: number, code?: string): Promise<LoginResult> {
   const token = randomBytes(32).toString('base64url');
   const result = await db.execute<{ o_outcome: string; o_user_id: string | null; o_expires_at: Date | string | null }>(
-    sql`select * from auth_login(${email}, ${password}, ${hashToken(token)}, ${ttlSeconds})`,
+    sql`select * from auth_login(${email}, ${password}, ${code ?? null}, ${hashToken(token)}, ${ttlSeconds})`,
   );
   const row = result.rows[0];
   if (row?.o_outcome === 'locked') throw new DomainError('account_locked', 'Too many attempts. Try again later');
+  if (row?.o_outcome === 'totp_required') throw new DomainError('totp_required', 'The verification code is required');
   if (row?.o_outcome !== 'ok' || !row.o_user_id || !row.o_expires_at) {
     throw new DomainError('invalid_credentials', 'Email or password not valid');
   }
@@ -35,14 +36,38 @@ export interface SessionUser {
   email: string;
   name: string;
   platformRole: 'none' | 'admin';
+  twoFactor: boolean;
 }
 
 export async function resolveSession(db: Database, token: string): Promise<SessionUser | null> {
-  const result = await db.execute<{ o_user_id: string; o_email: string; o_name: string; o_platform_role: 'none' | 'admin' }>(
+  const result = await db.execute<{ o_user_id: string; o_email: string; o_name: string; o_platform_role: 'none' | 'admin'; o_totp_enabled: boolean }>(
     sql`select * from auth_session(${hashToken(token)})`,
   );
   const row = result.rows[0];
-  return row ? { userId: row.o_user_id, email: row.o_email, name: row.o_name, platformRole: row.o_platform_role } : null;
+  return row ? { userId: row.o_user_id, email: row.o_email, name: row.o_name, platformRole: row.o_platform_role, twoFactor: row.o_totp_enabled } : null;
+}
+
+/** Starts two-step setup. Returns the secret to load into an authenticator app, or null if already active. */
+export async function beginTwoFactor(db: Database, token: string): Promise<Uint8Array | null> {
+  const result = await db.execute<{ secret: Buffer | null }>(sql`select auth_totp_begin(${hashToken(token)}) as secret`);
+  const secret = result.rows[0]?.secret;
+  return secret ? new Uint8Array(secret) : null;
+}
+
+export async function confirmTwoFactor(db: Database, token: string, code: string): Promise<boolean> {
+  const result = await db.execute<{ ok: boolean }>(sql`select auth_totp_confirm(${hashToken(token)}, ${code}) as ok`);
+  return result.rows[0]?.ok === true;
+}
+
+/** Owner-side: switches two-step verification off for a person who lost their device. */
+export async function resetTwoFactor(adminUrl: string, email: string): Promise<void> {
+  const client = new pg.Client({ connectionString: adminUrl });
+  await client.connect();
+  try {
+    await client.query('UPDATE app_user SET totp_enabled = false, totp_secret = NULL, totp_last_step = NULL WHERE email = lower($1)', [email]);
+  } finally {
+    await client.end();
+  }
 }
 
 export async function logout(db: Database, token: string): Promise<void> {
