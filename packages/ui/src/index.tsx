@@ -1,18 +1,19 @@
 import type { ReactElement } from 'react';
 
 interface LogoProps {
-  /** Colour of the pole. The canopy cut-outs use `background`. */
-  pole?: string;
-  background?: string;
-  wave?: string;
+  /** `onDark` when the symbol sits on a dark surface. */
+  tone?: 'color' | 'onDark';
 }
 
-/** Umbrella over a wave. Decorative: the brand name is always written next to it. */
-export function Logo({ pole = '#023047', background = '#fff8e7', wave = '#126777' }: LogoProps): ReactElement {
+/** Brand symbol. Decorative: the brand name is always written next to it. */
+export function Logo({ tone = 'color' }: LogoProps): ReactElement {
+  const pole = tone === 'onDark' ? '#f8f9fa' : '#1d3557';
+  const background = tone === 'onDark' ? '#1d3557' : '#f8f9fa';
+  const wave = tone === 'onDark' ? '#7fc8d4' : '#005f73';
   return (
     <svg viewBox="0 0 240 240" aria-hidden="true" focusable="false">
       <path d="M120 30v160" stroke={pole} strokeWidth="10" strokeLinecap="round" fill="none" />
-      <path d="M120 38c-52 0-94 38-94 86h188c0-48-42-86-94-86z" fill="#ffb703" />
+      <path d="M120 38c-52 0-94 38-94 86h188c0-48-42-86-94-86z" fill="#ee9b00" />
       <circle cx="49.5" cy="124" r="23.5" fill={background} />
       <circle cx="96.5" cy="124" r="23.5" fill={background} />
       <circle cx="143.5" cy="124" r="23.5" fill={background} />

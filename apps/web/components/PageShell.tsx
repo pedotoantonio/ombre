@@ -83,7 +83,7 @@ export function PageShell({ locale, page, highlight = true, alternatePath, crumb
         <div className="container site-footer__grid">
           <div>
             <Link className="brand" href={pathFor('home', locale)} aria-label={`${config.brandName}, ${t.nav.home}`}>
-              <Logo pole="#fff8e7" background="#023047" wave="#5bc0d4" />
+              <Logo tone="onDark" />
               <span>{config.brandName}</span>
             </Link>
             <p>{t.footer.tagline}</p>
