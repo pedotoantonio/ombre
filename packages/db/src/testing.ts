@@ -19,12 +19,19 @@ export async function createTestDatabase(serverAdminUrl: string): Promise<TestDa
   const server = new pg.Client({ connectionString: serverAdminUrl });
   await server.connect();
   await server.query(`CREATE DATABASE ${name}`);
-  await server.end();
 
   const adminUrl = new URL(serverAdminUrl);
   adminUrl.pathname = `/${name}`;
-  await runMigrations(adminUrl.href, path.join(import.meta.dirname, '../migrations'));
-  await setAppPassword(adminUrl.href, 'test_app_only');
+  // The application role belongs to the whole server: test files running side by side
+  // must not create or alter it at the same instant.
+  await server.query('SELECT pg_advisory_lock(7302541)');
+  try {
+    await runMigrations(adminUrl.href, path.join(import.meta.dirname, '../migrations'));
+    await setAppPassword(adminUrl.href, 'test_app_only');
+  } finally {
+    await server.query('SELECT pg_advisory_unlock(7302541)');
+    await server.end();
+  }
 
   const appUrl = new URL(adminUrl.href);
   appUrl.username = 'ombre_app';

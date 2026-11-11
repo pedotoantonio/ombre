@@ -82,3 +82,69 @@ export const auditEvent = pgTable('audit_event', {
   detail: jsonb('detail').notNull().default({}),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
+
+export const bookingStatus = pgEnum('booking_status', ['draft', 'under_review', 'confirmed', 'cancelled', 'completed']);
+export const paymentStatus = pgEnum('payment_status', ['not_started', 'in_progress', 'succeeded', 'failed', 'under_review']);
+export const refundStatus = pgEnum('refund_status', ['requested', 'in_progress', 'completed', 'failed']);
+export const presenceStatus = pgEnum('presence_status', ['expected', 'inside', 'outside_reentry_allowed', 'ended']);
+export const accessKind = pgEnum('access_kind', ['entry', 'exit']);
+
+export const booking = pgTable('booking', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  beachId: uuid('beach_id').notNull(),
+  inventoryDayId: uuid('inventory_day_id').notNull(),
+  holdId: uuid('hold_id').notNull(),
+  promotionId: uuid('promotion_id'),
+  code: text('code').notNull(),
+  status: bookingStatus('status').notNull().default('draft'),
+  presence: presenceStatus('presence').notNull().default('expected'),
+  guestName: text('guest_name').notNull(),
+  guestEmail: text('guest_email').notNull(),
+  listPriceCents: integer('list_price_cents').notNull(),
+  discountCents: integer('discount_cents').notNull(),
+  totalCents: integer('total_cents').notNull(),
+  promoCode: text('promo_code'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  confirmedAt: timestamp('confirmed_at', { withTimezone: true }),
+});
+
+export const payment = pgTable('payment', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  beachId: uuid('beach_id').notNull(),
+  bookingId: uuid('booking_id').notNull(),
+  provider: text('provider').notNull(),
+  providerRef: text('provider_ref').notNull(),
+  status: paymentStatus('status').notNull().default('not_started'),
+  amountCents: integer('amount_cents').notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const refund = pgTable('refund', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  beachId: uuid('beach_id').notNull(),
+  paymentId: uuid('payment_id').notNull(),
+  status: refundStatus('status').notNull().default('requested'),
+  amountCents: integer('amount_cents').notNull(),
+  reason: text('reason').notNull(),
+});
+
+export const providerEvent = pgTable('provider_event', {
+  provider: text('provider').notNull(),
+  eventId: text('event_id').notNull(),
+});
+
+export const pass = pgTable('pass', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  beachId: uuid('beach_id').notNull(),
+  bookingId: uuid('booking_id').notNull(),
+  revoked: boolean('revoked').notNull().default(false),
+});
+
+export const accessEvent = pgTable('access_event', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  beachId: uuid('beach_id').notNull(),
+  bookingId: uuid('booking_id').notNull(),
+  kind: accessKind('kind').notNull(),
+  operatorUserId: uuid('operator_user_id').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});

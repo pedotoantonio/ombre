@@ -1,5 +1,6 @@
 export * from './client';
 export * from './auth';
+export * from './bookings';
 export * from './inventory';
 export * from './manage';
 export * from './migrate';

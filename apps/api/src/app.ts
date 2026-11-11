@@ -1,14 +1,19 @@
+import { createHmac, timingSafeEqual } from 'node:crypto';
 import { Hono } from 'hono';
 import { sql } from 'drizzle-orm';
 import { z } from 'zod';
 import {
   acquireHold,
+  applyPaymentOutcome,
   authorize,
+  checkAccess,
   DomainError,
   findActiveBeach,
+  getBooking,
   getHold,
   listActiveBeaches,
   listAvailability,
+  listBookings,
   listInventory,
   listMemberships,
   login,
@@ -18,6 +23,7 @@ import {
   resolveSession,
   setBlocked,
   setPrice,
+  startCheckout,
   quoteSpot,
   type Database,
   type DomainErrorCode,
@@ -32,14 +38,18 @@ export interface AppOptions {
   holdSeconds: number;
   /** How long a sign-in lasts, in seconds. Twelve hours when not given. */
   sessionSeconds?: number;
+  /** Signs booking links and passes. At least 32 characters. */
+  signingSecret: string;
+  /** Shared with the test payment provider. Without it the test provider is switched off. */
+  sandboxWebhookSecret?: string;
   log?: (message: string, error: unknown) => void;
 }
 
 class HttpError extends Error {
-  readonly status: 400 | 401 | 404;
+  readonly status: 400 | 401 | 404 | 503;
   readonly code: string;
 
-  constructor(status: 400 | 401 | 404, code: string, message: string) {
+  constructor(status: 400 | 401 | 404 | 503, code: string, message: string) {
     super(message);
     this.status = status;
     this.code = code;
@@ -55,6 +65,9 @@ const domainStatus: Record<DomainErrorCode, 401 | 403 | 404 | 409 | 422 | 429> =
   account_locked: 429,
   forbidden: 403,
   invalid_state: 409,
+  hold_expired: 409,
+  pass_invalid: 422,
+  wrong_day: 409,
 };
 
 const slugSchema = z.string().regex(/^[a-z0-9]+(-[a-z0-9]+)*$/).max(80);
@@ -70,6 +83,18 @@ const priceSchema = z.number().int().min(0).max(1_000_000);
 const publishSchema = z.object({ day: daySchema, priceCents: priceSchema, spotIds: z.array(z.uuid()).min(1).max(500).optional() });
 const blockSchema = z.object({ spotId: z.uuid(), day: daySchema, blocked: z.boolean(), reason: z.string().trim().max(200).optional() });
 const spotPriceSchema = z.object({ spotId: z.uuid(), day: daySchema, priceCents: priceSchema });
+const checkoutSchema = z.object({
+  beachSlug: slugSchema,
+  holdId: z.uuid(),
+  guestName: z.string().trim().min(1).max(120),
+  guestEmail: z.email().max(200),
+});
+const noticeSchema = z.object({
+  eventId: z.string().min(8).max(100),
+  reference: z.string().min(8).max(100),
+  outcome: z.enum(['succeeded', 'failed']),
+});
+const accessSchema = z.object({ credential: z.string().trim().min(8).max(120), kind: z.enum(['entry', 'exit']) });
 const idempotencyKeySchema = z.string().min(8).max(200).regex(/^[\x21-\x7e]+$/);
 
 function parse<T>(schema: z.ZodType<T>, value: unknown, what: string): T {
@@ -92,7 +117,9 @@ function publicBeach(beach: PublicBeach) {
   return { slug: beach.slug, name: beach.name, locality: beach.locality, timezone: beach.timezone, demo: beach.demo };
 }
 
-export function createApp({ db, holdSeconds, sessionSeconds = 12 * 60 * 60, log = console.error }: AppOptions): Hono {
+export function createApp(options: AppOptions): Hono {
+  const { db, holdSeconds, sessionSeconds = 12 * 60 * 60, signingSecret, sandboxWebhookSecret, log = console.error } = options;
+  if (signingSecret.length < 32) throw new RangeError('signingSecret must be at least 32 characters long');
   const app = new Hono();
 
   async function beachBySlug(slug: string): Promise<PublicBeach> {
@@ -164,6 +191,60 @@ export function createApp({ db, holdSeconds, sessionSeconds = 12 * 60 * 60, log 
     const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'inventory.price');
     await setPrice(db, actor, parse(spotPriceSchema, await body(c.req.raw), 'request'));
     return c.body(null, 204);
+  });
+
+  app.post('/v1/checkouts', async (c) => {
+    const request = parse(checkoutSchema, await body(c.req.raw), 'request');
+    const beach = await beachBySlug(request.beachSlug);
+    const started = await startCheckout(db, beach.id, request, signingSecret);
+    return c.json(
+      {
+        bookingId: started.bookingId,
+        accessToken: started.accessToken,
+        status: started.status,
+        payment: { ...started.payment, currency: 'EUR' },
+      },
+      started.replayed ? 200 : 201,
+    );
+  });
+
+  // Test payment provider. The signature covers the exact bytes received.
+  app.post('/v1/payment-webhooks/sandbox', async (c) => {
+    if (!sandboxWebhookSecret) throw new HttpError(503, 'integration_unavailable', 'The test payment provider is not configured');
+    const raw = await c.req.text();
+    const expected = createHmac('sha256', sandboxWebhookSecret).update(raw).digest('hex');
+    const given = c.req.header('X-Ombre-Signature') ?? '';
+    if (given.length !== expected.length || !timingSafeEqual(Buffer.from(given), Buffer.from(expected))) {
+      throw new HttpError(401, 'invalid_signature', 'Signature not valid');
+    }
+    let payload: unknown;
+    try {
+      payload = JSON.parse(raw);
+    } catch {
+      throw new HttpError(400, 'invalid_request', 'The body must be JSON');
+    }
+    const notice = parse(noticeSchema, payload, 'notification');
+    return c.json({ result: await applyPaymentOutcome(db, { provider: 'sandbox', ...notice }) });
+  });
+
+  app.get('/v1/beaches/:slug/bookings/:bookingId', async (c) => {
+    const beach = await beachBySlug(parse(slugSchema, c.req.param('slug'), 'beach club'));
+    const token = /^Bearer ([A-Za-z0-9_-]{20,200})$/.exec(c.req.header('Authorization') ?? '')?.[1];
+    if (!token) throw new HttpError(401, 'unauthenticated', 'The booking token is required');
+    const view = await getBooking(db, beach.id, parse(z.uuid(), c.req.param('bookingId'), 'booking'), token, signingSecret);
+    const { quote, ...rest } = view;
+    return c.json({ ...rest, beach: publicBeach(beach), ...money(quote) });
+  });
+
+  app.post('/v1/manage/beaches/:slug/access-events', async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'access.check');
+    return c.json(await checkAccess(db, actor, parse(accessSchema, await body(c.req.raw), 'request'), signingSecret), 201);
+  });
+
+  app.get('/v1/manage/beaches/:slug/bookings', async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'bookings.read');
+    const day = parse(daySchema, c.req.query('day'), 'day');
+    return c.json({ day, currency: 'EUR', bookings: await listBookings(db, actor, day) });
   });
 
   app.get('/v1/health', async (c) => {

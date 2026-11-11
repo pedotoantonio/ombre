@@ -64,6 +64,9 @@ services:
       # The API logs in with the restricted role: row level security always applies to it.
       OMBRE_DB_URL: postgres://ombre_app:${OMBRE_DB_APP_PASSWORD:-dev_app_only}@db:5432/ombre
       OMBRE_HOLD_MINUTES: ${OMBRE_HOLD_MINUTES:-10}
+      OMBRE_SIGNING_SECRET: ${OMBRE_SIGNING_SECRET:-dev_only_signing_secret_not_for_production}
+      # Empty switches the test payment provider off.
+      OMBRE_SANDBOX_WEBHOOK_SECRET: ${OMBRE_SANDBOX_WEBHOOK_SECRET:-}
     depends_on:
       migrate:
         condition: service_completed_successfully

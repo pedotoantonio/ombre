@@ -25,10 +25,15 @@ Aggiornato all'11/11/2026.
     stabilimento, registro delle azioni;
   - gestione dell'inventario nell'API: pubblicazione di una giornata, blocco operativo,
     cambio di prezzo, vista completa delle postazioni;
+  - prenotazione nell'API: dalla riserva alla prenotazione in verifica, pagamento con un
+    fornitore di prova, conferma solo a pagamento riuscito, codice `OM-AAMMGG-NNN`, pass
+    firmato, rimborso registrato quando la giornata non è più disponibile;
+  - reception nell'API: ingresso, uscita e rientro con il testo del QR o il codice breve,
+    elenco delle prenotazioni del giorno;
   - `Dockerfile` e compose con database, migrazioni, API e sito.
 - **Non fatto**: secondo fattore di accesso, inviti e recupero password, aree riservate (ospite, stagionale, gestione,
-  reception, console), condivisione stagionale, prenotazione confermata, pagamenti, pass,
-  rendiconto, worker. Dopo la riserva il percorso si ferma: il pagamento non esiste
+  reception, console), condivisione stagionale, annullamento da parte dell'ospite,
+  pagamenti reali, rendiconto, worker. Dopo la riserva il percorso si ferma: il pagamento non esiste
   ancora e la pagina lo dice. Nessun dominio registrato, nessuna pubblicazione. Il sito dichiara che il
   servizio è in preparazione e chiede di non essere indicizzato.
 
@@ -37,7 +42,7 @@ Aggiornato all'11/11/2026.
 | Controllo | Esito |
 |---|---|
 | Lint e controllo dei tipi | Superati |
-| Test (38, di cui 20 su un PostgreSQL vero) | Superati |
+| Test (45, di cui 27 su un PostgreSQL vero) | Superati |
 | Due acquisti sulla stessa giornata | Dodici richieste simultanee, una sola riserva; ripetuto sull'API in container con dieci richieste: un 201 e nove 409 |
 | Prezzo manipolato nel browser | L'importo inviato dal client è ignorato: vale quello del server |
 | MARE10 su €30 | Totale €27, salvato nella riserva e immutato se il listino cambia |
@@ -46,6 +51,10 @@ Aggiornato all'11/11/2026.
 | Accesso a un altro stabilimento | Zero righe lette e zero scritte dal database, qualunque sia la query |
 | Ruoli | La reception blocca ma non cambia i prezzi; la contabilità non tocca l'inventario; un gestore non entra in un altro stabilimento; ogni azione finisce nel registro |
 | Accessi | Risposta identica per password errata e utente inesistente; blocco al quinto errore; uscita e rimozione dell'appartenenza hanno effetto immediato |
+| Pagamento riuscito tardivo | Giornata ancora libera: prenotazione confermata. Giornata presa da un altro: nessuna prenotazione e rimborso registrato |
+| Notifica del fornitore ripetuta o fuori ordine | Applicata una volta sola: nessuna conferma o pass duplicato; firma errata rifiutata |
+| Pagamento fallito | Prenotazione annullata, postazione di nuovo libera, utilizzo della promozione restituito |
+| Due scansioni del pass | Sei scansioni simultanee, un solo ingresso; uscita e rientro controllati; pass contraffatto, di un altro giorno o annullato rifiutato |
 | Chiave di idempotenza | Stessa richiesta, stessa riserva; richiesta diversa, errore esplicito |
 | Pagine servite dal container (192 verifiche su 12 pagine) | Superate |
 | Percorso di riserva sul sito in container (24 verifiche) | Superato: MARE10 da 30,00 a 27,00, doppio invio del modulo senza doppia riserva, secondo acquirente rimandato alla scelta, modulo inviato da un altro sito rifiutato, dati dimostrativi non indicizzabili |
@@ -64,14 +73,13 @@ ripulisce le riserve scadute (oggi la scadenza è valutata al momento della rich
 Un incremento operativo verificabile in ambiente di prova che colleghi:
 sito personale → autorizzazione stagionale → acquisto → inventario → reception →
 rendiconto. Inventario, riserva e percorso nel sito ci sono; il prossimo anello sono
-la prenotazione confermata: pagamento di prova, pass e verifica alla reception.
+la condivisione stagionale con le autorizzazioni del gestore, poi il rendiconto.
 
 ## Passi successivi in ordine
 
-1. Prenotazione confermata con pagamento in sandbox, pass e verifica alla reception.
-2. Condivisione stagionale, worker con outbox, rendiconto.
-3. Aree riservate nel sito, sito del bagno con modelli e revisioni.
-4. In parallelo, fuori dal codice: chiudere le decisioni di avvio (marchio e domini,
+1. Condivisione stagionale, worker con outbox, rendiconto.
+2. Aree riservate nel sito, sito del bagno con modelli e revisioni.
+3. In parallelo, fuori dal codice: chiudere le decisioni di avvio (marchio e domini,
    soggetto venditore, provider pagamenti, condizioni) e scegliere i partner pilota.
 
 ## Dipendenze esterne aperte

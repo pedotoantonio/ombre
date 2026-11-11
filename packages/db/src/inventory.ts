@@ -12,7 +12,10 @@ export type DomainErrorCode =
   | 'invalid_credentials'
   | 'account_locked'
   | 'forbidden'
-  | 'invalid_state';
+  | 'invalid_state'
+  | 'hold_expired'
+  | 'pass_invalid'
+  | 'wrong_day';
 
 /** A refusal the caller can explain to the user. Anything else is an internal fault. */
 export class DomainError extends Error {
