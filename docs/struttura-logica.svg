@@ -2,70 +2,67 @@
 <title>Ombrè — struttura logica del progetto</title>
 <desc>Quattro attori usano quattro superfici, che parlano con un'unica API composta da otto moduli di dominio. L'API scrive su PostgreSQL, da cui un worker con outbox raggiunge i provider esterni; i webhook di pagamento rientrano nell'API.</desc>
 <defs>
-<marker id="freccia" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#023047"/></marker>
-<marker id="freccia-mare" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#126777"/></marker>
+<marker id="freccia" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#1D3557"/></marker>
+<marker id="freccia-mare" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#005F73"/></marker>
 </defs>
-<rect width="1200" height="830" fill="#FFF8E7"/>
+<rect width="1200" height="830" fill="#F8F9FA"/>
 
 <g transform="translate(60 28) scale(0.25)">
-<path d="M120 30v160" stroke="#023047" stroke-width="10" stroke-linecap="round" fill="none"/>
-<path d="M120 38c-52 0-94 38-94 86h188c0-48-42-86-94-86z" fill="#FFB703"/>
-<circle cx="49.5" cy="124" r="23.5" fill="#FFF8E7"/><circle cx="96.5" cy="124" r="23.5" fill="#FFF8E7"/><circle cx="143.5" cy="124" r="23.5" fill="#FFF8E7"/><circle cx="190.5" cy="124" r="23.5" fill="#FFF8E7"/>
-<path d="M34 206c14-16 30-16 44 0s30 16 44 0 30-16 44 0 30 16 40 0" fill="none" stroke="#126777" stroke-width="12" stroke-linecap="round"/>
+<path fill="#005f73" d="M134 98.8L205.7 98.8Q189.3 124.5 182.8 154.3L132 103.5A14.3 14.3 0 0 0 134 98.8zM127.7 107.8L178.5 158.6Q148.7 165.1 123 181.5L123 109.8A14.3 14.3 0 0 0 127.7 107.8zM117 109.8L117 181.5Q91.3 165.1 61.5 158.6L112.3 107.8A14.3 14.3 0 0 0 117 109.8zM108 103.5L57.2 154.3Q50.7 124.5 34.3 98.8L106 98.8A14.3 14.3 0 0 0 108 103.5zM106 92.8L34.3 92.8Q50.7 67.1 57.2 37.3L108 88.1A14.3 14.3 0 0 0 106 92.8zM112.3 83.8L61.5 33Q91.3 26.5 117 10.1L117 81.8A14.3 14.3 0 0 0 112.3 83.8zM123 81.8L123 10.1Q148.7 26.5 178.5 33L127.7 83.8A14.3 14.3 0 0 0 123 81.8zM132 88.1L182.8 37.3Q189.3 67.1 205.7 92.8L134 92.8A14.3 14.3 0 0 0 132 88.1z"/><circle cx="120" cy="95.8" r="8.2" fill="#ee9b00"/><path fill="#ee9b00" d="M30.5 160.5A92.4 92.4 0 0 0 209.5 160.5A5.5 5.5 0 0 0 199.8 155.8A101.2 101.2 0 0 1 40.2 155.8A5.5 5.5 0 0 0 30.5 160.5z"/>
 </g>
-<text x="134" y="56" font-size="30" font-weight="800" fill="#023047">ombrè</text>
-<text x="134" y="80" font-size="16" fill="#3E5C6B">Struttura logica del progetto</text>
+<path fill="#005F73" transform="translate(85.07 26.38) scale(0.17857)" d="M328.8 167.9Q315.2 167.9 304 161.7Q292.8 155.4 286.2 144.6Q279.5 133.8 279.5 120Q279.5 106.1 286.2 95.3Q292.8 84.6 304 78.3Q315.2 72.1 328.8 72.1Q342.4 72.1 353.5 78.3Q364.6 84.6 371.2 95.3Q377.8 106.1 377.8 120Q377.8 133.8 371.2 144.6Q364.6 155.4 353.5 161.7Q342.4 167.9 328.8 167.9zM328.8 145.2Q335.7 145.2 340.8 142Q345.9 138.8 348.8 133.1Q351.8 127.4 351.8 120Q351.8 112.6 348.8 107Q345.9 101.4 340.8 98.1Q335.7 94.8 328.8 94.8Q321.9 94.8 316.7 98.1Q311.5 101.4 308.5 107Q305.6 112.6 305.6 120Q305.6 127.4 308.5 133.1Q311.5 138.8 316.7 142Q321.9 145.2 328.8 145.2zM387.6 165.9V74.1H411.1V96.5L408.6 92.8Q410.6 82.2 418.3 77.2Q426 72.1 436.8 72.1Q448.2 72.1 456.9 77.9Q465.5 83.7 467.7 93.5L460.5 94.1Q465 82.9 473.4 77.5Q481.8 72.1 493.1 72.1Q503 72.1 510.6 76.5Q518.3 80.9 522.6 88.7Q527 96.5 527 106.9V165.9H501.8V112.3Q501.8 106.9 499.9 103Q497.9 99.2 494.4 97Q490.9 94.8 485.8 94.8Q481 94.8 477.4 97Q473.8 99.2 471.8 103Q469.9 106.9 469.9 112.3V165.9H444.7V112.3Q444.7 106.9 442.8 103Q440.8 99.2 437.3 97Q433.8 94.8 428.7 94.8Q423.9 94.8 420.2 97Q416.6 99.2 414.7 103Q412.8 106.9 412.8 112.3V165.9zM590 167.9Q580.6 167.9 572.6 164.4Q564.6 161 559.8 154.3L562.1 149.1V165.9H538.6V38.7H563.8V91.6L559.9 86.6Q564.5 79.7 572.3 75.9Q580.1 72.1 590.2 72.1Q603.3 72.1 613.9 78.5Q624.4 84.9 630.7 95.7Q636.9 106.6 636.9 120Q636.9 133.3 630.7 144.2Q624.6 155.1 614 161.5Q603.4 167.9 590 167.9zM587 145.2Q594 145.2 599.4 142Q604.8 138.8 607.8 133.1Q610.8 127.4 610.8 120Q610.8 112.6 607.8 107Q604.8 101.4 599.4 98.1Q594 94.8 587 94.8Q580.3 94.8 575 98Q569.7 101.2 566.7 106.9Q563.8 112.6 563.8 120Q563.8 127.4 566.7 133.1Q569.7 138.8 575 142Q580.3 145.2 587 145.2zM646.6 165.9V74.1H670.1V96.1L668.5 93Q671.5 81.4 678.5 77.2Q685.4 73.1 695 73.1H700.4V95H692.5Q683.2 95 677.5 100.6Q671.8 106.2 671.8 116.5V165.9zM750.6 167.9Q736 167.9 725.2 161.4Q714.5 154.9 708.6 144Q702.7 133.1 702.7 119.8Q702.7 106.1 708.9 95.3Q715 84.6 725.4 78.3Q735.8 72.1 748.9 72.1Q759.9 72.1 768.3 75.6Q776.7 79 782.5 85.2Q788.2 91.4 791.3 99.6Q794.3 107.7 794.3 117.3Q794.3 120 794 122.6Q793.8 125.2 793.1 127.1H724.4V108.6H778.8L766.9 117.3Q768.6 110.1 766.7 104.5Q764.9 98.8 760.3 95.6Q755.7 92.3 748.9 92.3Q742.4 92.3 737.7 95.5Q733 98.7 730.6 104.9Q728.3 111.1 728.8 120Q728.1 127.7 730.6 133.6Q733.1 139.5 738.4 142.8Q743.6 146 751 146Q757.7 146 762.5 143.4Q767.2 140.7 769.9 136L790.1 145.5Q787.4 152.3 781.6 157.3Q775.8 162.3 767.9 165.1Q760 167.9 750.6 167.9zM736.3 58.3 718.9 28.1H751.3L761 58.3z"/>
+<text x="134" y="80" font-size="16" fill="#4A5A73">Struttura logica del progetto</text>
 
-<text x="84" y="130" font-size="14" font-weight="700" fill="#126777" letter-spacing="2">ATTORI</text>
-<g font-size="19" font-weight="700" fill="#FFF8E7" text-anchor="middle">
-<rect x="84" y="142" width="240" height="72" rx="12" fill="#023047"/><text x="204" y="173">Ospite occasionale</text>
-<rect x="348" y="142" width="240" height="72" rx="12" fill="#023047"/><text x="468" y="173">Stagionale</text>
-<rect x="612" y="142" width="240" height="72" rx="12" fill="#023047"/><text x="732" y="173">Gestore del bagno</text>
-<rect x="876" y="142" width="240" height="72" rx="12" fill="#023047"/><text x="996" y="173">Reception</text>
+<text x="84" y="130" font-size="14" font-weight="700" fill="#005F73" letter-spacing="2">ATTORI</text>
+<g font-size="19" font-weight="700" fill="#F8F9FA" text-anchor="middle">
+<rect x="84" y="142" width="240" height="72" rx="12" fill="#1D3557"/><text x="204" y="173">Ospite occasionale</text>
+<rect x="348" y="142" width="240" height="72" rx="12" fill="#1D3557"/><text x="468" y="173">Stagionale</text>
+<rect x="612" y="142" width="240" height="72" rx="12" fill="#1D3557"/><text x="732" y="173">Gestore del bagno</text>
+<rect x="876" y="142" width="240" height="72" rx="12" fill="#1D3557"/><text x="996" y="173">Reception</text>
 </g>
-<g font-size="14" fill="#BFD8E0" text-anchor="middle">
+<g font-size="14" fill="#E0F2F1" text-anchor="middle">
 <text x="204" y="195">Cerca, prenota, paga</text>
 <text x="468" y="195">Libera le sue giornate</text>
 <text x="732" y="195">Autorizza e fissa le regole</text>
 <text x="996" y="195">Verifica il pass all'arrivo</text>
 </g>
-<g stroke="#023047" stroke-width="2" marker-end="url(#freccia)">
+<g stroke="#1D3557" stroke-width="2" marker-end="url(#freccia)">
 <line x1="204" y1="214" x2="204" y2="246"/><line x1="468" y1="214" x2="468" y2="246"/><line x1="732" y1="214" x2="732" y2="246"/><line x1="996" y1="214" x2="996" y2="246"/>
 </g>
 
-<rect x="60" y="250" width="1080" height="128" rx="16" fill="#FFFDF6" stroke="#E6D9BC"/>
-<text x="84" y="279" font-size="14" font-weight="700" fill="#126777" letter-spacing="2">SUPERFICI</text>
-<text x="190" y="279" font-size="14" fill="#3E5C6B">solo interfacce, nessuna regola di business</text>
-<g font-size="19" font-weight="700" fill="#023047" text-anchor="middle">
-<rect x="84" y="292" width="240" height="68" rx="12" fill="#FFB703"/><text x="204" y="321">Portale e siti</text>
-<rect x="348" y="292" width="240" height="68" rx="12" fill="#FFB703"/><text x="468" y="321">Area stagionale</text>
-<rect x="612" y="292" width="240" height="68" rx="12" fill="#FFB703"/><text x="732" y="321">Gestionale</text>
-<rect x="876" y="292" width="240" height="68" rx="12" fill="#FFB703"/><text x="996" y="321">App reception</text>
+<rect x="60" y="250" width="1080" height="128" rx="16" fill="#FFFFFF" stroke="#005F73" stroke-opacity=".25"/>
+<text x="84" y="279" font-size="14" font-weight="700" fill="#005F73" letter-spacing="2">SUPERFICI</text>
+<text x="190" y="279" font-size="14" fill="#4A5A73">solo interfacce, nessuna regola di business</text>
+<g font-size="19" font-weight="700" fill="#1D3557" text-anchor="middle">
+<rect x="84" y="292" width="240" height="68" rx="12" fill="#EE9B00"/><text x="204" y="321">Portale e siti</text>
+<rect x="348" y="292" width="240" height="68" rx="12" fill="#EE9B00"/><text x="468" y="321">Area stagionale</text>
+<rect x="612" y="292" width="240" height="68" rx="12" fill="#EE9B00"/><text x="732" y="321">Gestionale</text>
+<rect x="876" y="292" width="240" height="68" rx="12" fill="#EE9B00"/><text x="996" y="321">App reception</text>
 </g>
-<g font-size="14" fill="#4A3A00" text-anchor="middle">
+<g font-size="14" fill="#1D3557" text-anchor="middle">
 <text x="204" y="343">Ricerca e acquisto diretto</text>
 <text x="468" y="343">Proposte e quote maturate</text>
 <text x="732" y="343">Planimetria, prezzi, regole</text>
 <text x="996" y="343">Accessi e presenze del giorno</text>
 </g>
 
-<line x1="600" y1="378" x2="600" y2="410" stroke="#023047" stroke-width="2" marker-end="url(#freccia)"/>
-<text x="616" y="399" font-size="14" fill="#3E5C6B">HTTPS · contratto OpenAPI</text>
+<line x1="600" y1="378" x2="600" y2="410" stroke="#1D3557" stroke-width="2" marker-end="url(#freccia)"/>
+<text x="616" y="399" font-size="14" fill="#4A5A73">HTTPS · contratto OpenAPI</text>
 
-<rect x="60" y="414" width="1080" height="214" rx="16" fill="#FFFDF6" stroke="#E6D9BC"/>
-<text x="84" y="443" font-size="14" font-weight="700" fill="#126777" letter-spacing="2">API /v1</text>
-<text x="166" y="443" font-size="14" fill="#3E5C6B">monolite modulare, otto moduli di dominio</text>
-<g font-size="19" font-weight="700" fill="#FFF8E7" text-anchor="middle">
-<rect x="84" y="456" width="240" height="68" rx="12" fill="#126777"/><text x="204" y="485">Ricerca</text>
-<rect x="348" y="456" width="240" height="68" rx="12" fill="#126777"/><text x="468" y="485">Inventario</text>
-<rect x="612" y="456" width="240" height="68" rx="12" fill="#126777"/><text x="732" y="485">Condivisione</text>
-<rect x="876" y="456" width="240" height="68" rx="12" fill="#126777"/><text x="996" y="485">Prenotazione</text>
-<rect x="84" y="540" width="240" height="68" rx="12" fill="#126777"/><text x="204" y="569">Promozioni</text>
-<rect x="348" y="540" width="240" height="68" rx="12" fill="#126777"/><text x="468" y="569">Pass e accessi</text>
-<rect x="612" y="540" width="240" height="68" rx="12" fill="#126777"/><text x="732" y="569">Siti ed editor</text>
-<rect x="876" y="540" width="240" height="68" rx="12" fill="#126777"/><text x="996" y="569">Ledger</text>
+<rect x="60" y="414" width="1080" height="214" rx="16" fill="#FFFFFF" stroke="#005F73" stroke-opacity=".25"/>
+<text x="84" y="443" font-size="14" font-weight="700" fill="#005F73" letter-spacing="2">API /v1</text>
+<text x="166" y="443" font-size="14" fill="#4A5A73">monolite modulare, otto moduli di dominio</text>
+<g font-size="19" font-weight="700" fill="#F8F9FA" text-anchor="middle">
+<rect x="84" y="456" width="240" height="68" rx="12" fill="#005F73"/><text x="204" y="485">Ricerca</text>
+<rect x="348" y="456" width="240" height="68" rx="12" fill="#005F73"/><text x="468" y="485">Inventario</text>
+<rect x="612" y="456" width="240" height="68" rx="12" fill="#005F73"/><text x="732" y="485">Condivisione</text>
+<rect x="876" y="456" width="240" height="68" rx="12" fill="#005F73"/><text x="996" y="485">Prenotazione</text>
+<rect x="84" y="540" width="240" height="68" rx="12" fill="#005F73"/><text x="204" y="569">Promozioni</text>
+<rect x="348" y="540" width="240" height="68" rx="12" fill="#005F73"/><text x="468" y="569">Pass e accessi</text>
+<rect x="612" y="540" width="240" height="68" rx="12" fill="#005F73"/><text x="732" y="569">Siti ed editor</text>
+<rect x="876" y="540" width="240" height="68" rx="12" fill="#005F73"/><text x="996" y="569">Ledger</text>
 </g>
-<g font-size="14" fill="#D7EAEE" text-anchor="middle">
+<g font-size="14" fill="#E0F2F1" text-anchor="middle">
 <text x="204" y="507">Portale, mappa, disponibilità</text>
 <text x="468" y="507">Postazione × giornata</text>
 <text x="732" y="507">Proposte degli stagionali</text>
@@ -76,22 +73,22 @@
 <text x="996" y="591">Quote, rimborsi, liquidazioni</text>
 </g>
 
-<line x1="244" y1="628" x2="244" y2="660" stroke="#023047" stroke-width="2" marker-end="url(#freccia)"/>
-<line x1="956" y1="664" x2="956" y2="632" stroke="#126777" stroke-width="2" stroke-dasharray="6 5" marker-end="url(#freccia-mare)"/>
-<text x="972" y="652" font-size="14" fill="#126777">webhook di pagamento</text>
+<line x1="244" y1="628" x2="244" y2="660" stroke="#1D3557" stroke-width="2" marker-end="url(#freccia)"/>
+<line x1="956" y1="664" x2="956" y2="632" stroke="#005F73" stroke-width="2" stroke-dasharray="6 5" marker-end="url(#freccia-mare)"/>
+<text x="972" y="652" font-size="14" fill="#005F73">webhook di pagamento</text>
 
-<text x="84" y="652" font-size="14" font-weight="700" fill="#126777" letter-spacing="2">DATI</text>
-<rect x="84" y="664" width="320" height="80" rx="12" fill="#023047"/>
-<text x="244" y="698" font-size="19" font-weight="700" fill="#FFB703" text-anchor="middle">PostgreSQL</text>
-<text x="244" y="722" font-size="14" fill="#BFD8E0" text-anchor="middle">Unica fonte autorevole · RLS per bagno</text>
-<line x1="404" y1="704" x2="436" y2="704" stroke="#023047" stroke-width="2" marker-end="url(#freccia)"/>
-<rect x="440" y="664" width="320" height="80" rx="12" fill="#FFFDF6" stroke="#023047" stroke-width="1.5"/>
-<text x="600" y="698" font-size="19" font-weight="700" fill="#023047" text-anchor="middle">Worker e outbox</text>
-<text x="600" y="722" font-size="14" fill="#3E5C6B" text-anchor="middle">Notifiche, scadenze, riconciliazioni</text>
-<line x1="760" y1="704" x2="792" y2="704" stroke="#023047" stroke-width="2" marker-end="url(#freccia)"/>
-<rect x="796" y="664" width="320" height="80" rx="12" fill="#FFFDF6" stroke="#023047" stroke-width="1.5"/>
-<text x="956" y="698" font-size="19" font-weight="700" fill="#023047" text-anchor="middle">Provider esterni</text>
-<text x="956" y="722" font-size="14" fill="#3E5C6B" text-anchor="middle">Pagamenti, email — da validare</text>
+<text x="84" y="652" font-size="14" font-weight="700" fill="#005F73" letter-spacing="2">DATI</text>
+<rect x="84" y="664" width="320" height="80" rx="12" fill="#1D3557"/>
+<text x="244" y="698" font-size="19" font-weight="700" fill="#EE9B00" text-anchor="middle">PostgreSQL</text>
+<text x="244" y="722" font-size="14" fill="#E0F2F1" text-anchor="middle">Unica fonte autorevole · RLS per bagno</text>
+<line x1="404" y1="704" x2="436" y2="704" stroke="#1D3557" stroke-width="2" marker-end="url(#freccia)"/>
+<rect x="440" y="664" width="320" height="80" rx="12" fill="#FFFFFF" stroke="#1D3557" stroke-width="1.5"/>
+<text x="600" y="698" font-size="19" font-weight="700" fill="#1D3557" text-anchor="middle">Worker e outbox</text>
+<text x="600" y="722" font-size="14" fill="#4A5A73" text-anchor="middle">Notifiche, scadenze, riconciliazioni</text>
+<line x1="760" y1="704" x2="792" y2="704" stroke="#1D3557" stroke-width="2" marker-end="url(#freccia)"/>
+<rect x="796" y="664" width="320" height="80" rx="12" fill="#FFFFFF" stroke="#1D3557" stroke-width="1.5"/>
+<text x="956" y="698" font-size="19" font-weight="700" fill="#1D3557" text-anchor="middle">Provider esterni</text>
+<text x="956" y="722" font-size="14" fill="#4A5A73" text-anchor="middle">Pagamenti, email — da validare</text>
 
-<text x="60" y="796" font-size="14" fill="#3E5C6B">ombrè · struttura logica — dati dimostrativi · dettagli in ombre/docs/progetto.md</text>
+<text x="60" y="796" font-size="14" fill="#4A5A73">ombrè · struttura logica — dati dimostrativi · dettagli in ombre/docs/progetto.md</text>
 </svg>
