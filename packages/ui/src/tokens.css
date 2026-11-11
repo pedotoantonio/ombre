@@ -53,6 +53,7 @@
   --tocco: 2.75rem;
   --larghezza: 70rem;
   --lettura: 65ch;
+  --lettura-guida: 46ch; /* lead paragraphs: about 65 characters per line, the zero of this typeface is wide */
   --margine: 1.25rem; /* side margin of the pages */
   --testata: 4.25rem; /* header height on wide screens */
 

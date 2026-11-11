@@ -1,20 +1,20 @@
+import { cache } from 'react';
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import QRCode from 'qrcode';
-import { accountPages, accountPath, accountSection, can, config, formatMoney, getDictionary, isLocale, locales, type AccountPage, type Locale, type MembershipRole } from '@ombre/shared';
-import { apiCall, dayPattern, formatDay, slugPattern, uuidPattern } from '@/lib/api';
-import { sessionToken } from '@/lib/session';
+import { accountPages, accountPath, accountSection, can, config, formatMoney, getDictionary, isLocale, locales, type AccountPage, type Locale } from '@ombre/shared';
+import { apiCall, dayPattern, formatDate, formatDay, formatPeriod, slugPattern, uuidPattern } from '@/lib/api';
+import { privateMetadata } from '@/lib/seo';
+import { signedIn, type Me } from '@/lib/session';
 import { PageHead, PageShell } from './PageShell';
 import { SiteEditorView } from './site-editor';
+import { Cell, DataTable, Row, RowHead } from './table';
 
 type Query = Record<string, string | string[] | undefined>;
 const first = (value: string | string[] | undefined): string | undefined => (Array.isArray(value) ? value[0] : value);
 const other = (locale: Locale): Locale => locales.find((candidate) => candidate !== locale) ?? locale;
 
-interface Me {
-  user: { email: string; name: string; twoFactor: boolean };
-  memberships: { beachSlug: string; beachName: string; role: MembershipRole }[];
-}
 interface Contract {
   contractId: string;
   beachSlug: string;
@@ -37,10 +37,34 @@ function pageFromSegment(locale: Locale, segment: string): AccountPage | null {
 
 /** Signed-in person, or a redirect to the sign-in page. */
 async function requireMe(locale: Locale): Promise<{ me: Me; token: string }> {
-  const token = await sessionToken();
-  const result = token ? await apiCall<Me>('GET', '/v1/me', { token }) : null;
-  if (!token || !result?.ok) redirect(accountPath(locale, 'signIn'));
-  return { me: result.data, token };
+  const session = await signedIn();
+  if (!session) redirect(accountPath(locale, 'signIn'));
+  return session;
+}
+
+/** Season passes of the signed-in person: the title and the page ask for them once. */
+const ownContracts = cache((token: string) => apiCall<{ contracts: Contract[] }>('GET', '/v1/season/contracts', { token }));
+
+/** Title of a reserved page. The names of beach clubs and spots are read only for who is signed in. */
+export async function accountMetadata(locale: Locale, segments: string[]): Promise<Metadata> {
+  const t = getDictionary(locale, config.brandName);
+  const page = pageFromSegment(locale, segments[0] ?? '');
+  const id = segments[1];
+  if (segments.length === 1) {
+    const title = page === 'signIn' ? t.account.signInTitle : page === 'overview' ? t.account.overviewTitle : page === 'twoFactor' ? t.account.twoFactorTitle : null;
+    return privateMetadata(locale, title ?? t.nav.reservedArea);
+  }
+  const session = segments.length === 2 ? await signedIn() : null;
+  if (session && (page === 'manage' || page === 'site')) {
+    const club = session.me.memberships.find((entry) => entry.beachSlug === id)?.beachName;
+    return privateMetadata(locale, page === 'manage' ? t.account.manageShort : t.site.openEditor, { club });
+  }
+  if (session && page === 'season') {
+    const contracts = await ownContracts(session.token);
+    const contract = contracts.ok ? contracts.data.contracts.find((entry) => entry.contractId === id) : undefined;
+    if (contract) return privateMetadata(locale, t.booking.spot(contract.spotCode), { club: contract.beachName });
+  }
+  return privateMetadata(locale, t.nav.reservedArea);
 }
 
 function Notice({ locale, query }: { locale: Locale; query: Query }) {
@@ -65,20 +89,9 @@ function Hidden({ values }: { values: Record<string, string> }) {
   );
 }
 
-function SignOut({ locale }: { locale: Locale }) {
-  const t = getDictionary(locale, config.brandName).account;
-  return (
-    <form method="post" action="/azioni/uscita" className="inline-form">
-      <Hidden values={{ lang: locale }} />
-      <button className="button button--secondary button--small" type="submit">{t.signOut}</button>
-    </form>
-  );
-}
-
 async function SignInView({ locale, query }: { locale: Locale; query: Query }) {
   const t = getDictionary(locale, config.brandName).account;
-  const token = await sessionToken();
-  if (token && (await apiCall('GET', '/v1/me', { token })).ok) redirect(accountPath(locale, 'overview'));
+  if (await signedIn()) redirect(accountPath(locale, 'overview'));
   return (
     <PageShell locale={locale} page="help" highlight={false} alternatePath={accountPath(other(locale), 'signIn')} crumbs={[{ label: t.signInTitle }]}>
       <PageHead title={t.signInTitle} lead={t.signInLead} />
@@ -99,7 +112,7 @@ async function SignInView({ locale, query }: { locale: Locale; query: Query }) {
               <label htmlFor="codice">{t.signInCode}</label>
               <input id="codice" name="code" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} />
             </div>
-            <button className="button" type="submit">{t.signInButton}</button>
+            <button className="button button--block" type="submit">{t.signInButton}</button>
           </form>
         </div>
       </section>
@@ -110,10 +123,10 @@ async function SignInView({ locale, query }: { locale: Locale; query: Query }) {
 async function OverviewView({ locale }: { locale: Locale }) {
   const t = getDictionary(locale, config.brandName).account;
   const { me, token } = await requireMe(locale);
-  const contracts = await apiCall<{ contracts: Contract[] }>('GET', '/v1/season/contracts', { token });
+  const contracts = await ownContracts(token);
   const mine = contracts.ok ? contracts.data.contracts : [];
   return (
-    <PageShell locale={locale} page="help" highlight={false} alternatePath={accountPath(other(locale), 'overview')} crumbs={[{ label: t.overviewTitle }]}>
+    <PageShell locale={locale} page="help" highlight={false} alternatePath={accountPath(other(locale), 'overview')} crumbs={[{ label: t.overviewTitle }]} signedInAs={me.user.name}>
       <PageHead title={t.overviewTitle} lead={t.hello(me.user.name)} />
       <section className="section">
         <div className="container stack">
@@ -126,7 +139,10 @@ async function OverviewView({ locale }: { locale: Locale }) {
                   <li className="card" key={membership.beachSlug}>
                     <h3>{membership.beachName}</h3>
                     <p>{t.roles[membership.role]}</p>
-                    <Link className="card__link" href={accountPath(locale, 'manage', membership.beachSlug)}>{t.open}</Link>
+                    <Link className="card__link" href={accountPath(locale, 'manage', membership.beachSlug)}>
+                      {t.open}
+                      <span className="visually-hidden">{` ${membership.beachName}`}</span>
+                    </Link>
                   </li>
                 ))}
               </ul>
@@ -140,7 +156,10 @@ async function OverviewView({ locale }: { locale: Locale }) {
                   <li className="card" key={contract.contractId}>
                     <h3>{t.seasonTitle(contract.spotCode, contract.beachName)}</h3>
                     <p>{t.contractStates[contract.status]}</p>
-                    <Link className="card__link" href={accountPath(locale, 'season', contract.contractId)}>{t.open}</Link>
+                    <Link className="card__link" href={accountPath(locale, 'season', contract.contractId)}>
+                      {t.open}
+                      <span className="visually-hidden">{` ${t.seasonTitle(contract.spotCode, contract.beachName)}`}</span>
+                    </Link>
                   </li>
                 ))}
               </ul>
@@ -155,7 +174,6 @@ async function OverviewView({ locale }: { locale: Locale }) {
               </p>
             )}
           </div>
-          <SignOut locale={locale} />
         </div>
       </section>
     </PageShell>
@@ -177,6 +195,7 @@ async function TwoFactorView({ locale, query }: { locale: Locale; query: Query }
       highlight={false}
       alternatePath={accountPath(other(locale), 'twoFactor')}
       crumbs={[{ label: t.overviewTitle, href: accountPath(locale, 'overview') }, { label: t.twoFactorTitle }]}
+      signedInAs={me.user.name}
     >
       <PageHead title={t.twoFactorTitle} lead={t.twoFactorOff} />
       <section className="section">
@@ -266,6 +285,7 @@ async function ManageView({ locale, beachSlug, query }: { locale: Locale; beachS
       page="help" highlight={false}
       alternatePath={`${accountPath(other(locale), 'manage', beachSlug)}?day=${day}`}
       crumbs={[{ label: t.overviewTitle, href: accountPath(locale, 'overview') }, { label: membership.beachName }]}
+      signedInAs={me.user.name}
     >
       <PageHead title={t.manageTitle(membership.beachName)} lead={`${t.roles[role]}. ${formatDay(day, locale)}.`} />
       <section className="section">
@@ -326,41 +346,40 @@ async function ManageView({ locale, beachSlug, query }: { locale: Locale; beachS
               {bookings.data.bookings.length === 0 ? (
                 <p className="prose">{t.noBookings}</p>
               ) : (
-                <div className="table-wrap">
-                  <table className="table">
-                    <thead>
-                      <tr><th>{t.code}</th><th>{t.spot}</th><th>{t.guest}</th><th>{t.booking}</th><th>{t.presence}</th><th>{t.actions}</th></tr>
-                    </thead>
-                    <tbody>
-                      {bookings.data.bookings.map((row) => (
-                        <tr key={row.code}>
-                          <td>{row.code}</td><td>{row.spotCode}</td><td>{row.guestName}</td><td>{t.bookingStates[row.status]}</td><td>{t.presences[row.presence]}</td>
-                          <td>
-                            {row.status === 'confirmed' && can(role, 'bookings.move') && freeSpots.length > 0 ? (
-                              <form method="post" action="/azioni/banco-sposta" className="inline-form">
-                                <Hidden values={{ ...common, code: row.code }} />
-                                <select name="spot" aria-label={`${t.moveTo}, ${row.code}`} required>
-                                  {freeSpots.map((free) => (
-                                    <option key={free.spotId} value={free.spotId}>{free.code}</option>
-                                  ))}
-                                </select>
-                                <button className="button button--secondary button--small" type="submit">{t.move}</button>
-                              </form>
-                            ) : null}
-                            {row.status === 'confirmed' && can(role, 'bookings.cancel') ? (
-                              <form method="post" action="/azioni/gestione-annulla" className="inline-form">
-                                <Hidden values={{ ...common, code: row.code }} />
-                                <button className="button button--secondary button--small" type="submit">
-                                  {t.cancelBooking} <span className="visually-hidden">{row.code}</span>
-                                </button>
-                              </form>
-                            ) : null}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <DataTable label={t.bookingsTitle} columns={[t.code, t.spot, t.guest, t.booking, t.presence, t.actions].map((label) => ({ label }))}>
+                  {bookings.data.bookings.map((row) => (
+                    <Row key={row.code}>
+                      <Cell label={t.code}>{row.code}</Cell>
+                      <Cell label={t.spot}>{row.spotCode}</Cell>
+                      <Cell label={t.guest}>{row.guestName}</Cell>
+                      <Cell label={t.booking}>{t.bookingStates[row.status]}</Cell>
+                      <Cell label={t.presence}>{t.presences[row.presence]}</Cell>
+                      <Cell label={t.actions}>
+                        {row.status === 'confirmed' && can(role, 'bookings.move') && freeSpots.length > 0 ? (
+                          <form method="post" action="/azioni/banco-sposta" className="inline-form">
+                            <Hidden values={{ ...common, code: row.code }} />
+                            <select name="spot" aria-label={`${t.moveTo}, ${row.code}`} required>
+                              {freeSpots.map((free) => (
+                                <option key={free.spotId} value={free.spotId}>{free.code}</option>
+                              ))}
+                            </select>
+                            <button className="button button--secondary button--small" type="submit">
+                              {t.move} <span className="visually-hidden">{row.code}</span>
+                            </button>
+                          </form>
+                        ) : null}
+                        {row.status === 'confirmed' && can(role, 'bookings.cancel') ? (
+                          <form method="post" action="/azioni/gestione-annulla" className="inline-form">
+                            <Hidden values={{ ...common, code: row.code }} />
+                            <button className="button button--secondary button--small" type="submit">
+                              {t.cancelBooking} <span className="visually-hidden">{row.code}</span>
+                            </button>
+                          </form>
+                        ) : null}
+                      </Cell>
+                    </Row>
+                  ))}
+                </DataTable>
               )}
             </div>
           ) : null}
@@ -368,39 +387,34 @@ async function ManageView({ locale, beachSlug, query }: { locale: Locale; beachS
           {inventory?.ok ? (
             <div className="panel">
               <h2>{t.inventoryTitle}</h2>
-              <div className="table-wrap">
-                <table className="table">
-                  <thead>
-                    <tr><th>{t.spot}</th><th>{t.state}</th><th>{t.price}</th><th>{t.actions}</th></tr>
-                  </thead>
-                  <tbody>
-                    {inventory.data.spots.map((row) => (
-                      <tr key={row.spotId}>
-                        <td>{row.code}{row.shared ? <> <span className="badge">{t.sharedMark}</span></> : null}</td>
-                        <td>{t.states[row.state]}</td>
-                        <td>{row.priceCents === null ? '' : formatMoney(row.priceCents, locale)}</td>
-                        <td>
-                          {can(role, 'inventory.block') && (row.state === 'available' || row.state === 'blocked' || row.state === 'unpublishable') ? (
-                            <form method="post" action="/azioni/gestione-blocco" className="inline-form">
-                              <Hidden values={{ ...common, spot: row.spotId, blocked: row.state === 'blocked' ? 'no' : 'yes' }} />
-                              <button className="button button--secondary button--small" type="submit">
-                                {row.state === 'blocked' ? t.unblock : t.block} <span className="visually-hidden">{row.code}</span>
-                              </button>
-                            </form>
-                          ) : null}
-                          {can(role, 'inventory.price') && row.state !== 'unpublished' ? (
-                            <form method="post" action="/azioni/gestione-prezzo" className="inline-form">
-                              <Hidden values={{ ...common, spot: row.spotId }} />
-                              <input type="text" name="price" inputMode="decimal" aria-label={`${t.newPrice}, ${row.code}`} defaultValue={euro(row.priceCents)} required />
-                              <button className="button button--secondary button--small" type="submit">{t.setPrice}</button>
-                            </form>
-                          ) : null}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <DataTable label={t.inventoryTitle} columns={[{ label: t.spot }, { label: t.state }, { label: t.price, numeric: true }, { label: t.actions }]}>
+                {inventory.data.spots.map((row) => (
+                  <Row key={row.spotId}>
+                    <Cell label={t.spot}>{row.code}{row.shared ? <> <span className="badge">{t.sharedMark}</span></> : null}</Cell>
+                    <Cell label={t.state}>{t.states[row.state]}</Cell>
+                    <Cell label={t.price} numeric>{row.priceCents === null ? null : formatMoney(row.priceCents, locale)}</Cell>
+                    <Cell label={t.actions}>
+                      {can(role, 'inventory.block') && (row.state === 'available' || row.state === 'blocked' || row.state === 'unpublishable') ? (
+                        <form method="post" action="/azioni/gestione-blocco" className="inline-form">
+                          <Hidden values={{ ...common, spot: row.spotId, blocked: row.state === 'blocked' ? 'no' : 'yes' }} />
+                          <button className="button button--secondary button--small" type="submit">
+                            {row.state === 'blocked' ? t.unblock : t.block} <span className="visually-hidden">{row.code}</span>
+                          </button>
+                        </form>
+                      ) : null}
+                      {can(role, 'inventory.price') && row.state !== 'unpublished' ? (
+                        <form method="post" action="/azioni/gestione-prezzo" className="inline-form">
+                          <Hidden values={{ ...common, spot: row.spotId }} />
+                          <input type="text" name="price" inputMode="decimal" aria-label={`${t.newPrice}, ${row.code}`} defaultValue={euro(row.priceCents)} required />
+                          <button className="button button--secondary button--small" type="submit">
+                            {t.setPrice} <span className="visually-hidden">{row.code}</span>
+                          </button>
+                        </form>
+                      ) : null}
+                    </Cell>
+                  </Row>
+                ))}
+              </DataTable>
               {can(role, 'inventory.publish') ? (
                 <>
                   <h3>{t.publishTitle}</h3>
@@ -424,28 +438,25 @@ async function ManageView({ locale, beachSlug, query }: { locale: Locale; beachS
               {proposals.data.proposals.length === 0 ? (
                 <p className="prose">{t.noProposals}</p>
               ) : (
-                <div className="table-wrap">
-                  <table className="table">
-                    <thead>
-                      <tr><th>{t.day}</th><th>{t.spot}</th><th>{t.actions}</th></tr>
-                    </thead>
-                    <tbody>
-                      {proposals.data.proposals.map((row) => (
-                        <tr key={row.proposalId}>
-                          <td>{formatDay(row.day, locale)}</td>
-                          <td>{row.spotCode}</td>
-                          <td>
-                            <form method="post" action="/azioni/gestione-proposta" className="inline-form">
-                              <Hidden values={{ ...common, proposal: row.proposalId }} />
-                              <button className="button button--small" type="submit" name="approve" value="yes">{t.approve}</button>
-                              <button className="button button--secondary button--small" type="submit" name="approve" value="no">{t.reject}</button>
-                            </form>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <DataTable label={t.proposalsTitle} columns={[t.day, t.spot, t.actions].map((label) => ({ label }))}>
+                  {proposals.data.proposals.map((row) => (
+                    <Row key={row.proposalId}>
+                      <Cell label={t.day}>{formatDay(row.day, locale)}</Cell>
+                      <Cell label={t.spot}>{row.spotCode}</Cell>
+                      <Cell label={t.actions}>
+                        <form method="post" action="/azioni/gestione-proposta" className="inline-form">
+                          <Hidden values={{ ...common, proposal: row.proposalId }} />
+                          <button className="button button--small" type="submit" name="approve" value="yes">
+                            {t.approve} <span className="visually-hidden">{row.spotCode}, {formatDay(row.day, locale)}</span>
+                          </button>
+                          <button className="button button--secondary button--small" type="submit" name="approve" value="no">
+                            {t.reject} <span className="visually-hidden">{row.spotCode}, {formatDay(row.day, locale)}</span>
+                          </button>
+                        </form>
+                      </Cell>
+                    </Row>
+                  ))}
+                </DataTable>
               )}
               {settings?.ok ? (
                 <>
@@ -471,30 +482,27 @@ async function ManageView({ locale, beachSlug, query }: { locale: Locale; beachS
             <div className="panel">
               <h2>{t.contractsManageTitle}</h2>
               {contracts.data.contracts.length > 0 ? (
-                <div className="table-wrap">
-                  <table className="table">
-                    <thead>
-                      <tr><th>{t.spot}</th><th>{t.from}</th><th>{t.to}</th><th>{t.mode}</th><th>{t.state}</th><th>{t.actions}</th></tr>
-                    </thead>
-                    <tbody>
-                      {contracts.data.contracts.map((row) => (
-                        <tr key={row.contractId}>
-                          <td>{row.spotCode}</td><td>{row.validFrom}</td><td>{row.validTo}</td><td>{t.modes[row.sharingMode]}</td><td>{t.contractStates[row.status]}</td>
-                          <td>
-                            {row.status === 'ended' ? null : (
-                              <form method="post" action="/azioni/gestione-stato-abbonamento" className="inline-form">
-                                <Hidden values={{ ...common, contract: row.contractId, status: row.status === 'active' ? 'suspended' : 'active' }} />
-                                <button className="button button--secondary button--small" type="submit">
-                                  {row.status === 'active' ? t.suspend : t.resume} <span className="visually-hidden">{row.spotCode}</span>
-                                </button>
-                              </form>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <DataTable label={t.contractsManageTitle} columns={[t.spot, t.from, t.to, t.mode, t.state, t.actions].map((label) => ({ label }))}>
+                  {contracts.data.contracts.map((row) => (
+                    <Row key={row.contractId}>
+                      <Cell label={t.spot}>{row.spotCode}</Cell>
+                      <Cell label={t.from}>{formatDate(row.validFrom, locale)}</Cell>
+                      <Cell label={t.to}>{formatDate(row.validTo, locale)}</Cell>
+                      <Cell label={t.mode}>{t.modes[row.sharingMode]}</Cell>
+                      <Cell label={t.state}>{t.contractStates[row.status]}</Cell>
+                      <Cell label={t.actions}>
+                        {row.status === 'ended' ? null : (
+                          <form method="post" action="/azioni/gestione-stato-abbonamento" className="inline-form">
+                            <Hidden values={{ ...common, contract: row.contractId, status: row.status === 'active' ? 'suspended' : 'active' }} />
+                            <button className="button button--secondary button--small" type="submit">
+                              {row.status === 'active' ? t.suspend : t.resume} <span className="visually-hidden">{row.spotCode}</span>
+                            </button>
+                          </form>
+                        )}
+                      </Cell>
+                    </Row>
+                  ))}
+                </DataTable>
               ) : null}
               <form method="post" action="/azioni/gestione-abbonamento" className="form-row">
                 <Hidden values={common} />
@@ -533,35 +541,30 @@ async function ManageView({ locale, beachSlug, query }: { locale: Locale; beachS
           {report?.ok ? (
             <div className="panel">
               <h2>{t.reportTitle}</h2>
-              <p className="prose">{t.reportLead(formatDay(month, locale), formatDay(monthEnd, locale))}</p>
-              <div className="table-wrap">
-                <table className="table">
-                  <tbody>
-                    <tr><th scope="row">{t.sharedSales}</th><td>{report.data.bookings.shared}</td><td>{formatMoney(report.data.grossCents.shared, locale)}</td></tr>
-                    <tr><th scope="row">{t.ordinarySales}</th><td>{report.data.bookings.ordinary}</td><td>{formatMoney(report.data.grossCents.ordinary, locale)}</td></tr>
-                  </tbody>
-                </table>
-              </div>
-              <div className="table-wrap">
-                <table className="table">
-                  <thead>
-                    <tr><th></th><th>{t.expected}</th><th>{t.accrued}</th></tr>
-                  </thead>
-                  <tbody>
-                    {(['season_holder', 'beach_club', 'platform'] as const).map((party) => (
-                      <tr key={party}>
-                        <th scope="row">{t.parties[party]}</th>
-                        <td>{formatMoney(report.data.byParty[party].expected, locale)}</td>
-                        <td>{formatMoney(report.data.byParty[party].accrued, locale)}</td>
-                      </tr>
-                    ))}
-                    <tr><th scope="row">{t.refundsDue}</th><td colSpan={2}>{formatMoney(report.data.refundsDueCents, locale)}</td></tr>
-                  </tbody>
-                </table>
-              </div>
+              <p className="prose">{t.reportLead(formatPeriod(month, monthEnd, locale))}</p>
+              <DataTable label={t.reportSalesTable} columns={[{ label: t.item }, { label: t.bookingsCount, numeric: true }, { label: t.amount, numeric: true }]}>
+                {(['shared', 'ordinary'] as const).map((kind) => (
+                  <Row key={kind}>
+                    <RowHead>{kind === 'shared' ? t.sharedSales : t.ordinarySales}</RowHead>
+                    <Cell label={t.bookingsCount} numeric>{report.data.bookings[kind]}</Cell>
+                    <Cell label={t.amount} numeric>{formatMoney(report.data.grossCents[kind], locale)}</Cell>
+                  </Row>
+                ))}
+              </DataTable>
+              <DataTable label={t.reportSharesTable} columns={[{ label: t.item }, { label: t.expected, numeric: true }, { label: t.accrued, numeric: true }]}>
+                {(['season_holder', 'beach_club', 'platform'] as const).map((party) => (
+                  <Row key={party}>
+                    <RowHead>{t.parties[party]}</RowHead>
+                    <Cell label={t.expected} numeric>{formatMoney(report.data.byParty[party].expected, locale)}</Cell>
+                    <Cell label={t.accrued} numeric>{formatMoney(report.data.byParty[party].accrued, locale)}</Cell>
+                  </Row>
+                ))}
+              </DataTable>
+              <p className="prose">
+                {t.refundsDue}: <strong>{formatMoney(report.data.refundsDueCents, locale)}</strong>
+              </p>
             </div>
           ) : null}
-          <SignOut locale={locale} />
         </div>
       </section>
     </PageShell>
@@ -579,9 +582,9 @@ interface StatementRow {
 async function SeasonView({ locale, contractId, query }: { locale: Locale; contractId: string; query: Query }) {
   if (!uuidPattern.test(contractId)) notFound();
   const t = getDictionary(locale, config.brandName).account;
-  const { token } = await requireMe(locale);
+  const { me, token } = await requireMe(locale);
   const [contracts, statement] = await Promise.all([
-    apiCall<{ contracts: Contract[] }>('GET', '/v1/season/contracts', { token }),
+    ownContracts(token),
     apiCall<{ days: StatementRow[] }>('GET', `/v1/season/contracts/${contractId}/statement`, { token }),
   ]);
   const contract = contracts.ok ? contracts.data.contracts.find((entry) => entry.contractId === contractId) : undefined;
@@ -594,8 +597,9 @@ async function SeasonView({ locale, contractId, query }: { locale: Locale; contr
       page="help" highlight={false}
       alternatePath={accountPath(other(locale), 'season', contractId)}
       crumbs={[{ label: t.overviewTitle, href: accountPath(locale, 'overview') }, { label: contract.spotCode }]}
+      signedInAs={me.user.name}
     >
-      <PageHead title={t.seasonTitle(contract.spotCode, contract.beachName)} lead={t.seasonLead(formatDay(contract.validFrom, locale), formatDay(contract.validTo, locale))} />
+      <PageHead title={t.seasonTitle(contract.spotCode, contract.beachName)} lead={t.seasonLead(formatPeriod(contract.validFrom, contract.validTo, locale))} />
       <section className="section">
         <div className="container stack">
           <Notice locale={locale} query={query} />
@@ -621,7 +625,7 @@ async function SeasonView({ locale, contractId, query }: { locale: Locale; contr
                   </label>
                 ))}
               </fieldset>
-              <button className="button" type="submit">{t.propose}</button>
+              <button className="button button--block" type="submit">{t.propose}</button>
             </form>
           </div>
           <div className="panel">
@@ -629,36 +633,28 @@ async function SeasonView({ locale, contractId, query }: { locale: Locale; contr
             {statement.data.days.length === 0 ? (
               <p className="prose">{t.noDays}</p>
             ) : (
-              <div className="table-wrap">
-                <table className="table">
-                  <thead>
-                    <tr><th>{t.day}</th><th>{t.proposal}</th><th>{t.sold}</th><th>{t.share}</th><th>{t.actions}</th></tr>
-                  </thead>
-                  <tbody>
-                    {statement.data.days.map((row) => (
-                      <tr key={row.day}>
-                        <td>{formatDay(row.day, locale)}</td>
-                        <td>{t.proposalStates[row.proposal]}</td>
-                        <td>{row.sold ? t.yes : t.no}</td>
-                        <td>{row.shareCents === null ? '' : `${formatMoney(row.shareCents, locale)} (${row.shareState ? t.shareStates[row.shareState] : ''})`}</td>
-                        <td>
-                          {!row.sold && (row.proposal === 'proposed' || row.proposal === 'approved') ? (
-                            <form method="post" action="/azioni/stagionale-ritira" className="inline-form">
-                              <Hidden values={{ ...common, day: row.day }} />
-                              <button className="button button--secondary button--small" type="submit">
-                                {t.withdraw} <span className="visually-hidden">{formatDay(row.day, locale)}</span>
-                              </button>
-                            </form>
-                          ) : null}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <DataTable label={t.statementTitle} columns={[{ label: t.day }, { label: t.proposal }, { label: t.sold }, { label: t.share, numeric: true }, { label: t.actions }]}>
+                {statement.data.days.map((row) => (
+                  <Row key={row.day}>
+                    <Cell label={t.day}>{formatDay(row.day, locale)}</Cell>
+                    <Cell label={t.proposal}>{t.proposalStates[row.proposal]}</Cell>
+                    <Cell label={t.sold}>{row.sold ? t.yes : t.no}</Cell>
+                    <Cell label={t.share} numeric>{row.shareCents === null ? null : `${formatMoney(row.shareCents, locale)} (${row.shareState ? t.shareStates[row.shareState] : ''})`}</Cell>
+                    <Cell label={t.actions}>
+                      {!row.sold && (row.proposal === 'proposed' || row.proposal === 'approved') ? (
+                        <form method="post" action="/azioni/stagionale-ritira" className="inline-form">
+                          <Hidden values={{ ...common, day: row.day }} />
+                          <button className="button button--secondary button--small" type="submit">
+                            {t.withdraw} <span className="visually-hidden">{formatDay(row.day, locale)}</span>
+                          </button>
+                        </form>
+                      ) : null}
+                    </Cell>
+                  </Row>
+                ))}
+              </DataTable>
             )}
           </div>
-          <SignOut locale={locale} />
         </div>
       </section>
     </PageShell>

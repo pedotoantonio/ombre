@@ -36,6 +36,24 @@ export function buildMetadata(page: PageId, locale: Locale): Metadata {
   };
 }
 
+/** Label of a fixed page in the breadcrumb. Explore keeps the name it has in the navigation. */
+export function crumbLabel(page: Exclude<PageId, 'home'>, locale: Locale): string {
+  const dictionary = getDictionary(locale, config.brandName);
+  return page === 'explore' ? dictionary.nav.explore : dictionary.pages[page].h1;
+}
+
+/**
+ * Metadata of a page that is never indexed: reserved area, summary, hold, booking.
+ * With a beach club the title is "<page> · <club> | <brand>", otherwise "<page> | <brand>".
+ */
+export function privateMetadata(locale: Locale, page: string, options: { club?: string; follow?: boolean } = {}): Metadata {
+  const t = getDictionary(locale, config.brandName).meta;
+  return {
+    title: options.club ? t.beachPageTitle(page, options.club) : t.pageTitle(page),
+    robots: { index: false, follow: options.follow ?? false },
+  };
+}
+
 /** Structured data. It must only repeat what the page shows. */
 export function JsonLd({ data }: { data: Record<string, unknown> }) {
   const json = JSON.stringify({ '@context': 'https://schema.org', ...data }).replace(/</g, '\\u003c');
@@ -43,12 +61,11 @@ export function JsonLd({ data }: { data: Record<string, unknown> }) {
 }
 
 export function breadcrumbData(page: Exclude<PageId, 'home'>, locale: Locale): Record<string, unknown> {
-  const dictionary = getDictionary(locale, config.brandName);
   return {
     '@type': 'BreadcrumbList',
     itemListElement: [
       { '@type': 'ListItem', position: 1, name: config.brandName, item: pageUrl('home', locale) },
-      { '@type': 'ListItem', position: 2, name: dictionary.pages[page].h1, item: pageUrl(page, locale) },
+      { '@type': 'ListItem', position: 2, name: crumbLabel(page, locale), item: pageUrl(page, locale) },
     ],
   };
 }

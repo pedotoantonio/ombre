@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { accountPath, config, getDictionary, locales, pathFor, type InnerPageId, type Locale, type PageId } from '@ombre/shared';
 import { Logo, LogoLockup } from '@ombre/ui';
+import { crumbLabel } from '@/lib/seo';
 
 const navPages: readonly InnerPageId[] = ['explore', 'howItWorks', 'forBeachClubs', 'forSeasonHolders', 'help'];
 
@@ -20,10 +21,38 @@ interface PageShellProps {
   alternatePath?: string;
   /** Trail after the home page, when it is not a fixed page. */
   crumbs?: Crumb[];
+  /** Name of the signed-in person, on reserved pages only: public pages never read the session. */
+  signedInAs?: string;
   children: ReactNode;
 }
 
-export function PageShell({ locale, page, highlight = true, alternatePath, crumbs, children }: PageShellProps) {
+/** Who is signed in and the way out, at the top of every reserved page. */
+function AccountBar({ locale, name }: { locale: Locale; name: string }) {
+  const t = getDictionary(locale, config.brandName).account;
+  return (
+    <div className="account-bar" role="region" aria-label={t.barLabel}>
+      <div className="container account-bar__inner">
+        <p className="account-bar__who">
+          {t.signedInAs} <strong>{name}</strong>
+        </p>
+        <form method="post" action="/azioni/uscita" className="inline-form">
+          <input type="hidden" name="lang" value={locale} />
+          <button className="button button--secondary button--small" type="submit">
+            {t.signOut}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function Notice({ locale }: { locale: Locale }) {
+  const t = getDictionary(locale, config.brandName).notice;
+  if (config.demoMode) return <p className="notice notice--demo">{t.demo}</p>;
+  return config.bookingsOpen ? null : <p className="notice">{t.preLaunch}</p>;
+}
+
+export function PageShell({ locale, page, highlight = true, alternatePath, crumbs, signedInAs, children }: PageShellProps) {
   const t = getDictionary(locale, config.brandName);
   const otherLocale = locales.find((candidate) => candidate !== locale) ?? locale;
 
@@ -32,7 +61,7 @@ export function PageShell({ locale, page, highlight = true, alternatePath, crumb
       <a className="skip-link" href="#contenuto">
         {t.nav.skip}
       </a>
-      {config.bookingsOpen ? null : <p className="notice">{t.notice.preLaunch}</p>}
+      <Notice locale={locale} />
       <header className="site-header">
         <div className="container site-header__inner">
           <Link className="brand" href={pathFor('home', locale)} aria-label={`${config.brandName}, ${t.nav.home}`}>
@@ -71,6 +100,7 @@ export function PageShell({ locale, page, highlight = true, alternatePath, crumb
           </div>
         </div>
       </header>
+      {signedInAs ? <AccountBar locale={locale} name={signedInAs} /> : null}
       <main id="contenuto">
         {page === 'home' ? null : (
           <nav className="container breadcrumb" aria-label={t.nav.breadcrumb}>
@@ -78,7 +108,7 @@ export function PageShell({ locale, page, highlight = true, alternatePath, crumb
               <li>
                 <Link href={pathFor('home', locale)}>{config.brandName}</Link>
               </li>
-              {(crumbs ?? [{ label: t.pages[page].h1 }]).map((crumb, index, all) =>
+              {(crumbs ?? [{ label: crumbLabel(page, locale) }]).map((crumb, index, all) =>
                 index === all.length - 1 || !crumb.href ? (
                   <li key={crumb.label} aria-current={index === all.length - 1 ? 'page' : undefined}>
                     <span className="breadcrumb__label">{crumb.label}</span>
@@ -131,12 +161,57 @@ export function PageShell({ locale, page, highlight = true, alternatePath, crumb
   );
 }
 
-export function PageHead({ title, lead }: { title: string; lead: string }) {
+export function PageHead({ title, lead, children }: { title: string; lead: string; children?: ReactNode }) {
   return (
     <div className="container page-head">
       <h1>{title}</h1>
       <p className="lead">{lead}</p>
+      {children}
     </div>
+  );
+}
+
+/** The page shown for an unknown address, in the normal shell. */
+export function NotFoundPage({ locale }: { locale: Locale }) {
+  const t = getDictionary(locale, config.brandName);
+  const other = locales.find((candidate) => candidate !== locale) ?? locale;
+  return (
+    <PageShell locale={locale} page="help" highlight={false} alternatePath={pathFor('home', other)} crumbs={[{ label: t.notFound.title }]}>
+      <PageHead title={t.notFound.title} lead={t.notFound.lead}>
+        <p className="actions">
+          <Link className="button" href={pathFor('home', locale)}>
+            {t.notFound.home}
+          </Link>
+          <Link className="button button--secondary" href={pathFor('explore', locale)}>
+            {t.notFound.explore}
+          </Link>
+        </p>
+      </PageHead>
+    </PageShell>
+  );
+}
+
+/** Closing block of an editorial page: one main action, at most one secondary link. */
+export function NextStep({ title, text, action, secondary }: { title: string; text: string; action: Crumb & { href: string }; secondary?: Crumb & { href: string } }) {
+  return (
+    <section className="section">
+      <div className="container">
+        <div className="next-step">
+          <h2>{title}</h2>
+          <p>{text}</p>
+          <p className="actions">
+            <Link className="button" href={action.href}>
+              {action.label}
+            </Link>
+            {secondary ? (
+              <Link className="button button--secondary" href={secondary.href}>
+                {secondary.label}
+              </Link>
+            ) : null}
+          </p>
+        </div>
+      </div>
+    </section>
   );
 }
 

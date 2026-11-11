@@ -15,13 +15,20 @@
   }
 }
 
+/* Two columns on phones, three from 40rem: six pictures fill either grid evenly. */
 .site-gallery {
   display: grid;
   gap: var(--spazio-3);
-  grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   margin: 0;
   padding: 0;
   list-style: none;
+}
+
+@media (min-width: 40rem) {
+  .site-gallery {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
 .site-gallery img {

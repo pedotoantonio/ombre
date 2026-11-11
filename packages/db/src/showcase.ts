@@ -38,7 +38,8 @@ function addDays(day: string, amount: number): string {
 }
 
 function siteTexts(locale: Locale): SiteTexts {
-  const gallery: DemoMediaId[] = ['ombrelloni', 'chiosco', 'passerella', 'giochi', 'docce', 'riva', 'tramonto'];
+  // Six pictures: the gallery shows them in two or three columns, with no picture left alone.
+  const gallery: DemoMediaId[] = ['ombrelloni', 'chiosco', 'passerella', 'giochi', 'docce', 'tramonto'];
   const images = { cover: demoImage('copertina', locale), gallery: gallery.map((id) => demoImage(id, locale)) };
   if (locale === 'en') {
     return {

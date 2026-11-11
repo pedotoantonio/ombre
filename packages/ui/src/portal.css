@@ -145,8 +145,15 @@
   gap: var(--spazio-6);
 }
 
-.portal-results > .alert {
+.portal-results > .alert,
+.portal-results__body > .alert {
   margin-bottom: 0;
+}
+
+/* Where a search lands: the results, with any notice about the search just above them. */
+.portal-results__body {
+  display: grid;
+  gap: var(--spazio-6);
 }
 
 .portal-search-panel {
@@ -232,6 +239,11 @@
   border: 1px solid var(--bordo);
   border-radius: var(--raggio-grande);
   scroll-margin-top: 5rem;
+  /* One column that never grows past the panel: the map inside scrolls instead. */
+  grid-template-columns: minmax(0, 1fr);
+  /* Width the longest row needs: its spots and the gaps between them. */
+  container-type: inline-size;
+  --plan-need: calc(var(--plan-cols, 8) * 4.75rem - 0.5rem);
 }
 
 .plan__head p {
@@ -282,9 +294,70 @@
   height: 1.75rem;
 }
 
+/* Shown only while the longest row is clearly wider than the panel: the difference between the
+   two, made very large, is clamped to the height of the line. Without container units it stays shown. */
+.plan__hint {
+  display: flex;
+  align-items: center;
+  gap: var(--spazio-2);
+  max-height: clamp(0px, calc((var(--plan-need) - 0.5rem - 100cqi) * 999), 4rem);
+  margin-bottom: clamp(0px, calc((var(--plan-need) - 0.5rem - 100cqi) * 999), var(--spazio-3));
+  overflow: hidden;
+  color: var(--testo-secondario);
+  font-size: 0.9375rem;
+}
+
+.plan__hint svg,
+.plan__sea svg {
+  flex: none;
+  width: 1.25rem;
+  height: 1.25rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Every row stays on one line. The map scrolls sideways inside this region, never the page.
+   The padding leaves room for the rings and shadows of the spots, which the scrolling box would cut.
+   Positioned, so that the hidden labels of the spots are cut with the rest and do not widen the page. */
+.plan__scroll {
+  position: relative;
+  margin: calc(var(--spazio-1) * -1);
+  padding: var(--spazio-1);
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+}
+
+.plan__scroll:focus-visible {
+  outline-offset: 0;
+}
+
 .plan__rows {
   display: grid;
   gap: var(--spazio-4);
+  width: max-content;
+  min-width: 100%;
+}
+
+/* The sea is on the side of the first row. The label stays in view while the map scrolls. */
+.plan__sea {
+  padding: var(--spazio-1) var(--spazio-3);
+  border-radius: var(--raggio-piccolo);
+  background: var(--spuma);
+  color: var(--oceano);
+  font-size: 0.9375rem;
+  font-weight: 700;
+}
+
+.plan__sea-label {
+  position: sticky;
+  inset-inline-start: var(--spazio-3);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spazio-2);
 }
 
 .plan-row {
@@ -293,26 +366,43 @@
 }
 
 .plan-row__label {
+  position: sticky;
+  inset-inline-start: 0;
+  width: max-content;
   color: var(--testo-secondario);
   font-size: 0.9375rem;
   font-weight: 700;
 }
 
-/* Le postazioni vanno a capo: la pagina non scorre mai in orizzontale. */
 .plan-row__spots {
   display: flex;
-  flex-wrap: wrap;
   gap: var(--spazio-2);
+}
+
+/* A spot is reached from its own link after a choice: it lands a little above the middle of the
+   screen, with the rows around it in view, and clear of the edges of the scrolling map. */
+.plan-row__spots > li {
+  flex: none;
+  scroll-margin: 38vh var(--spazio-4) var(--spazio-4);
 }
 
 @media (min-width: 40rem) {
   .plan {
     padding: var(--spazio-6);
+    --plan-need: calc(var(--plan-cols, 8) * 4.75rem + 4.5rem);
   }
 
   .plan-row {
     grid-template-columns: 4.5rem minmax(0, 1fr);
+  }
+
+  /* Beside the row: the spots slide under the label while the map scrolls. */
+  .plan-row__label {
+    z-index: 1;
+    display: flex;
     align-items: center;
+    width: auto;
+    background: var(--carta);
   }
 }
 

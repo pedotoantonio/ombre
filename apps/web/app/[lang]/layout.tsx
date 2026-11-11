@@ -3,6 +3,7 @@ import type { Metadata, Viewport } from 'next';
 import { Plus_Jakarta_Sans } from 'next/font/google';
 import { notFound } from 'next/navigation';
 import { config, htmlLang, isLocale, locales } from '@ombre/shared';
+import { rememberLocale } from '@/lib/locale';
 import '@ombre/ui/tokens.css';
 import '@ombre/ui/base.css';
 import '@ombre/ui/portal.css';
@@ -31,6 +32,7 @@ export default async function RootLayout({
 }) {
   const { lang } = await params;
   if (!isLocale(lang)) notFound();
+  rememberLocale(lang);
 
   return (
     <html lang={htmlLang[lang]} className={jakarta.variable}>

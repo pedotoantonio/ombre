@@ -1,4 +1,4 @@
-import type { SiteContent, SiteTemplate } from '@ombre/shared';
+import { config, getDictionary, type DayParts, type SiteContent, type SiteTemplate } from '@ombre/shared';
 
 // Server-side client of the Ombrè API. The address is read at request time.
 
@@ -196,6 +196,25 @@ export function formatDay(day: string, locale: 'it' | 'en'): string {
     year: 'numeric',
     timeZone: 'UTC',
   }).format(new Date(`${day}T00:00:00Z`));
+}
+
+/** A date without the day of the week, for tables and short labels. */
+export function formatDate(day: string, locale: 'it' | 'en'): string {
+  return new Intl.DateTimeFormat(dateLocale[locale], { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${day}T00:00:00Z`));
+}
+
+function dayParts(day: string, locale: 'it' | 'en'): DayParts {
+  const date = new Date(`${day}T00:00:00Z`);
+  return {
+    day: date.getUTCDate(),
+    month: new Intl.DateTimeFormat(dateLocale[locale], { month: 'long', timeZone: 'UTC' }).format(date),
+    year: date.getUTCFullYear(),
+  };
+}
+
+/** Two days as one period, in lower case: "dal 1º al 30 novembre 2026", "from 1 to 30 November 2026". */
+export function formatPeriod(from: string, to: string, locale: 'it' | 'en'): string {
+  return getDictionary(locale, config.brandName).dates.period(dayParts(from, locale), dayParts(to, locale));
 }
 
 export function formatTime(instant: string, locale: 'it' | 'en', timeZone: string): string {

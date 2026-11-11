@@ -7,6 +7,8 @@ const base = (process.argv[2] ?? 'http://127.0.0.1:3210').replace(/\/+$/, '');
 const password = process.env.OMBRE_DEMO_PASSWORD ?? '';
 const beach = 'bagno-delle-dune';
 const day = '2027-06-17';
+const brand = process.env.OMBRE_BRAND_NAME?.trim() || 'Ombrè';
+const titleOf = (html: string): string => /<title>([^<]*)<\/title>/.exec(html)?.[1] ?? '';
 const failures: string[] = [];
 let checks = 0;
 
@@ -78,6 +80,7 @@ check(/\/prenotazione\/[0-9a-f-]{36}\?t=[A-Za-z0-9_-]{40,}$/.test(bookingUrl), `
 const pending = await guest.get(bookingUrl);
 check(pending.html.includes('Pagamento di prova') && !pending.html.includes('Il tuo pass'), 'booking page: test payment not offered, or pass shown before payment');
 check(/<meta name="robots" content="noindex/.test(pending.html), 'booking page: must not be indexable');
+check(titleOf(pending.html) === `Prenotazione · Bagno delle Dune | ${brand}`, `booking page: the title is "${titleOf(pending.html)}"`);
 check((await guest.get(bookingUrl.replace(/\?t=.*/, '?t=token-inventato-abbastanza-lungo'))).status === 404, 'booking page: opened with a wrong token');
 
 const [, bookingId = '', token = ''] = /\/prenotazione\/([0-9a-f-]{36})\?t=(.+)$/.exec(bookingUrl) ?? [];
@@ -97,12 +100,31 @@ check((await manager.signIn('gestore@bagnodelledune.example', 'password-sbagliat
 check((await manager.signIn('gestore@bagnodelledune.example')).endsWith('/area/profilo'), 'sign-in: manager not signed in');
 const overview = await manager.get('/area/profilo');
 check(overview.html.includes('Bagno delle Dune') && overview.html.includes('Gestore'), 'overview: beach club and role not shown');
-check((await manager.get('/en/account/overview')).html.includes('Your area'), 'overview: not available in English');
+const overviewEnglish = await manager.get('/en/account/overview');
+check(overviewEnglish.html.includes('Your area'), 'overview: not available in English');
+check(titleOf(overview.html) === `La tua area | ${brand}` && titleOf(overviewEnglish.html) === `Your area | ${brand}`, `overview: the title is "${titleOf(overview.html)}"`);
+check(/<meta name="robots" content="noindex/.test(overview.html), 'overview: must not be indexable');
+// Every reserved page says who is signed in and offers the way out at the top; the sign-in page does not.
+const accountBar = /<div class="account-bar"[^]*?<\/form>/.exec(overview.html)?.[0] ?? '';
+check(accountBar.includes('Gestore dimostrativo') && accountBar.includes('action="/azioni/uscita"') && accountBar.includes('Esci'), 'overview: no bar with the name of who is signed in and the sign-out button');
+check(overview.html.indexOf('class="account-bar"') < overview.html.indexOf('<main'), 'overview: the sign-out bar is not at the top of the page');
+check(!(await new Visitor().get('/area/accesso')).html.includes('class="account-bar"'), 'sign-in: the bar of a signed-in person is shown to a visitor');
+check(/>Apri(?:<!-- -->)?<span class="visually-hidden">[^<]*Bagno delle Dune<\/span>/.test(overview.html), 'overview: the "Apri" link does not name its beach club');
 
 // ---- Manager: the day just sold, then a new day ----
 const sold = await manager.get(`/area/gestione/${beach}?day=${day}`);
 check(sold.html.includes(code) && sold.html.includes('Venduta') && sold.html.includes('Ospite di Prova'), 'management: the confirmed booking is not shown');
 check(sold.html.includes('Riepilogo economico') && sold.html.includes('Stagionali'), 'management: the financial summary is missing');
+check(titleOf(sold.html) === `Gestione · Bagno delle Dune | ${brand}`, `management: the title is "${titleOf(sold.html)}"`);
+check(sold.html.includes('class="account-bar"'), 'management: no bar with who is signed in');
+// Tables turn into cards on phones: every cell carries the name of its column, and the wrapper is a labelled region.
+const tables = sold.html.match(/<div class="table-wrap"[^>]*>/g) ?? [];
+check(tables.length >= 4 && tables.every((tag) => /role="region"/.test(tag) && /aria-label="[^"]+"/.test(tag) && /tabindex="0"/i.test(tag)), 'management: a table is not inside a labelled, focusable region');
+const cells = sold.html.match(/<td\b[^>]*>/g) ?? [];
+check(cells.length > 0 && cells.every((tag) => /data-label="[^"]+"/.test(tag)), 'management: a table cell does not carry the name of its column');
+check(['Voce', 'Prenotazioni', 'Importo', 'Previsto', 'Maturato'].every((label) => new RegExp(`<th[^>]*>${label}</th>`).test(sold.html)), 'management: the financial tables have no column headers');
+check(/Cambia prezzo(?:<!-- -->)? <span class="visually-hidden">A01<\/span>/.test(sold.html), 'management: "Cambia prezzo" does not name its spot');
+check(/Dal 1º al 30 giugno 2027\./.test(sold.html) && !/Dal (lunedì|martedì|mercoledì|giovedì|venerdì|sabato|domenica)/.test(sold.html), 'management: the period of the financial summary is not written "Dal 1º al 30 giugno 2027"');
 
 const newDay = '2027-06-20';
 check((await manager.post('gestione-pubblica', { lang: 'it', beach, day: newDay, price: '32,50' })).includes('ok=1'), 'management: the day was not published');
@@ -154,7 +176,9 @@ check(seasonUrl !== '', 'season holder: the season pass is not listed');
 const proposed = await holder.post('stagionale-proponi', { lang: 'it', contract: seasonUrl.split('/').at(-1)!, from: '2027-07-05', to: '2027-07-11', weekday: ['2', '4'] });
 check(decodeURIComponent(proposed.replaceAll('+', ' ')).includes('Aggiunte 2'), `season holder: proposal summary is "${proposed}"`);
 const statement = await holder.get(seasonUrl);
-check((statement.html.match(/<td>In attesa<\/td>/g) ?? []).length === 2, 'season holder: the two proposed days are not waiting');
+check((statement.html.match(/<td[^>]*data-label="Proposta"[^>]*>In attesa<\/td>/g) ?? []).length === 2, 'season holder: the two proposed days are not waiting');
+check(titleOf(statement.html) === `Postazione B02 · Bagno delle Dune | ${brand}`, `season holder: the title is "${titleOf(statement.html)}"`);
+check(statement.html.includes('class="account-bar"') && /Abbonamento valido (dal|dall') /.test(statement.html) && !/valido dal (lunedì|martedì|mercoledì|giovedì|venerdì|sabato|domenica)/.test(statement.html), 'season holder: no sign-out bar, or the period still names the days of the week');
 check(statement.html.includes('13,50') && !statement.html.includes('Ospite di Prova') && !statement.html.includes('example.org'), 'season holder: share missing or guest data visible');
 
 const waiting = await manager.get(`/area/gestione/${beach}?day=${day}`);

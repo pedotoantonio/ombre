@@ -4,7 +4,7 @@ import { beachPath, config, formatMoney, getDictionary, pathFor, type InnerPageI
 import { api, formatDay, isDay, today, type ApiBeachOffer } from '@/lib/api';
 import { CoastScene } from '@ombre/ui';
 import { breadcrumbData, JsonLd, pageUrl } from '@/lib/seo';
-import { Contact, PageHead } from './PageShell';
+import { Contact, NextStep, PageHead } from './PageShell';
 
 interface PageProps {
   locale: Locale;
@@ -62,11 +62,14 @@ function StepList({ steps }: { steps: readonly { title: string; text: string }[]
   );
 }
 
+/** Where a search lands on the explore page: the results, not the form again. */
+const resultsAnchor = 'risultati';
+
 /** Plain form that opens the explore page with the search in the address. It works without scripts. */
 function SearchForm({ locale, search, minDay }: { locale: Locale; search: ExploreSearch; minDay?: string }) {
   const t = getDictionary(locale, config.brandName).search;
   return (
-    <form className="portal-search" method="get" action={pathFor('explore', locale)} role="search" aria-label={t.title}>
+    <form className="portal-search" method="get" action={`${pathFor('explore', locale)}#${resultsAnchor}`} role="search" aria-label={t.title}>
       <div className="field portal-search__place">
         <label htmlFor="cerca-luogo">{t.place}</label>
         <input id="cerca-luogo" name="place" type="text" maxLength={80} defaultValue={search.place} autoComplete="off" enterKeyHint="search" />
@@ -186,7 +189,7 @@ function BeachCard({ locale, beach, day }: { locale: Locale; beach: ApiBeachOffe
       ) : null}
       {beach.demo ? (
         <p>
-          <span className="badge badge--demo">{t.booking.demoBadge}</span>
+          <span className="badge badge--demo">{t.booking.demoBadgeShort}</span>
         </p>
       ) : null}
       <Link className="card__link" href={`${beachPath(locale, beach.slug)}${day ? `?day=${day}` : ''}`}>
@@ -221,67 +224,69 @@ async function ExplorePage({ locale, query = {} }: PageProps & { query?: Query }
           <div className="portal-search-panel">
             <SearchForm locale={locale} search={search} minDay={today()} />
           </div>
-          {dayPast ? (
-            <p className="alert" role="alert">
-              {copy.pastDay}
-            </p>
-          ) : null}
-          {!result.ok ? (
-            <div className="empty">
-              <h2>{copy.unavailableTitle}</h2>
-              <p>{copy.unavailableText}</p>
-            </div>
-          ) : beaches.length === 0 && !search.place ? (
-            <div className="empty">
-              <h2>{copy.emptyTitle}</h2>
-              <p>{copy.emptyText}</p>
-              <Link className="button button--secondary" href={pathFor('howItWorks', locale)}>
-                {copy.emptyLink}
-              </Link>
-            </div>
-          ) : beaches.length === 0 ? (
-            <div className="empty">
-              <h2>{copy.noMatchTitle}</h2>
-              <p>{copy.noMatchText(search.place)}</p>
-              <Link className="button button--secondary" href={pathFor('explore', locale)}>
-                {copy.showAll}
-              </Link>
-            </div>
-          ) : (
-            <>
-              <div className="portal-results__head">
-                <h2>{search.day ? copy.resultsTitle(formatDay(search.day, locale)) : copy.listTitle}</h2>
-                <p>{notes.join(' ')}</p>
+          <div className="portal-results__body" id={resultsAnchor}>
+            {dayPast ? (
+              <p className="alert" role="alert">
+                {copy.pastDay}
+              </p>
+            ) : null}
+            {!result.ok ? (
+              <div className="empty">
+                <h2>{copy.unavailableTitle}</h2>
+                <p>{copy.unavailableText}</p>
               </div>
-              {open.length === 0 ? (
-                <div className="empty">
-                  <h3>{copy.noFreeTitle}</h3>
-                  <p>{copy.noFreeText}</p>
-                  <Link className="button button--secondary" href={pathFor('explore', locale)}>
-                    {copy.showAll}
-                  </Link>
+            ) : beaches.length === 0 && !search.place ? (
+              <div className="empty">
+                <h2>{copy.emptyTitle}</h2>
+                <p>{copy.emptyText}</p>
+                <Link className="button button--secondary" href={pathFor('howItWorks', locale)}>
+                  {copy.emptyLink}
+                </Link>
+              </div>
+            ) : beaches.length === 0 ? (
+              <div className="empty">
+                <h2>{copy.noMatchTitle}</h2>
+                <p>{copy.noMatchText(search.place)}</p>
+                <Link className="button button--secondary" href={pathFor('explore', locale)}>
+                  {copy.showAll}
+                </Link>
+              </div>
+            ) : (
+              <>
+                <div className="portal-results__head">
+                  <h2>{search.day ? copy.resultsTitle(formatDay(search.day, locale)) : copy.listTitle}</h2>
+                  <p>{notes.join(' ')}</p>
                 </div>
-              ) : (
-                <ul className="cards">
-                  {open.map((beach) => (
-                    <BeachCard key={beach.slug} locale={locale} beach={beach} day={search.day} />
-                  ))}
-                </ul>
-              )}
-              {full.length > 0 && open.length > 0 ? (
-                <div className="portal-results__full">
-                  <p id="senza-posto">{copy.fullLead}</p>
-                  <ul aria-labelledby="senza-posto">
-                    {full.map((beach) => (
-                      <li key={beach.slug}>
-                        <Link href={beachPath(locale, beach.slug)}>{beach.name}</Link>, {beach.locality}
-                      </li>
+                {open.length === 0 ? (
+                  <div className="empty">
+                    <h3>{copy.noFreeTitle}</h3>
+                    <p>{copy.noFreeText}</p>
+                    <Link className="button button--secondary" href={pathFor('explore', locale)}>
+                      {copy.showAll}
+                    </Link>
+                  </div>
+                ) : (
+                  <ul className="cards">
+                    {open.map((beach) => (
+                      <BeachCard key={beach.slug} locale={locale} beach={beach} day={search.day} />
                     ))}
                   </ul>
-                </div>
-              ) : null}
-            </>
-          )}
+                )}
+                {full.length > 0 && open.length > 0 ? (
+                  <div className="portal-results__full">
+                    <p id="senza-posto">{copy.fullLead}</p>
+                    <ul aria-labelledby="senza-posto">
+                      {full.map((beach) => (
+                        <li key={beach.slug}>
+                          <Link href={beachPath(locale, beach.slug)}>{beach.name}</Link>, {beach.locality}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+              </>
+            )}
+          </div>
         </div>
       </section>
     </>
@@ -322,6 +327,7 @@ function HowItWorksPage({ locale }: PageProps) {
           </ul>
         </div>
       </section>
+      <NextStep title={copy.nextTitle} text={copy.nextText} action={{ label: copy.nextAction, href: pathFor('explore', locale) }} />
     </>
   );
 }
@@ -376,6 +382,12 @@ function ForBeachClubsPage({ locale }: PageProps) {
         </div>
       </section>
       <Contact locale={locale} />
+      <NextStep
+        title={copy.nextTitle}
+        text={copy.nextText}
+        action={{ label: copy.nextAction, href: pathFor('explore', locale) }}
+        secondary={{ label: copy.nextSecondary, href: pathFor('howItWorks', locale) }}
+      />
     </>
   );
 }
@@ -434,6 +446,7 @@ function HelpPage({ locale }: PageProps) {
         </div>
       </section>
       <Contact locale={locale} />
+      <NextStep title={copy.nextTitle} text={copy.nextText} action={{ label: copy.nextAction, href: pathFor('explore', locale) }} />
     </>
   );
 }

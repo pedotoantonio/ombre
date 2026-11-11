@@ -1,9 +1,11 @@
+import { cache, type CSSProperties } from 'react';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import {
   beachPath,
   beachSection,
+  bookingSegment,
   bookPath,
   bookSegment,
   config,
@@ -18,7 +20,7 @@ import {
   type SiteTemplate,
 } from '@ombre/shared';
 import { api, dayPattern, formatDay, formatTime, isDay, slugPattern, uuidPattern, type ApiBeach, type ApiMapSpot, type ApiSpot } from '@/lib/api';
-import { JsonLd } from '@/lib/seo';
+import { JsonLd, privateMetadata } from '@/lib/seo';
 import { PageHead, PageShell, type Crumb } from './PageShell';
 import { BeachSite, localBusinessData } from './site-view';
 
@@ -32,20 +34,22 @@ export function otherLocale(locale: Locale): Locale {
   return locales.find((candidate) => candidate !== locale) ?? locale;
 }
 
-/** Checks the localized segments and loads the beach club, or answers 404. */
-export async function loadBeach(
-  lang: string,
-  section: string,
-  slug: string,
-): Promise<{ locale: Locale; beach: ApiBeach; nextDay: string | null; site: { template: SiteTemplate; content: SiteContent } | null }> {
-  if (!isLocale(lang) || section !== beachSection[lang] || !slugPattern.test(slug)) notFound();
-  const result = await api.beach(slug);
-  if (!result.ok) {
-    if (result.status === 404) notFound();
-    throw new Error(`API not available (${result.code})`);
-  }
-  return { locale: lang, beach: result.data.beach, nextDay: result.data.nextAvailableDay, site: result.data.site };
-}
+/** Checks the localized segments and loads the beach club, or answers 404. Asked once per request. */
+export const loadBeach = cache(
+  async (
+    lang: string,
+    section: string,
+    slug: string,
+  ): Promise<{ locale: Locale; beach: ApiBeach; nextDay: string | null; site: { template: SiteTemplate; content: SiteContent } | null }> => {
+    if (!isLocale(lang) || section !== beachSection[lang] || !slugPattern.test(slug)) notFound();
+    const result = await api.beach(slug);
+    if (!result.ok) {
+      if (result.status === 404) notFound();
+      throw new Error(`API not available (${result.code})`);
+    }
+    return { locale: lang, beach: result.data.beach, nextDay: result.data.nextAvailableDay, site: result.data.site };
+  },
+);
 
 export function crumbsFor(locale: Locale, beach: ApiBeach, last?: string): Crumb[] {
   const t = getDictionary(locale, config.brandName);
@@ -80,7 +84,16 @@ export async function beachMetadata(lang: string, section: string, slug: string,
   };
 }
 
-export const privateMetadata: Metadata = { robots: { index: false, follow: true } };
+/** Title of the pages after the beach page: summary, hold, booking. Never indexed. */
+export async function stepMetadata(lang: string, section: string, slug: string, step: string): Promise<Metadata> {
+  const { locale, beach } = await loadBeach(lang, section, slug);
+  const t = getDictionary(locale, config.brandName);
+  const page = step === bookSegment[locale] ? t.booking.summaryTitle : step === bookingSegment[locale] ? t.account.booking : t.booking.holdTitle;
+  return privateMetadata(locale, page, { club: beach.name, follow: true });
+}
+
+/** Where the day picker and the map start: the target of the button under the lead. */
+const pickerAnchor = 'disponibilita';
 
 function SpotCard({ locale, beach, spot, day, selected }: { locale: Locale; beach: ApiBeach; spot: ApiSpot; day: string; selected: boolean }) {
   const t = getDictionary(locale, config.brandName).booking;
@@ -173,11 +186,12 @@ function MapSpot({ locale, beach, spot, day, selected }: { locale: Locale; beach
     );
   }
   // The choice is a new address of this same page: it works without scripts and can be shared.
+  // It points at the spot itself, so that the map comes back scrolled, also sideways, to the chosen spot.
   return (
-    <li>
+    <li id={`postazione-${spot.code}`}>
       <Link
         className={`plan-spot plan-spot--${spot.status}${selected ? ' plan-spot--selected' : ''}`}
-        href={`${beachPath(locale, beach.slug)}?day=${day}&spot=${spot.spotId}#planimetria`}
+        href={`${beachPath(locale, beach.slug)}?day=${day}&spot=${spot.spotId}#postazione-${spot.code}`}
         prefetch={false}
         aria-current={selected ? 'true' : undefined}
       >
@@ -191,8 +205,10 @@ function BeachMap({ locale, beach, layout, day, selected }: { locale: Locale; be
   const t = getDictionary(locale, config.brandName).booking;
   const rows = [...new Set(layout.map((spot) => spot.rowNumber))].sort((a, b) => a - b);
   const free = layout.filter((spot) => spot.status !== 'unavailable').length;
+  // The longest row sets the width the map needs: the hint about scrolling shows only when it does not fit.
+  const widest = Math.max(...rows.map((row) => layout.filter((spot) => spot.rowNumber === row).length));
   return (
-    <div className="plan" id="planimetria" role="group" aria-labelledby="planimetria-titolo">
+    <div className="plan" id="planimetria" role="group" aria-labelledby="planimetria-titolo" style={{ '--plan-cols': widest } as CSSProperties}>
       <div className="plan__head">
         <h3 id="planimetria-titolo">{t.planTitle}</h3>
         <p>{t.planLead}</p>
@@ -224,21 +240,41 @@ function BeachMap({ locale, beach, layout, day, selected }: { locale: Locale; be
           {t.status.selected}
         </li>
       </ul>
-      <div className="plan__rows">
-        {rows.map((row) => (
-          <div className="plan-row" key={row}>
-            <p className="plan-row__label" id={`planimetria-fila-${row}`}>
-              {t.row(row)}
+      <div className="plan__map">
+        <p className="plan__hint" aria-hidden="true">
+          <svg viewBox="0 0 24 24" focusable="false">
+            <path d="M4 12h16M8 8l-4 4 4 4M16 8l4 4-4 4" />
+          </svg>
+          {t.planScrollHint}
+        </p>
+        {/* Every row stays on one line: the map scrolls sideways inside this region, the page never does. */}
+        <div className="plan__scroll" role="region" aria-label={t.planRegion} tabIndex={0}>
+          <div className="plan__rows">
+            <p className="plan__sea">
+              <span className="plan__sea-label">
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path d="M2 9c2.5 0 2.5-2 5-2s2.5 2 5 2 2.5-2 5-2 2.5 2 5 2M2 15c2.5 0 2.5-2 5-2s2.5 2 5 2 2.5-2 5-2 2.5 2 5 2" />
+                </svg>
+                {t.planSea}
+                <span className="visually-hidden">, {t.planSeaNote}</span>
+              </span>
             </p>
-            <ol className="plan-row__spots" aria-labelledby={`planimetria-fila-${row}`}>
-              {layout
-                .filter((spot) => spot.rowNumber === row)
-                .map((spot) => (
-                  <MapSpot key={spot.code} locale={locale} beach={beach} spot={spot} day={day} selected={spot.spotId === selected?.spotId} />
-                ))}
-            </ol>
+            {rows.map((row) => (
+              <div className="plan-row" key={row}>
+                <p className="plan-row__label" id={`planimetria-fila-${row}`}>
+                  {t.row(row)}
+                </p>
+                <ol className="plan-row__spots" aria-labelledby={`planimetria-fila-${row}`}>
+                  {layout
+                    .filter((spot) => spot.rowNumber === row)
+                    .map((spot) => (
+                      <MapSpot key={spot.code} locale={locale} beach={beach} spot={spot} day={day} selected={spot.spotId === selected?.spotId} />
+                    ))}
+                </ol>
+              </div>
+            ))}
           </div>
-        ))}
+        </div>
       </div>
     </div>
   );
@@ -284,7 +320,15 @@ export async function BeachView({ lang, section, slug, query }: { lang: string; 
 
   return (
     <PageShell locale={locale} page="explore" alternatePath={beachPath(otherLocale(locale), beach.slug) + alternateQuery} crumbs={crumbsFor(locale, beach)}>
-      <PageHead title={beach.name} lead={t.beachLead(beach.locality)} />
+      <PageHead title={beach.name} lead={t.beachLead(beach.locality)}>
+        {site && texts ? (
+          <p className="actions">
+            <a className="button" href={`#${pickerAnchor}`}>
+              {t.chooseCta}
+            </a>
+          </p>
+        ) : null}
+      </PageHead>
       <DemoBadge locale={locale} beach={beach} />
       {site && texts ? (
         <section className="section">
@@ -294,7 +338,7 @@ export async function BeachView({ lang, section, slug, query }: { lang: string; 
           </div>
         </section>
       ) : null}
-      <section className="section">
+      <section className="section" id={pickerAnchor}>
         <div className="container">
           {first(query.taken) ? <p className="alert" role="alert">{t.takenNotice}</p> : null}
           {picked && !selected ? <p className="alert" role="alert">{t.selectionGone}</p> : null}
@@ -458,7 +502,7 @@ export async function BookView({ lang, section, slug, step, query }: { lang: str
                 <input type="hidden" name="day" value={day} />
                 <input type="hidden" name="promo" value={quote.data.promoCode ?? ''} />
                 <input type="hidden" name="key" value={`web-${crypto.randomUUID()}`} />
-                <button className="button" type="submit">
+                <button className="button button--block" type="submit">
                   {t.holdButton}
                 </button>
               </form>
@@ -518,7 +562,7 @@ export async function HoldView({ lang, section, slug, step, holdId }: { lang: st
                   <label htmlFor="email">{c.email}</label>
                   <input id="email" name="email" type="email" autoComplete="email" maxLength={200} required />
                 </div>
-                <button className="button" type="submit">{c.button}</button>
+                <button className="button button--block" type="submit">{c.button}</button>
               </form>
             </>
           ) : null}

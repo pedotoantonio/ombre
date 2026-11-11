@@ -29,11 +29,13 @@ function submit(fields: Record<string, string>, origin = base): Promise<Response
 
 const demoDay = '2027-06-17';
 const count = (html: string, pattern: RegExp): number => (html.match(pattern) ?? []).length;
+const brand = process.env.OMBRE_BRAND_NAME?.trim() || 'Ombrè';
+const titleOf = (html: string): string => /<title>([^<]*)<\/title>/.exec(html)?.[1] ?? '';
 
 // ---- Home page: the search is a plain form that opens the explore page ----
 const home = await page('/');
 const form = /<form class="portal-search"[^>]*>[^]*?<\/form>/.exec(home.html)?.[0] ?? '';
-check(/method="get"/.test(form) && /action="\/esplora"/.test(form) && /role="search"/.test(form), 'home: no search form that opens the explore page');
+check(/method="get"/.test(form) && /action="\/esplora#risultati"/.test(form) && /role="search"/.test(form), 'home: no search form that opens the explore page at its results');
 for (const name of ['place', 'day', 'guests', 'shared']) check(form.includes(`name="${name}"`), `home: the search has no "${name}" field`);
 // The home page is prerendered, so its form carries no date limit; the explore page, rendered per request, does.
 const exploreForm = /<form class="portal-search"[^>]*>[^]*?<\/form>/.exec((await page('/esplora')).html)?.[0] ?? '';
@@ -41,7 +43,8 @@ const firstDay = /name="day"[^>]*min="(\d{4}-\d{2}-\d{2})"|min="(\d{4}-\d{2}-\d{
 const romeToday = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome' }).format(new Date());
 check((firstDay?.[1] ?? firstDay?.[2]) === romeToday, `explore: the search does not start from today (${firstDay?.[1] ?? firstDay?.[2]})`);
 check(count(form, /type="submit"/g) === 1 && count(home.html, /class="button[ "]/g) === 1, 'home: expected exactly one main button, the search');
-check(/action="\/en\/explore"/.test((await page('/en')).html), 'english home: the search does not open the English explore page');
+check(/action="\/en\/explore#risultati"/.test((await page('/en')).html), 'english home: the search does not open the English explore page');
+check(/action="\/esplora#risultati"/.test(exploreForm), 'explore: a new search does not land on the results');
 
 // ---- Explore: plain list, then searches by day, guests, shared days and place ----
 const explore = await page('/esplora');
@@ -52,6 +55,8 @@ check(!explore.html.includes('postazioni libere</span>') && explore.html.include
 const searched = await page(`/esplora?day=${demoDay}&guests=2`);
 check(searched.html.includes('8 postazioni libere') && searched.html.includes('da 30,00'), 'search: free spots and "from" price of the demo day are not shown');
 check(searched.html.includes(`href="${beach}?day=${demoDay}"`), 'search: the card does not carry the day to the beach club page');
+const results = /id="risultati"[^]*$/.exec(searched.html)?.[0] ?? '';
+check(count(searched.html, /id="risultati"/g) === 1 && results.includes('<h2>Disponibilità per') && !results.includes('<form class="portal-search"'), 'search: the results anchor is missing, or it is not right before the results heading');
 check(/<meta name="robots" content="noindex/.test(searched.html), 'search: a page with parameters must not be indexable');
 check(/<link rel="canonical" href="[^"?]*\/esplora"/.test(searched.html), 'search: the canonical address is not the plain explore page');
 check(searched.html.includes(`href="/en/explore?day=${demoDay}&guests=2"`), 'search: the link to the other language loses the search');
@@ -70,7 +75,7 @@ const club = await page(beach);
 check(club.status === 200, `beach page: status ${club.status}`);
 check((club.html.match(/<h1\b/g) ?? []).length === 1, 'beach page: expected exactly one h1');
 check(/<meta name="robots" content="noindex/.test(club.html), 'beach page: demo data must not be indexable');
-const mapLinks = [...club.html.matchAll(/<a class="plan-spot plan-spot--(free|shared)"[^>]*href="(\/bagni\/bagno-delle-dune\?day=(\d{4}-\d{2}-\d{2})&spot=([0-9a-f-]{36}))#planimetria"/g)];
+const mapLinks = [...club.html.matchAll(/<a class="plan-spot plan-spot--(free|shared)"[^>]*href="(\/bagni\/bagno-delle-dune\?day=(\d{4}-\d{2}-\d{2})&spot=([0-9a-f-]{36}))#postazione-[A-Z]\d{2}"/g)];
 const listLinks = [...club.html.matchAll(/href="\/bagni\/bagno-delle-dune\/prenota\?spot=([0-9a-f-]{36})&day=\d{4}-\d{2}-\d{2}"/g)];
 const takenBefore = count(club.html, /class="plan-spot plan-spot--taken"/g);
 check(mapLinks.length > 0, 'beach page: no free spot to choose on the map');
@@ -78,6 +83,12 @@ check(mapLinks.length + takenBefore === 8, `beach page: the map draws ${mapLinks
 check(mapLinks.length === listLinks.length && mapLinks.every((link) => listLinks.some((item) => item[1] === link[4])), 'beach page: the list is not equivalent to the map');
 check(count(club.html, /class="spot__code"/g) === mapLinks.length, 'beach page: the list does not show one card per free spot');
 check(['Legenda', 'Libera, giornata condivisa', 'Non disponibile', 'Scelta da te'].every((text) => club.html.includes(text)), 'beach page: the map has no text legend');
+// Rows never wrap: the map scrolls inside a labelled region the keyboard can reach, with the sea marked beside row 1.
+const scroller = /<div class="plan__scroll"[^>]*>/.exec(club.html)?.[0] ?? '';
+check(/role="region"/.test(scroller) && /aria-label="[^"]+"/.test(scroller) && /tabindex="0"/i.test(scroller), 'beach page: the map is not a labelled, focusable scrolling region');
+const seaAt = club.html.indexOf('class="plan__sea"');
+check(seaAt > 0 && seaAt < club.html.indexOf('class="plan-row"') && />Mare</.test(club.html.slice(seaAt, seaAt + 600)), 'beach page: no sea marker before the first row');
+check(club.html.includes('class="plan__hint"') && club.html.includes('--plan-cols:4'), 'beach page: no hint that the map scrolls, or the width of the rows is not given');
 check(!club.html.includes('class="plan-bar"') && !club.html.includes('aria-current="true"'), 'beach page: a spot is shown as chosen before any choice');
 
 const chosen = mapLinks[0];
@@ -102,6 +113,8 @@ check(refused.html.includes('Questo codice non si può applicare'), 'summary: an
 
 const summary = await page(`${bookHref}&promo=MARE10`);
 check(summary.status === 200, `summary: status ${summary.status}`);
+check(titleOf(summary.html) === `Riepilogo · Bagno delle Dune | ${brand}`, `summary: the title is "${titleOf(summary.html)}"`);
+check(/<meta name="robots" content="noindex/.test(summary.html), 'summary: must not be indexable');
 check(summary.html.includes('30,00') && summary.html.includes('27,00'), 'summary: MARE10 does not turn 30,00 into 27,00');
 const key = /name="key" value="(web-[0-9a-f-]{36})"/.exec(summary.html)?.[1] ?? '';
 check(key !== '', 'summary: the form has no idempotency key');
@@ -124,6 +137,7 @@ const held = await page(holdUrl);
 check(held.status === 200 && held.html.includes('Riserva attiva'), 'hold page: the hold is not shown as active');
 check(held.html.includes('27,00') && held.html.includes('Sconto MARE10'), 'hold page: the saved price is not shown');
 check(/<meta name="robots" content="noindex/.test(held.html), 'hold page: must not be indexable');
+check(titleOf(held.html) === `Riserva · Bagno delle Dune | ${brand}`, `hold page: the title is "${titleOf(held.html)}"`);
 
 const after = await page(`${beach}?day=${day}`);
 check(!after.html.includes(spotId), 'beach page: the held spot is still offered');
@@ -137,7 +151,8 @@ const english = await page('/en/beach-clubs/bagno-delle-dune');
 check(english.status === 200 && english.html.includes('<html lang="en"') && english.html.includes('Free spots on'), 'english beach page: not served in English');
 check(english.html.includes('Beach map') && english.html.includes('Not available') && english.html.includes('List of free spots'), 'english beach page: map and list not in English');
 check(english.html.includes(`href="${beach}"`), 'english beach page: no link to the Italian version');
-check((await page(holdUrl.replace('/bagni/', '/en/beach-clubs/').replace('/riserva/', '/hold/'))).html.includes('Hold active'), 'english hold page: not served');
+const englishHold = await page(holdUrl.replace('/bagni/', '/en/beach-clubs/').replace('/riserva/', '/hold/'));
+check(englishHold.html.includes('Hold active') && titleOf(englishHold.html) === `Hold · Bagno delle Dune | ${brand}`, 'english hold page: not served, or without its title');
 
 check((await page('/en/bagni/bagno-delle-dune')).status === 404, 'italian section under /en must be 404');
 check((await page('/bagni/bagno-che-non-esiste')).status === 404, 'unknown beach club must be 404');

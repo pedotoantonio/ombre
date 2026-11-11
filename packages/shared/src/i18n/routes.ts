@@ -81,3 +81,35 @@ export function accountPath(locale: Locale, page: AccountPage, id?: string): str
   const base = `${localePrefix(locale)}/${accountSection[locale]}/${accountPages[page][locale]}`;
   return id ? `${base}/${id}` : base;
 }
+
+/** Internal address of the page shown for unknown addresses. It is never linked. */
+export const notFoundSegment = 'pagina-non-trovata';
+
+const accountDepth: Record<AccountPage, number> = { signIn: 2, overview: 2, twoFactor: 2, manage: 3, season: 3, site: 3 };
+
+/**
+ * Reads the language of an address and tells whether it has the shape of a page of the site.
+ * Whether a beach club or a booking really exists is decided later, by the page itself.
+ */
+export function readAddress(pathname: string): { locale: Locale; known: boolean } {
+  const parts = pathname.split('/').filter((part) => part !== '');
+  const prefix = parts[0];
+  const locale = prefix !== undefined && prefix !== defaultLocale && isLocale(prefix) ? prefix : defaultLocale;
+  const rest = locale === defaultLocale ? parts : parts.slice(1);
+  const [first, second, third] = rest;
+
+  if (first === undefined) return { locale, known: true };
+  if (rest.length === 1) return { locale, known: pageFromSlug(locale, first) !== null };
+  if (first === beachSection[locale]) {
+    const known =
+      rest.length === 2 ||
+      (rest.length === 3 && third === bookSegment[locale]) ||
+      (rest.length === 4 && (third === holdSegment[locale] || third === bookingSegment[locale]));
+    return { locale, known };
+  }
+  if (first === accountSection[locale]) {
+    const page = (Object.keys(accountPages) as AccountPage[]).find((id) => accountPages[id][locale] === second);
+    return { locale, known: page !== undefined && accountDepth[page] === rest.length };
+  }
+  return { locale, known: false };
+}

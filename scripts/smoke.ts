@@ -4,6 +4,9 @@
 const base = (process.argv[2] ?? 'http://127.0.0.1:3210').replace(/\/+$/, '');
 const siteUrl = (process.env.OMBRE_SITE_URL ?? 'http://localhost:3210').replace(/\/+$/, '');
 const indexable = process.env.OMBRE_INDEXABLE === 'true';
+const brand = process.env.OMBRE_BRAND_NAME?.trim() || 'Ombrè';
+// Set to "true" or "false" to require that notice; unset, the check follows what the site shows.
+const demoMode = process.env.OMBRE_DEMO_MODE;
 
 const pages: { it: string; en: string; types: string[] }[] = [
   { it: '/', en: '/en', types: ['WebSite'] },
@@ -127,6 +130,50 @@ await expectStatus('/en/pagina-che-non-esiste', 404);
 await expectStatus('/en/come-funziona', 404);
 await expectStatus('/fr', 404);
 
+// An unknown address gets the site's own page, in the language of the address, readable without scripts.
+const notFound = { it: { heading: 'Pagina non trovata', home: '/', explore: '/esplora' }, en: { heading: 'Page not found', home: '/en', explore: '/en/explore' } };
+for (const [path, lang] of [['/pagina-che-non-esiste', 'it'], ['/fr', 'it'], ['/una/pagina/molto/in/fondo', 'it'], ['/en/pagina-che-non-esiste', 'en'], ['/en/come-funziona', 'en'], ['/en/bagni/bagno-delle-dune', 'en']] as const) {
+  const response = await fetch(base + path, { redirect: 'manual' });
+  const html = await response.text();
+  const expected = notFound[lang];
+  const main = /<main\b[^]*<\/main>/.exec(html)?.[0] ?? '';
+  check(response.status === 404, `${path}: status ${response.status}, expected 404`);
+  check(attribute(tags(html, 'html')[0] ?? '', 'lang') === lang, `${path}: the not-found page is not in "${lang}"`);
+  check(new RegExp(`<h1[^>]*>${expected.heading}</h1>`).test(main) && tags(html, 'h1').length === 1, `${path}: no "${expected.heading}" heading in the page as served`);
+  check(html.includes('class="site-header"') && html.includes('class="site-footer"'), `${path}: the not-found page is outside the site shell`);
+  check(main.includes(`href="${expected.home}"`) && main.includes(`href="${expected.explore}"`), `${path}: no links to the home page and to Explore`);
+  check((/<title>([^<]*)<\/title>/.exec(html)?.[1] ?? '') === `${expected.heading} | ${brand}`, `${path}: the title is not "${expected.heading} | ${brand}"`);
+  check(tags(html, 'meta').some((tag) => attribute(tag, 'name') === 'robots' && (attribute(tag, 'content') ?? '').includes('noindex')), `${path}: a not-found page must be noindex`);
+}
+
+// Reserved pages are never indexed, but they still need a title: here the one that needs no sign-in.
+for (const [path, title] of [['/area/accesso', 'Accedi'], ['/en/account/sign-in', 'Sign in']] as const) {
+  const html = await (await fetch(base + path, { redirect: 'manual' })).text();
+  check((/<title>([^<]*)<\/title>/.exec(html)?.[1] ?? '') === `${title} | ${brand}`, `${path}: the title is not "${title} | ${brand}"`);
+  check(tags(html, 'meta').some((tag) => attribute(tag, 'name') === 'robots' && (attribute(tag, 'content') ?? '').includes('noindex')), `${path}: a reserved page must be noindex`);
+}
+
+// The notice at the top: one at most, the same kind in both languages, and never the pre-launch
+// wording on a demonstration environment, where bookings can be tried.
+const notices = { demo: { it: 'Ambiente dimostrativo', en: 'Demonstration environment' }, preLaunch: { it: 'Servizio in preparazione', en: 'Service in preparation' } };
+const noticeOf = async (path: string, lang: 'it' | 'en') => {
+  const found = [...(await (await fetch(base + path)).text()).matchAll(/<p class="notice[^"]*">([^<]*)<\/p>/g)].map((match) => match[1] ?? '');
+  const kinds = (Object.keys(notices) as (keyof typeof notices)[]).filter((kind) => found.some((text) => text.startsWith(notices[kind][lang])));
+  return { count: found.length, kind: kinds[0] ?? 'none' };
+};
+const noticeIt = await noticeOf('/', 'it');
+const noticeEn = await noticeOf('/en', 'en');
+check(noticeIt.count <= 1 && noticeEn.count <= 1, 'notice: more than one notice at the top of the page');
+check(noticeIt.kind === noticeEn.kind && noticeIt.count === noticeEn.count, `notice: Italian shows "${noticeIt.kind}", English "${noticeEn.kind}"`);
+// Pages rendered at each request must show the same notice as the prerendered ones.
+for (const [path, lang] of [['/esplora', 'it'], ['/en/explore', 'en'], ['/area/accesso', 'it']] as const) {
+  const notice = await noticeOf(path, lang);
+  check(notice.kind === noticeIt.kind && notice.count === noticeIt.count, `notice: ${path} shows "${notice.kind}", the home page "${noticeIt.kind}"`);
+}
+check(noticeIt.count === 0 || noticeIt.kind !== 'none', 'notice: a notice with an unknown wording');
+if (demoMode === 'true') check(noticeIt.kind === 'demo', `notice: OMBRE_DEMO_MODE is true but the site shows "${noticeIt.kind}"`);
+if (demoMode === 'false') check(noticeIt.kind !== 'demo', 'notice: OMBRE_DEMO_MODE is false but the site shows the demonstration notice');
+
 const robots = await fetch(`${base}/robots.txt`);
 const robotsText = await robots.text();
 check(robots.status === 200 && robotsText.includes(`Sitemap: ${siteUrl}/sitemap.xml`), 'robots.txt: missing or without sitemap');
@@ -142,4 +189,4 @@ if (failures.length > 0) {
   console.error(`${failures.length} of ${checks} checks failed:\n- ${failures.join('\n- ')}`);
   process.exit(1);
 }
-console.log(`All ${checks} checks passed on ${base} (indexable: ${indexable}).`);
+console.log(`All ${checks} checks passed on ${base} (indexable: ${indexable}, notice: ${noticeIt.kind}).`);

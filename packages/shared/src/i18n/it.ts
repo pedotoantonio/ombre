@@ -1,6 +1,17 @@
+/** A calendar day in pieces, as the wording of a period needs it. */
+export interface DayParts {
+  day: number;
+  month: string;
+  year: number;
+}
+
+const capital = (text: string): string => text.charAt(0).toUpperCase() + text.slice(1);
+
 export function makeIt(brand: string) {
   return {
     meta: {
+      pageTitle: (page: string) => `${page} | ${brand}`,
+      beachPageTitle: (page: string, club: string) => `${page} · ${club} | ${brand}`,
       siteDescription: `${brand} è un servizio per prenotare online una giornata in uno stabilimento balneare e per permettere agli abbonati stagionali di condividere le giornate in cui non usano la postazione, con l'autorizzazione del gestore.`,
     },
     nav: {
@@ -19,6 +30,25 @@ export function makeIt(brand: string) {
     },
     notice: {
       preLaunch: 'Servizio in preparazione: le prenotazioni non sono ancora attive.',
+      demo: 'Ambiente dimostrativo: dati di esempio, nessun pagamento reale.',
+    },
+    notFound: {
+      title: 'Pagina non trovata',
+      lead: "Questo indirizzo non corrisponde a nessuna pagina. Può essere scritto male, oppure la pagina non c'è più.",
+      home: 'Vai alla pagina iniziale',
+      explore: 'Trova uno stabilimento',
+    },
+    dates: {
+      // "dal 1º al 30 novembre 2026": the first of the month is an ordinal, 8 and 11 take the elided article.
+      period: (from: DayParts, to: DayParts) => {
+        const number = (day: number) => (day === 1 ? '1º' : String(day));
+        const elided = (day: number) => day === 8 || day === 11;
+        const start = `${elided(from.day) ? "dall'" : 'dal '}${number(from.day)}`;
+        const end = `${elided(to.day) ? "all'" : 'al '}${number(to.day)}`;
+        if (from.year !== to.year) return `${start} ${from.month} ${from.year} ${end} ${to.month} ${to.year}`;
+        if (from.month !== to.month) return `${start} ${from.month} ${end} ${to.month} ${to.year}`;
+        return `${start} ${end} ${to.month} ${to.year}`;
+      },
     },
     footer: {
       tagline: 'Il tuo posto al sole, senza pensieri.',
@@ -41,6 +71,8 @@ export function makeIt(brand: string) {
     },
     booking: {
       demoBadge: 'Stabilimento dimostrativo: dati di esempio',
+      demoBadgeShort: 'Demo: dati di esempio',
+      chooseCta: 'Scegli il giorno e la postazione',
       beachTitle: (name: string, locality: string) => `${name} a ${locality}: ombrelloni e prenotazione`,
       beachDescription: (name: string, locality: string) =>
         `Postazioni libere, dotazione e prezzo per giornata a ${name}, ${locality}. Scegli la data e riserva la tua postazione.`,
@@ -88,6 +120,10 @@ export function makeIt(brand: string) {
       holdEndedText: 'Il tempo della riserva è scaduto oppure la riserva è stata rilasciata. La postazione è tornata disponibile.',
       planTitle: 'Planimetria',
       planLead: 'Ogni ombrellone è una postazione. Scegli una postazione libera per vedere il riepilogo e continuare.',
+      planRegion: 'Planimetria, fila per fila',
+      planScrollHint: 'Scorri di lato per vedere tutta la fila.',
+      planSea: 'Mare',
+      planSeaNote: 'dal lato della fila 1',
       freeCount: (free: number, total: number) => (free === 1 ? `1 postazione libera su ${total}` : `${free} postazioni libere su ${total}`),
       legendTitle: 'Legenda',
       status: { free: 'Libera', shared: 'Libera, giornata condivisa', unavailable: 'Non disponibile', selected: 'Scelta da te' },
@@ -108,6 +144,8 @@ export function makeIt(brand: string) {
       password: 'Password',
       signInButton: 'Accedi',
       signOut: 'Esci',
+      barLabel: 'Il tuo accesso',
+      signedInAs: 'Accesso come',
       overviewTitle: 'La tua area',
       hello: (name: string) => `Ciao ${name}.`,
       beachesTitle: 'Stabilimenti',
@@ -148,6 +186,7 @@ export function makeIt(brand: string) {
       twoFactorConfirm: 'Conferma e attiva',
       signInCode: 'Codice di verifica (solo se hai attivato la verifica in due passaggi)',
       manageTitle: (name: string) => `Gestione di ${name}`,
+      manageShort: 'Gestione',
       day: 'Giorno',
       show: 'Mostra',
       inventoryTitle: 'Postazioni del giorno',
@@ -214,7 +253,12 @@ export function makeIt(brand: string) {
       suspend: 'Sospendi',
       resume: 'Riattiva',
       reportTitle: 'Riepilogo economico',
-      reportLead: (from: string, to: string) => `Dal ${from} al ${to}. Le vendite condivise sono contate a parte.`,
+      reportLead: (period: string) => `${capital(period)}. Le vendite condivise sono contate a parte.`,
+      reportSalesTable: 'Vendite del periodo',
+      reportSharesTable: 'Ripartizione delle quote',
+      item: 'Voce',
+      bookingsCount: 'Prenotazioni',
+      amount: 'Importo',
       sharedSales: 'Vendite condivise',
       ordinarySales: 'Vendite ordinarie',
       parties: { season_holder: 'Stagionali', beach_club: 'Stabilimento', platform: 'Piattaforma' },
@@ -222,7 +266,7 @@ export function makeIt(brand: string) {
       accrued: 'Maturato',
       refundsDue: 'Rimborsi da eseguire',
       seasonTitle: (spot: string, beach: string) => `Postazione ${spot}, ${beach}`,
-      seasonLead: (from: string, to: string) => `Abbonamento valido dal ${from} al ${to}.`,
+      seasonLead: (period: string) => `Abbonamento valido ${period}.`,
       proposeTitle: 'Proponi le giornate in cui non ci sei',
       weekdays: 'Giorni della settimana (nessuno: tutti)',
       weekdayNames: ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'],
@@ -269,7 +313,8 @@ export function makeIt(brand: string) {
       template: 'Modello grafico',
       templates: { riviera: 'Riviera', boutique: 'Boutique', essential: 'Essential' },
       italian: 'Testi in italiano',
-      english: 'Testi in inglese (facoltativi: se li lasci vuoti la pagina inglese non mostra testi)',
+      english: 'Testi in inglese',
+      englishNote: 'Facoltativi: se li lasci vuoti, la pagina inglese non mostra testi.',
       tagline: 'Frase di presentazione',
       description: 'Descrizione',
       services: 'Servizi, uno per riga',
@@ -420,6 +465,9 @@ export function makeIt(brand: string) {
           'Le condizioni di annullamento le stabilisce lo stabilimento. Valgono quelle salvate nella tua prenotazione.',
           'Se compare «Pagamento in verifica» non serve pagare di nuovo: l\'esito viene controllato e la prenotazione aggiornata.',
         ],
+        nextTitle: 'Comincia dalla ricerca',
+        nextText: 'Indica località e giorno e guarda le postazioni libere, con il prezzo per la giornata.',
+        nextAction: 'Trova uno stabilimento',
       },
       forBeachClubs: {
         title: `${brand} per gli stabilimenti balneari: sito e prenotazioni`,
@@ -457,6 +505,10 @@ export function makeIt(brand: string) {
         ],
         pricingTitle: 'Costi',
         pricingText: 'Piani e commissioni saranno pubblicati qui al termine della fase pilota.',
+        nextTitle: 'Guarda il portale come lo vede un ospite',
+        nextText: 'Dalla pagina Esplora gli ospiti cercano una giornata, aprono la pagina dello stabilimento e scelgono la postazione.',
+        nextAction: 'Vai a Esplora',
+        nextSecondary: 'Come funziona',
       },
       forSeasonHolders: {
         title: `Condividere l'ombrellone stagionale con ${brand}`,
@@ -493,7 +545,7 @@ export function makeIt(brand: string) {
         title: `Assistenza e domande frequenti | ${brand}`,
         description: `Risposte alle domande più frequenti su ${brand}: prenotazione di una giornata, prezzo finale, annullamento, pass e ingresso in spiaggia.`,
         h1: 'Assistenza',
-        lead: 'Le risposte alle domande che riceviamo più spesso.',
+        lead: 'Risposte brevi su prenotazione, prezzo, annullamento e ingresso in spiaggia.',
         faqTitle: 'Domande frequenti',
         faq: [
           {
@@ -521,6 +573,9 @@ export function makeIt(brand: string) {
             a: 'Il servizio è in preparazione e partirà da una zona pilota. Gli stabilimenti attivi compariranno nella pagina Esplora.',
           },
         ],
+        nextTitle: 'Cerca una giornata al mare',
+        nextText: 'Nella pagina Esplora trovi gli stabilimenti attivi e le postazioni libere per il giorno che scegli.',
+        nextAction: 'Trova uno stabilimento',
       },
     },
   };

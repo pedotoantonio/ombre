@@ -73,3 +73,6 @@ non compaiono:
 | Filtri «Accesso disabili», «Area giochi» | I servizi sono testo libero: il filtro arriverà con i servizi strutturati |
 | Apple Pay e Google Pay | Dipendono dal fornitore di pagamento reale |
 | Colori scelti dal gestore, logo e galleria nell'editor | Rimandati con il caricamento dei media |
+| Console della reception come vista a griglia della spiaggia («Ombrè Skipper») | Non realizzata. Per ora la console è una tabella, che sul telefono diventa un elenco di schede |
+| Banner promozionale «Dritta Ombrè» | Richiede il concetto di «promozione pubblica», che oggi non esiste: le promozioni sono solo codici da inserire nel riepilogo |
+| Fascia di stabilimenti nella pagina iniziale | Non c'è: la pagina iniziale è prerenderizzata e non legge dati. Gli stabilimenti sono elencati in «Esplora» |

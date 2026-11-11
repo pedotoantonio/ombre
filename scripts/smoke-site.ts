@@ -58,7 +58,13 @@ const manager = new Visitor();
 await manager.post('accesso', { lang: 'it', email: 'gestore@bagnodelledune.example', password });
 const version = async (visitor: Visitor) => /name="version" value="(\d*)"/.exec(await visitor.get(editor))?.[1] ?? '';
 
-check((await manager.get(editor)).includes('Nessuna bozza in corso'), 'editor: does not open empty');
+const opened = await manager.get(editor);
+const brand = process.env.OMBRE_BRAND_NAME?.trim() || 'Ombrè';
+check(opened.includes('Nessuna bozza in corso'), 'editor: does not open empty');
+check((/<title>([^<]*)<\/title>/.exec(opened)?.[1] ?? '') === `Sito dello stabilimento · Bagno delle Dune | ${brand}`, 'editor: the page has no title naming the beach club');
+check(opened.includes('<legend>Testi in inglese</legend>') && opened.includes('Facoltativi: se li lasci vuoti'), 'editor: the English group has a long legend, or its note is missing');
+check((opened.match(/<img class="checks__thumb" src="\/demo\/[a-z]+\.svg"/g) ?? []).length === (opened.match(/name="gallery"/g) ?? []).length && opened.includes('name="gallery"'), 'editor: a gallery option has no thumbnail');
+check(opened.includes('class="account-bar"'), 'editor: no bar with who is signed in');
 const fields = { lang: 'it', beach, template: 'riviera', ...italian, ...blankEnglish };
 check((await manager.post('sito-salva', { ...fields, version: '' })).includes('ok=1'), 'editor: the first draft was not saved');
 
@@ -91,7 +97,7 @@ const history = await manager.get(editor);
 const firstRevision = [...history.matchAll(/name="revision" value="([0-9a-f-]{36})"/g)].at(-1)?.[1] ?? '';
 check((await manager.post('sito-ripristina', { lang: 'it', beach, revision: firstRevision })).includes('ok=1'), 'editor: the revision was not restored');
 const restored = await manager.get(editor);
-check(restored.includes('Bozza numero 3') && (restored.match(/<td>Archiviata<\/td>/g) ?? []).length === 1, 'editor: restore did not create draft 3 or changed the history');
+check(restored.includes('Bozza numero 3') && (restored.match(/<td[^>]*>Archiviata<\/td>/g) ?? []).length === 1, 'editor: restore did not create draft 3 or changed the history');
 check((await manager.get(`/bagni/${beach}`)).includes('tpl-boutique'), 'public page: a restore changed the site before publication');
 
 const reception = new Visitor();

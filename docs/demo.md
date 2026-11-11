@@ -72,7 +72,13 @@ Nel file dell'ambiente (`.env.demo`):
 OMBRE_SEED_DEMO=true
 OMBRE_SEED_SHOWCASE=true
 OMBRE_DEMO_PASSWORD=una-password-di-almeno-12-caratteri
+OMBRE_DEMO_MODE=true
 ```
+
+`OMBRE_DEMO_MODE=true` cambia l'avviso in cima alle pagine: dice che l'ambiente è
+dimostrativo, con dati di esempio e nessun pagamento reale. Come gli altri valori delle
+pagine pubbliche è letto quando si costruisce l'immagine del sito: dopo averlo cambiato
+serve `up -d --build`.
 
 Lido Aurora viene creato una sola volta: i riavvii non lo modificano. Per ripartire da
 capo si ricrea il volume del database (`docker compose -p ombre-demo down -v`, poi di

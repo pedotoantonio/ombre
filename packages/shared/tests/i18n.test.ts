@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getDictionary, innerPageIds, locales, pageFromSlug, pageIds, pathFor, slugs } from '../src/index';
+import { getDictionary, innerPageIds, locales, pageFromSlug, pageIds, pathFor, readAddress, slugs } from '../src/index';
 
 function shape(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(shape);
@@ -49,6 +49,23 @@ describe('dictionaries', () => {
       }
     }
   });
+
+  it('write a period without repeating what the two days share', () => {
+    const november = (day: number) => ({ day, month: 'novembre', year: 2026 });
+    expect(it_.dates.period(november(1), november(30))).toBe('dal 1º al 30 novembre 2026');
+    expect(it_.dates.period(november(8), november(11))).toBe("dall'8 all'11 novembre 2026");
+    expect(it_.dates.period({ day: 15, month: 'maggio', year: 2027 }, { day: 20, month: 'settembre', year: 2027 })).toBe('dal 15 maggio al 20 settembre 2027');
+    expect(it_.dates.period({ day: 1, month: 'dicembre', year: 2026 }, { day: 31, month: 'gennaio', year: 2027 })).toBe('dal 1º dicembre 2026 al 31 gennaio 2027');
+    expect(en.dates.period({ day: 1, month: 'November', year: 2026 }, { day: 30, month: 'November', year: 2026 })).toBe('from 1 to 30 November 2026');
+    expect(en.dates.period({ day: 15, month: 'May', year: 2027 }, { day: 20, month: 'September', year: 2027 })).toBe('from 15 May to 20 September 2027');
+    expect(it_.account.reportLead(it_.dates.period(november(1), november(30)))).toMatch(/^Dal 1º al 30 novembre 2026\. /);
+    expect(en.account.reportLead('from 1 to 30 November 2026')).toMatch(/^From 1 to 30 November 2026\. /);
+  });
+
+  it('give reserved pages a title that ends with the brand', () => {
+    expect(it_.meta.pageTitle('Accedi')).toBe('Accedi | Marchio');
+    expect(en.meta.beachPageTitle('Summary', 'Lido Aurora')).toBe('Summary · Lido Aurora | Marchio');
+  });
 });
 
 describe('routes', () => {
@@ -65,6 +82,17 @@ describe('routes', () => {
       expect(pageFromSlug(locale, 'non-esiste')).toBeNull();
     }
     expect(pageFromSlug('en', 'come-funziona')).toBeNull();
+  });
+
+  it('tell the pages of the site from unknown addresses, and in which language they are written', () => {
+    const known = ['/', '/en', '/esplora', '/en/explore', '/bagni/lido-aurora', '/bagni/lido-aurora/prenota', '/en/beach-clubs/lido-aurora/hold/abc', '/bagni/lido-aurora/prenotazione/abc', '/area/accesso', '/en/account/sign-in', '/area/gestione/lido-aurora', '/en/account/season/abc'];
+    for (const path of known) expect(readAddress(path), path).toMatchObject({ known: true });
+    const unknown = ['/pagina-che-non-esiste', '/fr', '/en/come-funziona', '/en/bagni/lido-aurora', '/bagni', '/bagni/lido-aurora/book', '/bagni/a/b/c/d', '/area', '/area/gestione', '/area/accesso/altro', '/a/b', '/it/esplora'];
+    for (const path of unknown) expect(readAddress(path), path).toMatchObject({ known: false });
+    expect(readAddress('/en/pagina-che-non-esiste').locale).toBe('en');
+    expect(readAddress('/en').locale).toBe('en');
+    expect(readAddress('/pagina-che-non-esiste').locale).toBe('it');
+    expect(readAddress('/fr/qualcosa').locale).toBe('it');
   });
 
   it('never use a locale code or a reserved name as a slug', () => {

@@ -1,5 +1,13 @@
 # syntax=docker/dockerfile:1
 
+# Values of the public pages, fixed when the web image is built (see .env.example).
+ARG OMBRE_BRAND_NAME=Ombrè
+ARG OMBRE_SITE_URL=http://localhost:3210
+ARG OMBRE_INDEXABLE=false
+ARG OMBRE_BOOKINGS_OPEN=false
+ARG OMBRE_DEMO_MODE=false
+ARG OMBRE_CONTACT_EMAIL=
+
 FROM node:22-alpine AS build
 WORKDIR /repo
 ENV NEXT_TELEMETRY_DISABLED=1 CI=true
@@ -51,21 +59,37 @@ CMD ["node", "worker.mjs"]
 # ---- Web: prerendered public pages ----
 FROM build AS web-build
 # Public pages are prerendered: these values are fixed when the image is built.
-ARG OMBRE_BRAND_NAME=Ombrè
-ARG OMBRE_SITE_URL=http://localhost:3210
-ARG OMBRE_INDEXABLE=false
-ARG OMBRE_BOOKINGS_OPEN=false
-ARG OMBRE_CONTACT_EMAIL=
+ARG OMBRE_BRAND_NAME
+ARG OMBRE_SITE_URL
+ARG OMBRE_INDEXABLE
+ARG OMBRE_BOOKINGS_OPEN
+ARG OMBRE_DEMO_MODE
+ARG OMBRE_CONTACT_EMAIL
 ENV OMBRE_BRAND_NAME=$OMBRE_BRAND_NAME \
     OMBRE_SITE_URL=$OMBRE_SITE_URL \
     OMBRE_INDEXABLE=$OMBRE_INDEXABLE \
     OMBRE_BOOKINGS_OPEN=$OMBRE_BOOKINGS_OPEN \
+    OMBRE_DEMO_MODE=$OMBRE_DEMO_MODE \
     OMBRE_CONTACT_EMAIL=$OMBRE_CONTACT_EMAIL
 RUN pnpm --filter @ombre/web build
 
 FROM node:22-alpine AS web
 WORKDIR /app
-ENV NODE_ENV=production PORT=3000 HOSTNAME=0.0.0.0 NEXT_TELEMETRY_DISABLED=1
+# The pages rendered at each request (explore, beach clubs, reserved area) must read the same
+# values the prerendered pages were built with: notice, brand name, canonical address, noindex.
+ARG OMBRE_BRAND_NAME
+ARG OMBRE_SITE_URL
+ARG OMBRE_INDEXABLE
+ARG OMBRE_BOOKINGS_OPEN
+ARG OMBRE_DEMO_MODE
+ARG OMBRE_CONTACT_EMAIL
+ENV NODE_ENV=production PORT=3000 HOSTNAME=0.0.0.0 NEXT_TELEMETRY_DISABLED=1 \
+    OMBRE_BRAND_NAME=$OMBRE_BRAND_NAME \
+    OMBRE_SITE_URL=$OMBRE_SITE_URL \
+    OMBRE_INDEXABLE=$OMBRE_INDEXABLE \
+    OMBRE_BOOKINGS_OPEN=$OMBRE_BOOKINGS_OPEN \
+    OMBRE_DEMO_MODE=$OMBRE_DEMO_MODE \
+    OMBRE_CONTACT_EMAIL=$OMBRE_CONTACT_EMAIL
 COPY --from=web-build --chown=node:node /repo/apps/web/.next/standalone ./
 COPY --from=web-build --chown=node:node /repo/apps/web/.next/static ./apps/web/.next/static
 COPY --from=web-build --chown=node:node /repo/apps/web/public ./apps/web/public

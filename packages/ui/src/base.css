@@ -161,6 +161,11 @@ svg {
   text-align: center;
 }
 
+/* Demonstration environment: the accent colour, so that it is not taken for the pre-launch notice. */
+.notice--demo {
+  background: var(--ambra);
+}
+
 /* Header: brand and tools on the first row, links on a second row that scrolls sideways.
    From 72rem everything sits on one row. */
 .site-header {
@@ -205,10 +210,11 @@ svg {
   height: 2.25rem;
 }
 
-/* Symbol and drawn wordmark together: the width follows the artwork. */
+/* Symbol and drawn wordmark together: the width follows the artwork.
+   On the narrowest phones it gives way a little, so that the tools stay on the same row. */
 .brand svg[role='img'] {
   width: auto;
-  height: 2.5rem;
+  height: clamp(2.375rem, 12.2vw, 2.75rem);
 }
 
 .site-footer .brand svg[role='img'] {
@@ -345,7 +351,8 @@ svg {
   transform: scale(0.97);
 }
 
-/* Link to the reserved area: a round mark on small screens, with its label from 30rem. */
+/* Link to the reserved area: a round mark on small screens, with its label from 30rem.
+   Outlined, so that the filled button of each page stays the one main action. */
 .account-link {
   display: inline-flex;
   align-items: center;
@@ -353,9 +360,10 @@ svg {
   gap: var(--spazio-2);
   min-width: var(--tocco);
   min-height: var(--tocco);
+  border: 1.5px solid var(--oceano);
   border-radius: var(--raggio-pillola);
-  background: var(--oceano);
-  color: var(--su-scuro);
+  background: var(--carta);
+  color: var(--oceano);
   font-size: var(--testo-piccolo);
   font-weight: var(--peso-medio);
   text-decoration: none;
@@ -364,8 +372,8 @@ svg {
 }
 
 .account-link:hover {
-  background: var(--oceano-scuro);
-  color: var(--su-scuro);
+  background: var(--spuma);
+  color: var(--oceano);
 }
 
 .account-link:active {
@@ -423,6 +431,10 @@ svg {
     min-height: var(--testata);
   }
 
+  .brand svg[role='img'] {
+    height: 3rem;
+  }
+
   .site-nav {
     margin-inline: 0;
     border-top: 0;
@@ -448,6 +460,32 @@ svg {
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
   }
+}
+
+/* Reserved area: who is signed in and the way out, under the header of every reserved page */
+.account-bar {
+  background: var(--carta);
+  border-bottom: 1px solid var(--bordo);
+  font-size: var(--testo-piccolo);
+}
+
+.account-bar__inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0 var(--spazio-4);
+  padding-block: var(--spazio-1);
+}
+
+.account-bar__who {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--testo-secondario);
+}
+
+.account-bar__who strong {
+  color: var(--abisso);
 }
 
 /* Breadcrumb */
@@ -548,7 +586,7 @@ svg {
 }
 
 .lead {
-  max-width: var(--lettura);
+  max-width: var(--lettura-guida);
   margin-top: var(--spazio-4);
   color: var(--testo-secondario);
   font-size: var(--testo-guida);
@@ -585,6 +623,10 @@ svg {
   margin-top: var(--spazio-6);
 }
 
+.page-head .actions {
+  margin-top: var(--spazio-6);
+}
+
 .hero__art {
   width: 100%;
   max-width: 26rem;
@@ -615,6 +657,12 @@ svg {
 @media (max-width: 29.99rem) {
   .actions > .button {
     flex: 1 1 100%;
+  }
+
+  /* The main button of a form takes the whole width on phones, like the search button. */
+  .button--block,
+  form:has(> .button--block) {
+    width: 100%;
   }
 }
 
@@ -854,6 +902,25 @@ button.button {
   outline-color: var(--fuoco-su-scuro);
 }
 
+/* Closing block of an editorial page: what to do next */
+.next-step {
+  padding: clamp(1.5rem, 4vw, 2.5rem);
+  background: var(--carta);
+  border: 1px solid var(--bordo);
+  border-radius: var(--raggio-grande);
+  box-shadow: var(--ombra-1);
+}
+
+.next-step > p:not(.actions) {
+  max-width: var(--lettura);
+  margin-top: var(--spazio-3);
+  color: var(--testo-secondario);
+}
+
+.next-step .actions {
+  margin-top: var(--spazio-6);
+}
+
 /* Lists */
 .list {
   display: grid;
@@ -967,6 +1034,7 @@ ol.list > li::before {
 /* Badges and alerts */
 .badge {
   display: inline-block;
+  max-width: 100%;
   padding: 0.1875rem 0.75rem;
   border: 1px solid rgb(0 95 115 / 0.28);
   border-radius: 0.875rem;
@@ -1133,6 +1201,11 @@ form.stack > .field {
   max-width: 22rem;
 }
 
+/* A choice needs room for its longest option, which a narrow column would cut. */
+.form-row > .field:has(> select) {
+  flex-basis: 16rem;
+}
+
 .field--wide,
 .stack > .field--wide {
   width: min(100%, 40rem);
@@ -1207,10 +1280,36 @@ form.stack > .field {
 .checks input,
 input[type='checkbox'],
 input[type='radio'] {
+  flex: none;
   width: 1.25rem;
   height: 1.25rem;
   margin: 0;
   accent-color: var(--oceano);
+}
+
+/* Choices with a small picture: one per line on phones, in columns where there is room. */
+.checks--media {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 17rem), 1fr));
+}
+
+.checks--media legend {
+  grid-column: 1 / -1;
+}
+
+.checks--media label {
+  display: flex;
+  padding-block: var(--spazio-2);
+  line-height: 1.35;
+}
+
+.checks__thumb {
+  flex: none;
+  width: 4.5rem;
+  height: 3rem;
+  object-fit: cover;
+  border-radius: var(--raggio-piccolo);
+  background: var(--spuma);
 }
 
 .group {
@@ -1389,7 +1488,8 @@ input[type='radio'] {
 
 /* Tables of the reserved area */
 /* Shadows at the edges appear only while there is more table to scroll to.
-   Positioned, so that hidden labels inside wide tables do not widen the page. */
+   Positioned, so that hidden labels inside wide tables do not widen the page.
+   The wrapper is a region the keyboard can reach and scroll. */
 .table-wrap {
   position: relative;
   width: 100%;
@@ -1453,6 +1553,122 @@ input[type='radio'] {
   white-space: nowrap;
 }
 
+/* Amounts and counts line up at the end of their column. */
+.table .num {
+  text-align: end;
+}
+
+/* The ring of the scrolling region is drawn inside, where its own edge cannot cut it. */
+.table-wrap:focus-visible {
+  outline-offset: -3px;
+  border-radius: var(--raggio-grande);
+}
+
+/* Phones: no sideways scrolling. Every row is a card and every cell shows the name of its
+   column before the value. The header row stays for assistive technology only. */
+@media (max-width: 39.99rem) {
+  .table-wrap {
+    overflow: visible;
+    background: none;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .table,
+  .table tr,
+  .table th,
+  .table td {
+    display: block;
+  }
+
+  .table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .table tbody {
+    display: grid;
+    gap: var(--spazio-3);
+  }
+
+  .table tbody tr {
+    padding: var(--spazio-2) var(--spazio-4);
+    background: var(--carta);
+    border: 1px solid var(--bordo);
+    border-radius: var(--raggio-grande);
+    box-shadow: var(--ombra-1);
+  }
+
+  .table tbody th,
+  .table tbody td {
+    padding: var(--spazio-2) 0;
+    border-bottom: 0;
+  }
+
+  .table tbody tr > * + * {
+    border-top: 1px solid var(--bordo);
+  }
+
+  /* In a card every value starts on the same line, amounts included. */
+  .table tbody .num {
+    text-align: start;
+  }
+
+  .table tbody th {
+    font-size: var(--testo-corpo);
+    font-weight: var(--peso-forte);
+  }
+
+  /* The name of the column sits beside the value. It is drawn, not read twice:
+     assistive technology already gets it from the header row. */
+  .table tbody td {
+    position: relative;
+    min-height: 2.5rem;
+    padding-inline-start: 42%;
+  }
+
+  .table tbody td::before {
+    content: attr(data-label);
+    content: attr(data-label) / '';
+    position: absolute;
+    inset-inline-start: 0;
+    width: 40%;
+    color: var(--testo-secondario);
+    font-weight: var(--peso-medio);
+    overflow-wrap: anywhere;
+  }
+
+  .table tbody td:first-child,
+  .table tbody td:has(> .inline-form) {
+    white-space: normal;
+  }
+
+  .table tbody td:empty {
+    display: none;
+  }
+
+  /* Actions take the whole width, under their label. */
+  .table tbody td:has(> .inline-form) {
+    padding-inline-start: 0;
+  }
+
+  .table tbody td:has(> .inline-form)::before {
+    position: static;
+    display: block;
+    width: auto;
+    margin-bottom: var(--spazio-1);
+  }
+
+  .table .inline-form {
+    flex-wrap: wrap;
+  }
+}
+
 /* Entry pass */
 .pass {
   width: min(100%, 20rem);
@@ -1510,9 +1726,11 @@ input[type='radio'] {
   text-wrap: balance;
 }
 
+/* Each column keeps its own height: a short list is not stretched to match a long one. */
 .site-columns {
   display: grid;
   gap: var(--spazio-4);
+  align-items: start;
 }
 
 .site-columns > div {

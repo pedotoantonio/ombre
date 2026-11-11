@@ -1,8 +1,10 @@
-import type { Dictionary } from './it';
+import type { DayParts, Dictionary } from './it';
 
 export function makeEn(brand: string): Dictionary {
   return {
     meta: {
+      pageTitle: (page: string) => `${page} | ${brand}`,
+      beachPageTitle: (page: string, club: string) => `${page} · ${club} | ${brand}`,
       siteDescription: `${brand} is a service for booking a day at a beach club online, and for letting season pass holders share the days they do not use their spot, with the manager's approval.`,
     },
     nav: {
@@ -21,6 +23,20 @@ export function makeEn(brand: string): Dictionary {
     },
     notice: {
       preLaunch: 'Service in preparation: bookings are not open yet.',
+      demo: 'Demonstration environment: sample data, no real payment.',
+    },
+    notFound: {
+      title: 'Page not found',
+      lead: 'This address does not match any page. It may be mistyped, or the page may no longer exist.',
+      home: 'Go to the home page',
+      explore: 'Find a beach club',
+    },
+    dates: {
+      period: (from: DayParts, to: DayParts) => {
+        if (from.year !== to.year) return `from ${from.day} ${from.month} ${from.year} to ${to.day} ${to.month} ${to.year}`;
+        if (from.month !== to.month) return `from ${from.day} ${from.month} to ${to.day} ${to.month} ${to.year}`;
+        return `from ${from.day} to ${to.day} ${to.month} ${to.year}`;
+      },
     },
     footer: {
       tagline: 'Your place in the sun, worry-free.',
@@ -43,6 +59,8 @@ export function makeEn(brand: string): Dictionary {
     },
     booking: {
       demoBadge: 'Demo beach club: sample data',
+      demoBadgeShort: 'Demo: sample data',
+      chooseCta: 'Choose the day and the spot',
       beachTitle: (name: string, locality: string) => `${name} in ${locality}: umbrellas and booking`,
       beachDescription: (name: string, locality: string) =>
         `Free spots, equipment and day price at ${name}, ${locality}. Choose the date and hold your spot.`,
@@ -90,6 +108,10 @@ export function makeEn(brand: string): Dictionary {
       holdEndedText: 'The hold has run out or has been released. The spot is available again.',
       planTitle: 'Beach map',
       planLead: 'Each umbrella is a spot. Choose a free one to see its summary and continue.',
+      planRegion: 'Beach map, row by row',
+      planScrollHint: 'Scroll sideways to see the whole row.',
+      planSea: 'Sea',
+      planSeaNote: 'on the side of row 1',
       freeCount: (free: number, total: number) => (free === 1 ? `1 free spot out of ${total}` : `${free} free spots out of ${total}`),
       legendTitle: 'Legend',
       status: { free: 'Free', shared: 'Free, shared day', unavailable: 'Not available', selected: 'Your choice' },
@@ -110,6 +132,8 @@ export function makeEn(brand: string): Dictionary {
       password: 'Password',
       signInButton: 'Sign in',
       signOut: 'Sign out',
+      barLabel: 'Your sign-in',
+      signedInAs: 'Signed in as',
       overviewTitle: 'Your area',
       hello: (name: string) => `Hello ${name}.`,
       beachesTitle: 'Beach clubs',
@@ -150,6 +174,7 @@ export function makeEn(brand: string): Dictionary {
       twoFactorConfirm: 'Confirm and switch on',
       signInCode: 'Verification code (only if you switched two-step verification on)',
       manageTitle: (name: string) => `Managing ${name}`,
+      manageShort: 'Management',
       day: 'Day',
       show: 'Show',
       inventoryTitle: 'Spots of the day',
@@ -216,7 +241,12 @@ export function makeEn(brand: string): Dictionary {
       suspend: 'Suspend',
       resume: 'Resume',
       reportTitle: 'Financial summary',
-      reportLead: (from: string, to: string) => `From ${from} to ${to}. Shared sales are counted apart.`,
+      reportLead: (period: string) => `${period.charAt(0).toUpperCase()}${period.slice(1)}. Shared sales are counted apart.`,
+      reportSalesTable: 'Sales in the period',
+      reportSharesTable: 'Split of the shares',
+      item: 'Item',
+      bookingsCount: 'Bookings',
+      amount: 'Amount',
       sharedSales: 'Shared sales',
       ordinarySales: 'Ordinary sales',
       parties: { season_holder: 'Season holders', beach_club: 'Beach club', platform: 'Platform' },
@@ -224,7 +254,7 @@ export function makeEn(brand: string): Dictionary {
       accrued: 'Accrued',
       refundsDue: 'Refunds to issue',
       seasonTitle: (spot: string, beach: string) => `Spot ${spot}, ${beach}`,
-      seasonLead: (from: string, to: string) => `Season pass valid from ${from} to ${to}.`,
+      seasonLead: (period: string) => `Season pass valid ${period}.`,
       proposeTitle: 'Offer the days you are away',
       weekdays: 'Days of the week (none: all)',
       weekdayNames: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
@@ -271,7 +301,8 @@ export function makeEn(brand: string): Dictionary {
       template: 'Design template',
       templates: { riviera: 'Riviera', boutique: 'Boutique', essential: 'Essential' },
       italian: 'Italian texts',
-      english: 'English texts (optional: if left empty the English page shows no texts)',
+      english: 'English texts',
+      englishNote: 'Optional: if you leave them empty, the English page shows no texts.',
       tagline: 'Introductory sentence',
       description: 'Description',
       services: 'Services, one per line',
@@ -422,6 +453,9 @@ export function makeEn(brand: string): Dictionary {
           'Cancellation terms are set by the beach club. The ones saved in your booking apply.',
           'If you see “Payment under review” you do not need to pay again: the outcome is checked and your booking updated.',
         ],
+        nextTitle: 'Start from the search',
+        nextText: 'Enter a place and a day and see the free spots, with the price for the day.',
+        nextAction: 'Find a beach club',
       },
       forBeachClubs: {
         title: `${brand} for beach clubs: website and bookings`,
@@ -459,6 +493,10 @@ export function makeEn(brand: string): Dictionary {
         ],
         pricingTitle: 'Costs',
         pricingText: 'Plans and fees will be published here at the end of the pilot phase.',
+        nextTitle: 'See the portal as a guest sees it',
+        nextText: 'From the Explore page guests search for a day, open the beach club page and choose their spot.',
+        nextAction: 'Go to Explore',
+        nextSecondary: 'How it works',
       },
       forSeasonHolders: {
         title: `Sharing your season umbrella with ${brand}`,
@@ -495,7 +533,7 @@ export function makeEn(brand: string): Dictionary {
         title: `Help and frequently asked questions | ${brand}`,
         description: `Answers to the most common questions about ${brand}: booking a day, final price, cancellation, pass and beach entry.`,
         h1: 'Help',
-        lead: 'Answers to the questions we receive most often.',
+        lead: 'Short answers about booking, price, cancellation and getting onto the beach.',
         faqTitle: 'Frequently asked questions',
         faq: [
           {
@@ -523,6 +561,9 @@ export function makeEn(brand: string): Dictionary {
             a: 'The service is in preparation and will start from a pilot area. Active beach clubs will appear on the Explore page.',
           },
         ],
+        nextTitle: 'Search for a day at the beach',
+        nextText: 'On the Explore page you find the active beach clubs and the free spots for the day you choose.',
+        nextAction: 'Find a beach club',
       },
     },
   };

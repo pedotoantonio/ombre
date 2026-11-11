@@ -1,5 +1,6 @@
+import type { Metadata } from 'next';
 import { bookingSegment, isLocale } from '@ombre/shared';
-import { HoldView, privateMetadata } from '@/components/beach';
+import { HoldView, stepMetadata } from '@/components/beach';
 import { BookingView } from '@/components/booking';
 
 interface Props {
@@ -7,7 +8,10 @@ interface Props {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
-export const metadata = privateMetadata;
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { lang, slug, beach, step } = await params;
+  return stepMetadata(lang, slug, beach, step);
+}
 
 export default async function Page({ params, searchParams }: Props) {
   const { lang, slug, beach, step, hold } = await params;
