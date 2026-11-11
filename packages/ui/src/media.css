@@ -2,6 +2,7 @@
 .site-cover {
   display: block;
   width: 100%;
+  height: auto;
   aspect-ratio: 16 / 9;
   object-fit: cover;
   border-radius: var(--raggio-grande);
@@ -26,6 +27,7 @@
 .site-gallery img {
   display: block;
   width: 100%;
+  height: auto;
   aspect-ratio: 3 / 2;
   object-fit: cover;
   border-radius: var(--raggio);
