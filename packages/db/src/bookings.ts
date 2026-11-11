@@ -3,6 +3,7 @@ import { and, asc, eq, sql } from 'drizzle-orm';
 import { canTransition } from '@ombre/shared';
 import { withActor, withBeach, type Database, type Transaction } from './client';
 import { DomainError } from './inventory';
+import { recordRefundDue, recordSale } from './ledger';
 import type { Actor } from './manage';
 import { accessEvent, auditEvent, beach, booking, hold, inventoryDay, pass, payment, promotion, providerEvent, refund, spot } from './schema';
 
@@ -151,12 +152,14 @@ export async function applyPaymentOutcome(db: Database, notice: ProviderNotice):
       await tx.update(inventoryDay).set({ state: 'occupied', activeHoldId: null, updatedAt: sql`now()` }).where(eq(inventoryDay.id, day.id));
       await tx.update(booking).set({ status: 'confirmed', confirmedAt: sql`now()` }).where(eq(booking.id, reserved.id));
       await tx.insert(pass).values({ beachId, bookingId: reserved.id });
+      await recordSale(tx, beachId, { bookingId: reserved.id, inventoryDayId: day.id, totalCents: reserved.totalCents });
       return 'confirmed';
     }
 
     // The day went to someone else while the payment was in flight: the money goes back.
     await tx.update(booking).set({ status: 'cancelled' }).where(eq(booking.id, reserved.id));
     await tx.insert(refund).values({ beachId, paymentId: paid.id, amountCents: paid.amountCents, reason: 'inventory_unavailable' });
+    await recordRefundDue(tx, beachId, reserved.id, paid.amountCents);
     return 'refund_due';
   });
 }

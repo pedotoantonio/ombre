@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { runMigrations, setAppPassword } from './migrate';
 import { upsertUser } from './auth';
-import { demoAccounts, seedDemo } from './seed';
+import { demoAccounts, demoHolderEmail, seedDemo } from './seed';
 
 // Applies migrations, then the optional steps asked for through the environment.
 const adminUrl = process.env.OMBRE_DB_ADMIN_URL;
@@ -38,6 +38,7 @@ if (process.env.OMBRE_SEED_DEMO === 'true') {
     for (const account of demoAccounts) {
       await upsertUser(adminUrl, { email: account.email, name: account.name, password }, [{ beachId, role: account.role }]);
     }
+    await upsertUser(adminUrl, { email: demoHolderEmail, name: 'Stagionale dimostrativo', password });
     console.log('Demo accounts ready');
   }
 }

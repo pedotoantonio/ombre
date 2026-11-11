@@ -14,6 +14,8 @@ export const beach = pgTable('beach', {
   timezone: text('timezone').notNull().default('Europe/Rome'),
   status: beachStatus('status').notNull().default('draft'),
   demo: boolean('demo').notNull().default(false),
+  dailySharedCap: integer('daily_shared_cap'),
+  sharedPriceCents: integer('shared_price_cents'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -46,6 +48,7 @@ export const inventoryDay = pgTable('inventory_day', {
   priceCents: integer('price_cents').notNull(),
   shared: boolean('shared').notNull().default(false),
   activeHoldId: uuid('active_hold_id'),
+  contractId: uuid('contract_id'),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -147,4 +150,61 @@ export const accessEvent = pgTable('access_event', {
   kind: accessKind('kind').notNull(),
   operatorUserId: uuid('operator_user_id').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const contractStatus = pgEnum('contract_status', ['active', 'suspended', 'ended']);
+export const sharingMode = pgEnum('sharing_mode', ['per_day', 'automatic']);
+export const proposalStatus = pgEnum('proposal_status', ['proposed', 'approved', 'rejected', 'withdrawn']);
+export const partyKind = pgEnum('party', ['season_holder', 'beach_club', 'platform']);
+export const allocationState = pgEnum('allocation_state', ['expected', 'accrued', 'suspended', 'settling', 'settled', 'adjusted']);
+
+export const seasonContract = pgTable('season_contract', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  beachId: uuid('beach_id').notNull(),
+  holderUserId: uuid('holder_user_id').notNull(),
+  spotId: uuid('spot_id').notNull(),
+  validFrom: date('valid_from', { mode: 'string' }).notNull(),
+  validTo: date('valid_to', { mode: 'string' }).notNull(),
+  status: contractStatus('status').notNull().default('active'),
+  sharingMode: sharingMode('sharing_mode').notNull().default('per_day'),
+});
+
+export const availabilityProposal = pgTable('availability_proposal', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  beachId: uuid('beach_id').notNull(),
+  contractId: uuid('contract_id').notNull(),
+  day: date('day', { mode: 'string' }).notNull(),
+  status: proposalStatus('status').notNull().default('proposed'),
+  decidedBy: uuid('decided_by'),
+  decidedAt: timestamp('decided_at', { withTimezone: true }),
+});
+
+export const splitRule = pgTable('split_rule', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  beachId: uuid('beach_id').notNull(),
+  seasonHolderBps: integer('season_holder_bps').notNull(),
+  beachClubBps: integer('beach_club_bps').notNull(),
+  platformBps: integer('platform_bps').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const allocation = pgTable('allocation', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  beachId: uuid('beach_id').notNull(),
+  bookingId: uuid('booking_id').notNull(),
+  party: partyKind('party').notNull(),
+  beneficiaryUserId: uuid('beneficiary_user_id'),
+  bps: integer('bps').notNull(),
+  amountCents: integer('amount_cents').notNull(),
+  state: allocationState('state').notNull().default('expected'),
+  splitRuleId: uuid('split_rule_id'),
+});
+
+export const ledgerEntry = pgTable('ledger_entry', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  beachId: uuid('beach_id').notNull(),
+  bookingId: uuid('booking_id').notNull(),
+  kind: text('kind').notNull(),
+  party: partyKind('party'),
+  amountCents: integer('amount_cents').notNull(),
 });

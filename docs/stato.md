@@ -30,10 +30,16 @@ Aggiornato all'11/11/2026.
     firmato, rimborso registrato quando la giornata non è più disponibile;
   - reception nell'API: ingresso, uscita e rientro con il testo del QR o il codice breve,
     elenco delle prenotazioni del giorno;
+  - condivisione stagionale nell'API: abbonamenti registrati dal gestore, proposte dello
+    stagionale anche con ricorrenza, autorizzazione giornata per giornata o automatica,
+    limite giornaliero, ritiro delle date libere, sospensione dell'abbonamento;
+  - economia nell'API: ripartizione di ogni vendita secondo le percentuali in vigore,
+    registro che si può solo estendere, maturazione a fine giornata, riepilogo per lo
+    stabilimento e rendiconto dello stagionale senza dati dell'ospite;
   - `Dockerfile` e compose con database, migrazioni, API e sito.
 - **Non fatto**: secondo fattore di accesso, inviti e recupero password, aree riservate (ospite, stagionale, gestione,
-  reception, console), condivisione stagionale, annullamento da parte dell'ospite,
-  pagamenti reali, rendiconto, worker. Dopo la riserva il percorso si ferma: il pagamento non esiste
+  reception, console), annullamento da parte dell'ospite, pagamenti e liquidazioni
+  reali, inviti agli stagionali (oggi l'utente deve già esistere), worker. Dopo la riserva il percorso si ferma: il pagamento non esiste
   ancora e la pagina lo dice. Nessun dominio registrato, nessuna pubblicazione. Il sito dichiara che il
   servizio è in preparazione e chiede di non essere indicizzato.
 
@@ -42,7 +48,7 @@ Aggiornato all'11/11/2026.
 | Controllo | Esito |
 |---|---|
 | Lint e controllo dei tipi | Superati |
-| Test (45, di cui 27 su un PostgreSQL vero) | Superati |
+| Test (57, di cui 36 su un PostgreSQL vero) | Superati |
 | Due acquisti sulla stessa giornata | Dodici richieste simultanee, una sola riserva; ripetuto sull'API in container con dieci richieste: un 201 e nove 409 |
 | Prezzo manipolato nel browser | L'importo inviato dal client è ignorato: vale quello del server |
 | MARE10 su €30 | Totale €27, salvato nella riserva e immutato se il listino cambia |
@@ -55,6 +61,8 @@ Aggiornato all'11/11/2026.
 | Notifica del fornitore ripetuta o fuori ordine | Applicata una volta sola: nessuna conferma o pass duplicato; firma errata rifiutata |
 | Pagamento fallito | Prenotazione annullata, postazione di nuovo libera, utilizzo della promozione restituito |
 | Due scansioni del pass | Sei scansioni simultanee, un solo ingresso; uscita e rientro controllati; pass contraffatto, di un altro giorno o annullato rifiutato |
+| Condivisione stagionale | Giornata visibile solo dopo l'autorizzazione; limite giornaliero rispettato anche con due autorizzazioni simultanee; ritiro rifiutato su una data riservata; la sospensione ferma le vendite e non tocca le prenotazioni confermate |
+| Ripartizione | Vendita condivisa a €27: 13,50 / 10,80 / 2,70. Giornata ordinaria: nessuna quota stagionale. Somma delle quote sempre uguale al totale. Registro non modificabile nemmeno dal proprietario del database |
 | Chiave di idempotenza | Stessa richiesta, stessa riserva; richiesta diversa, errore esplicito |
 | Pagine servite dal container (192 verifiche su 12 pagine) | Superate |
 | Percorso di riserva sul sito in container (24 verifiche) | Superato: MARE10 da 30,00 a 27,00, doppio invio del modulo senza doppia riserva, secondo acquirente rimandato alla scelta, modulo inviato da un altro sito rifiutato, dati dimostrativi non indicizzabili |
@@ -73,11 +81,11 @@ ripulisce le riserve scadute (oggi la scadenza è valutata al momento della rich
 Un incremento operativo verificabile in ambiente di prova che colleghi:
 sito personale → autorizzazione stagionale → acquisto → inventario → reception →
 rendiconto. Inventario, riserva e percorso nel sito ci sono; il prossimo anello sono
-la condivisione stagionale con le autorizzazioni del gestore, poi il rendiconto.
+il worker per i lavori in coda, poi le aree riservate nel sito.
 
 ## Passi successivi in ordine
 
-1. Condivisione stagionale, worker con outbox, rendiconto.
+1. Worker con outbox: pulizia delle riserve, chiusura della giornata, notifiche.
 2. Aree riservate nel sito, sito del bagno con modelli e revisioni.
 3. In parallelo, fuori dal codice: chiudere le decisioni di avvio (marchio e domini,
    soggetto venditore, provider pagamenti, condizioni) e scegliere i partner pilota.

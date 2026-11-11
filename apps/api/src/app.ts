@@ -7,30 +7,40 @@ import {
   applyPaymentOutcome,
   authorize,
   checkAccess,
+  createContract,
+  decideProposal,
   DomainError,
   findActiveBeach,
   getBooking,
   getHold,
+  holderStatement,
   listActiveBeaches,
   listAvailability,
   listBookings,
   listInventory,
+  listMyContracts,
+  listProposals,
   listMemberships,
   login,
   logout,
   nextAvailableDay,
+  proposeDays,
   publishDay,
+  reportSummary,
   resolveSession,
   setBlocked,
+  setContractStatus,
   setPrice,
+  setSharingSettings,
   startCheckout,
+  withdrawDay,
   quoteSpot,
   type Database,
   type DomainErrorCode,
   type PublicBeach,
   type SessionUser,
 } from '@ombre/db';
-import type { Action, DayQuote } from '@ombre/shared';
+import { expandRecurrence, type Action, type DayQuote } from '@ombre/shared';
 
 export interface AppOptions {
   db: Database;
@@ -68,6 +78,7 @@ const domainStatus: Record<DomainErrorCode, 401 | 403 | 404 | 409 | 422 | 429> =
   hold_expired: 409,
   pass_invalid: 422,
   wrong_day: 409,
+  cap_reached: 409,
 };
 
 const slugSchema = z.string().regex(/^[a-z0-9]+(-[a-z0-9]+)*$/).max(80);
@@ -95,6 +106,21 @@ const noticeSchema = z.object({
   outcome: z.enum(['succeeded', 'failed']),
 });
 const accessSchema = z.object({ credential: z.string().trim().min(8).max(120), kind: z.enum(['entry', 'exit']) });
+const contractSchema = z.object({
+  holderEmail: z.email().max(200),
+  spotId: z.uuid(),
+  validFrom: daySchema,
+  validTo: daySchema,
+  sharingMode: z.enum(['per_day', 'automatic']).default('per_day'),
+});
+const sharingSettingsSchema = z.object({ dailySharedCap: z.number().int().min(0).max(10_000).nullable(), sharedPriceCents: priceSchema.nullable() });
+const decisionSchema = z.object({ approve: z.boolean(), priceCents: priceSchema.optional() });
+const proposeSchema = z
+  .object({
+    days: z.array(daySchema).min(1).max(366).optional(),
+    recurrence: z.object({ from: daySchema, to: daySchema, weekdays: z.array(z.number().int().min(1).max(7)).min(1).max(7) }).optional(),
+  })
+  .refine((value) => Boolean(value.days) !== Boolean(value.recurrence));
 const idempotencyKeySchema = z.string().min(8).max(200).regex(/^[\x21-\x7e]+$/);
 
 function parse<T>(schema: z.ZodType<T>, value: unknown, what: string): T {
@@ -245,6 +271,90 @@ export function createApp(options: AppOptions): Hono {
     const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'bookings.read');
     const day = parse(daySchema, c.req.query('day'), 'day');
     return c.json({ day, currency: 'EUR', bookings: await listBookings(db, actor, day) });
+  });
+
+  // ---- Season holders: their own passes, proposals and statement ----
+  app.get('/v1/season/contracts', async (c) => {
+    const user = await currentUser(c.req.header('Authorization'));
+    const contracts = await listMyContracts(db, user.userId);
+    return c.json({
+      contracts: contracts.map(({ contractId, beachSlug, beachName, spotCode, validFrom, validTo, status, sharingMode }) => ({
+        contractId,
+        beachSlug,
+        beachName,
+        spotCode,
+        validFrom,
+        validTo,
+        status,
+        sharingMode,
+      })),
+    });
+  });
+
+  app.post('/v1/season/contracts/:contractId/proposals', async (c) => {
+    const user = await currentUser(c.req.header('Authorization'));
+    const contractId = parse(z.uuid(), c.req.param('contractId'), 'season pass');
+    const request = parse(proposeSchema, await body(c.req.raw), 'request');
+    let days: string[];
+    try {
+      days = request.days ?? expandRecurrence(request.recurrence!);
+    } catch {
+      throw new HttpError(400, 'invalid_request', 'Invalid recurrence');
+    }
+    return c.json(await proposeDays(db, user.userId, contractId, days));
+  });
+
+  app.post('/v1/season/contracts/:contractId/withdrawals', async (c) => {
+    const user = await currentUser(c.req.header('Authorization'));
+    const contractId = parse(z.uuid(), c.req.param('contractId'), 'season pass');
+    const { day } = parse(z.object({ day: daySchema }), await body(c.req.raw), 'request');
+    await withdrawDay(db, user.userId, contractId, day);
+    return c.body(null, 204);
+  });
+
+  app.get('/v1/season/contracts/:contractId/statement', async (c) => {
+    const user = await currentUser(c.req.header('Authorization'));
+    const contractId = parse(z.uuid(), c.req.param('contractId'), 'season pass');
+    return c.json({ currency: 'EUR', days: await holderStatement(db, user.userId, contractId) });
+  });
+
+  // ---- Beach club: season passes, proposals, reports ----
+  app.post('/v1/manage/beaches/:slug/contracts', async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'sharing.manage');
+    return c.json(await createContract(db, actor, parse(contractSchema, await body(c.req.raw), 'request')), 201);
+  });
+
+  app.post('/v1/manage/beaches/:slug/contracts/:contractId/status', async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'sharing.manage');
+    const { status } = parse(z.object({ status: z.enum(['active', 'suspended']) }), await body(c.req.raw), 'request');
+    await setContractStatus(db, actor, parse(z.uuid(), c.req.param('contractId'), 'season pass'), status);
+    return c.body(null, 204);
+  });
+
+  app.put('/v1/manage/beaches/:slug/sharing-settings', async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'sharing.manage');
+    await setSharingSettings(db, actor, parse(sharingSettingsSchema, await body(c.req.raw), 'request'));
+    return c.body(null, 204);
+  });
+
+  app.get('/v1/manage/beaches/:slug/proposals', async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'sharing.manage');
+    const status = parse(z.enum(['proposed', 'approved', 'rejected', 'withdrawn']).optional(), c.req.query('status'), 'status');
+    return c.json({ proposals: await listProposals(db, actor, status) });
+  });
+
+  app.post('/v1/manage/beaches/:slug/proposals/:proposalId/decision', async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'sharing.manage');
+    const decision = parse(decisionSchema, await body(c.req.raw), 'request');
+    await decideProposal(db, actor, parse(z.uuid(), c.req.param('proposalId'), 'proposal'), decision);
+    return c.body(null, 204);
+  });
+
+  app.get('/v1/manage/beaches/:slug/reports/summary', async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'reports.read');
+    const from = parse(daySchema, c.req.query('from'), 'start day');
+    const to = parse(daySchema, c.req.query('to'), 'end day');
+    return c.json({ currency: 'EUR', ...(await reportSummary(db, actor, from, to)) });
   });
 
   app.get('/v1/health', async (c) => {
