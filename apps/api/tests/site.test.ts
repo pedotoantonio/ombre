@@ -29,7 +29,7 @@ describe.skipIf(!testAdminUrl)('beach club website: draft, publish, restore', ()
     await upsertUser(database.adminUrl, { email: 'due@scoglio.example', name: 'Due', password }, [{ beachId: beach.beachId, role: 'manager' }]);
     await upsertUser(database.adminUrl, { email: 'banco@scoglio.example', name: 'Banco', password }, [{ beachId: beach.beachId, role: 'reception' }]);
     await upsertUser(database.adminUrl, { email: 'fuori@altro.example', name: 'Fuori', password }, [{ beachId: other.beachId, role: 'manager' }]);
-    app = createApp({ db: database.app.db, holdSeconds: 600, signingSecret: 'segreto-di-prova-lungo-almeno-32-caratteri', log: () => undefined });
+    app = createApp({ db: database.app.db, rateLimiter: { hit: () => 0 }, holdSeconds: 600, signingSecret: 'segreto-di-prova-lungo-almeno-32-caratteri', log: () => undefined });
     for (const name of ['uno@scoglio', 'due@scoglio', 'banco@scoglio', 'fuori@altro']) {
       tokens[name.split('@')[0]!] = ((await call('POST', '/v1/auth/login', { email: `${name}.example`, password })).body as { token: string }).token;
     }

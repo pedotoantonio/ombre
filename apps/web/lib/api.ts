@@ -43,9 +43,25 @@ function baseUrl(): string {
   return (process.env.OMBRE_API_URL ?? 'http://127.0.0.1:3211').replace(/\/+$/, '');
 }
 
+/** Address of the visitor, passed on so that the API can limit requests per person. */
+async function clientAddress(): Promise<Record<string, string>> {
+  try {
+    const { headers } = await import('next/headers');
+    const forwarded = (await headers()).get('x-forwarded-for')?.split(',')[0]?.trim();
+    return forwarded ? { 'X-Forwarded-For': forwarded } : {};
+  } catch {
+    return {};
+  }
+}
+
 async function call<T>(path: string, init?: RequestInit): Promise<ApiResult<T>> {
   try {
-    const response = await fetch(baseUrl() + path, { ...init, cache: 'no-store', signal: AbortSignal.timeout(5000) });
+    const response = await fetch(baseUrl() + path, {
+      ...init,
+      headers: { ...(init?.headers as Record<string, string> | undefined), ...(await clientAddress()) },
+      cache: 'no-store',
+      signal: AbortSignal.timeout(5000),
+    });
     const text = await response.text();
     const body = (text ? JSON.parse(text) : null) as unknown;
     if (response.ok) return { ok: true, data: body as T };

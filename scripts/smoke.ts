@@ -91,6 +91,7 @@ async function checkPage(path: string, lang: 'it' | 'en', pair: { it: string; en
 
   check(html.includes(`href="${pair[lang === 'it' ? 'en' : 'it']}"`), `${path}: no link to the other language`);
   check(response.headers.get('x-content-type-options') === 'nosniff', `${path}: missing security headers`);
+  check((response.headers.get('content-security-policy') ?? '').includes("frame-ancestors 'none'"), `${path}: missing content security policy`);
 }
 
 async function expectStatus(path: string, status: number, location?: string) {

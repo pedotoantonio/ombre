@@ -12,7 +12,7 @@ describe.skipIf(!testAdminUrl)('API /v1 on the demo beach club', () => {
   beforeAll(async () => {
     database = await createTestDatabase(testAdminUrl!);
     await seedDemo(database.adminUrl);
-    app = createApp({ db: database.app.db, holdSeconds: 600, signingSecret: 'segreto-di-prova-lungo-almeno-32-caratteri', log: (_message, error) => logged.push(error) });
+    app = createApp({ db: database.app.db, rateLimiter: { hit: () => 0 }, holdSeconds: 600, signingSecret: 'segreto-di-prova-lungo-almeno-32-caratteri', log: (_message, error) => logged.push(error) });
   });
 
   afterAll(async () => {

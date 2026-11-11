@@ -20,7 +20,7 @@ describe.skipIf(!testAdminUrl)('sign-in, roles and inventory management', () => 
     const other = await insertBeach(database.admin, 'altro', { spots: 1, day });
     await upsertUser(database.adminUrl, { email: 'gestore@altro.example', name: 'Altro gestore', password }, [{ beachId: other.beachId, role: 'manager' }]);
     await upsertUser(database.adminUrl, { email: 'bloccato@altro.example', name: 'Da bloccare', password });
-    app = createApp({ db: database.app.db, holdSeconds: 600, signingSecret: 'segreto-di-prova-lungo-almeno-32-caratteri', log: () => undefined });
+    app = createApp({ db: database.app.db, rateLimiter: { hit: () => 0 }, holdSeconds: 600, signingSecret: 'segreto-di-prova-lungo-almeno-32-caratteri', log: () => undefined });
 
     for (const email of [...demoAccounts.map((account) => account.email), 'gestore@altro.example']) {
       const response = await send('POST', '/v1/auth/login', { email, password });

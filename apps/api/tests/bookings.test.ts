@@ -33,7 +33,7 @@ describe.skipIf(!testAdminUrl)('booking, test payment, pass and front desk', () 
     for (const role of ['manager', 'reception', 'accounting'] as const) {
       await upsertUser(database.adminUrl, { email: `${role}@oggi.example`, name: role, password }, [{ beachId: beach.beachId, role }]);
     }
-    app = createApp({ db: database.app.db, holdSeconds: 600, signingSecret, sandboxWebhookSecret, log: () => undefined });
+    app = createApp({ db: database.app.db, rateLimiter: { hit: () => 0 }, holdSeconds: 600, signingSecret, sandboxWebhookSecret, log: () => undefined });
     for (const role of ['manager', 'reception', 'accounting']) {
       const response = await json('POST', '/v1/auth/login', { email: `${role}@oggi.example`, password });
       tokens[role] = (response.body as { token: string }).token;
@@ -134,7 +134,7 @@ describe.skipIf(!testAdminUrl)('booking, test payment, pass and front desk', () 
     expect(passes.rowCount).toBe(1);
 
     expect((await notify(booked.payment.reference, 'succeeded', undefined, 'segreto-sbagliato')).status).toBe(401);
-    const noProvider = createApp({ db: database.app.db, holdSeconds: 600, signingSecret, log: () => undefined });
+    const noProvider = createApp({ db: database.app.db, rateLimiter: { hit: () => 0 }, holdSeconds: 600, signingSecret, log: () => undefined });
     expect((await noProvider.request('/v1/payment-webhooks/sandbox', { method: 'POST', body: '{}' })).status).toBe(503);
   });
 

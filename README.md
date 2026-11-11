@@ -49,7 +49,15 @@ pnpm test:db          # tutti i test, compresi quelli su un PostgreSQL usa e get
 docker compose up -d --build   # sito su 127.0.0.1:3210, API su 127.0.0.1:3211, database interno
 pnpm smoke            # controlli sulle pagine servite
 pnpm smoke:api        # controlli sull'API (serve OMBRE_SEED_DEMO=true all'avvio)
+pnpm smoke:flow       # percorso di riserva sul sito
+pnpm smoke:booking    # prenotazione, pagamento di prova, quote e ruoli sull'API
+pnpm smoke:areas      # aree riservate sul sito
+pnpm smoke:site       # editor del sito dello stabilimento
+sh scripts/backup.sh ombre backups              # salva il database
+sh scripts/restore-check.sh backups/FILE ombre  # prova che il salvataggio si ripristina
 ```
+
+Il documento dell'API è servito su `/v1/openapi.json`.
 
 All'avvio il servizio `migrate` applica le migrazioni e prepara il ruolo dell'applicazione;
 con `OMBRE_SEED_DEMO=true` crea anche lo stabilimento dimostrativo «Bagno delle Dune».

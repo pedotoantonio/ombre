@@ -1,5 +1,5 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { sql } from 'drizzle-orm';
 import { z } from 'zod';
 import {
@@ -47,6 +47,8 @@ import {
   type PublicBeach,
   type SessionUser,
 } from '@ombre/db';
+import { buildOpenApi, type Operation } from './openapi';
+import { createRateLimiter, type RateLimiter } from './rate-limit';
 import { expandRecurrence, siteTemplates, siteTextLimits, type Action, type DayQuote } from '@ombre/shared';
 
 export interface AppOptions {
@@ -59,8 +61,12 @@ export interface AppOptions {
   signingSecret: string;
   /** Shared with the test payment provider. Without it the test provider is switched off. */
   sandboxWebhookSecret?: string;
+  /** Shared counter of requests. A new one is created when not given. */
+  rateLimiter?: RateLimiter;
   log?: (message: string, error: unknown) => void;
 }
+
+type Handler = (c: Context) => Response | Promise<Response>;
 
 class HttpError extends Error {
   readonly status: 400 | 401 | 404 | 503;
@@ -169,10 +175,38 @@ function publicBeach(beach: PublicBeach) {
   return { slug: beach.slug, name: beach.name, locality: beach.locality, timezone: beach.timezone, demo: beach.demo };
 }
 
+// Requests per minute and per client on the routes most exposed to abuse.
+const limits: Record<string, number> = {
+  'post /v1/auth/login': 10,
+  'post /v1/holds': 30,
+  'post /v1/checkouts': 20,
+  'post /v1/quotes': 120,
+};
+
 export function createApp(options: AppOptions): Hono {
   const { db, holdSeconds, sessionSeconds = 12 * 60 * 60, signingSecret, sandboxWebhookSecret, log = console.error } = options;
   if (signingSecret.length < 32) throw new RangeError('signingSecret must be at least 32 characters long');
   const app = new Hono();
+
+  const operations: Operation[] = [];
+  const limiter = options.rateLimiter ?? createRateLimiter();
+
+  /** Registers a route together with its description, and applies its request limit. */
+  function route(operation: Operation, handler: Handler): void {
+    operations.push(operation);
+    const limit = limits[`${operation.method} ${operation.path}`];
+    app.on(operation.method.toUpperCase(), operation.path, async (c) => {
+      if (limit) {
+        const client = c.req.header('X-Forwarded-For')?.split(',')[0]?.trim() || 'local';
+        const wait = limiter.hit(`${operation.path}|${client}`, limit, 60);
+        if (wait > 0) {
+          c.header('Retry-After', String(wait));
+          return c.json({ error: { code: 'rate_limited', message: 'Too many requests. Try again shortly' } }, 429);
+        }
+      }
+      return handler(c);
+    });
+  }
 
   async function beachBySlug(slug: string): Promise<PublicBeach> {
     const beach = await findActiveBeach(db, slug);
@@ -201,19 +235,19 @@ export function createApp(options: AppOptions): Hono {
     return authorize(db, user.userId, parse(slugSchema, slug, 'beach club'), action);
   }
 
-  app.post('/v1/auth/login', async (c) => {
+  route({ method: 'post', path: '/v1/auth/login', summary: 'Sign in with email and password', tag: 'Sign-in', auth: 'none', request: loginSchema, success: 200, errors: [400, 401, 429] }, async (c) => {
     const credentials = parse(loginSchema, await body(c.req.raw), 'credentials');
     const session = await login(db, credentials.email, credentials.password, sessionSeconds);
     return c.json({ token: session.token, expiresAt: session.expiresAt.toISOString() });
   });
 
-  app.post('/v1/auth/logout', async (c) => {
+  route({ method: 'post', path: '/v1/auth/logout', summary: 'End the current session', tag: 'Sign-in', auth: 'session', success: 204, errors: [401] }, async (c) => {
     const user = await currentUser(c.req.header('Authorization'));
     await logout(db, user.token);
     return c.body(null, 204);
   });
 
-  app.get('/v1/me', async (c) => {
+  route({ method: 'get', path: '/v1/me', summary: 'The signed-in person and the beach clubs they belong to', tag: 'Sign-in', auth: 'session', success: 200, errors: [401] }, async (c) => {
     const user = await currentUser(c.req.header('Authorization'));
     const memberships = await listMemberships(db, user.userId);
     return c.json({
@@ -222,30 +256,30 @@ export function createApp(options: AppOptions): Hono {
     });
   });
 
-  app.get('/v1/manage/beaches/:slug/inventory', async (c) => {
+  route({ method: 'get', path: '/v1/manage/beaches/:slug/inventory', summary: 'Every spot of a day with its state and price', tag: 'Beach club', auth: 'session', query: { day: 'YYYY-MM-DD' }, success: 200, errors: [400, 401, 403] }, async (c) => {
     const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'inventory.read');
     const day = parse(daySchema, c.req.query('day'), 'day');
     return c.json({ day, currency: 'EUR', spots: await listInventory(db, actor, day) });
   });
 
-  app.post('/v1/manage/beaches/:slug/inventory/publish', async (c) => {
+  route({ method: 'post', path: '/v1/manage/beaches/:slug/inventory/publish', summary: 'Put a day on sale', tag: 'Beach club', auth: 'session', request: publishSchema, success: 200, errors: [400, 401, 403, 404] }, async (c) => {
     const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'inventory.publish');
     return c.json(await publishDay(db, actor, parse(publishSchema, await body(c.req.raw), 'request')));
   });
 
-  app.post('/v1/manage/beaches/:slug/inventory/block', async (c) => {
+  route({ method: 'post', path: '/v1/manage/beaches/:slug/inventory/block', summary: 'Block or unblock a spot on a day', tag: 'Beach club', auth: 'session', request: blockSchema, success: 204, errors: [400, 401, 403, 404, 409] }, async (c) => {
     const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'inventory.block');
     await setBlocked(db, actor, parse(blockSchema, await body(c.req.raw), 'request'));
     return c.body(null, 204);
   });
 
-  app.put('/v1/manage/beaches/:slug/inventory/price', async (c) => {
+  route({ method: 'put', path: '/v1/manage/beaches/:slug/inventory/price', summary: 'Change the price of a spot on a day', tag: 'Beach club', auth: 'session', request: spotPriceSchema, success: 204, errors: [400, 401, 403, 404] }, async (c) => {
     const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'inventory.price');
     await setPrice(db, actor, parse(spotPriceSchema, await body(c.req.raw), 'request'));
     return c.body(null, 204);
   });
 
-  app.post('/v1/checkouts', async (c) => {
+  route({ method: 'post', path: '/v1/checkouts', summary: 'Turn an active hold into a booking under review and open its payment', tag: 'Booking', auth: 'none', request: checkoutSchema, success: 201, errors: [400, 404, 409, 429] }, async (c) => {
     const request = parse(checkoutSchema, await body(c.req.raw), 'request');
     const beach = await beachBySlug(request.beachSlug);
     const started = await startCheckout(db, beach.id, request, signingSecret);
@@ -261,7 +295,7 @@ export function createApp(options: AppOptions): Hono {
   });
 
   // Test payment provider. The signature covers the exact bytes received.
-  app.post('/v1/payment-webhooks/sandbox', async (c) => {
+  route({ method: 'post', path: '/v1/payment-webhooks/sandbox', summary: 'Notification from the test payment provider', tag: 'System', auth: 'provider-signature', request: noticeSchema, headers: { 'X-Ombre-Signature': 'HMAC-SHA256 of the body, in hexadecimal' }, success: 200, errors: [400, 401, 503] }, async (c) => {
     if (!sandboxWebhookSecret) throw new HttpError(503, 'integration_unavailable', 'The test payment provider is not configured');
     const raw = await c.req.text();
     const expected = createHmac('sha256', sandboxWebhookSecret).update(raw).digest('hex');
@@ -279,7 +313,7 @@ export function createApp(options: AppOptions): Hono {
     return c.json({ result: await applyPaymentOutcome(db, { provider: 'sandbox', ...notice }) });
   });
 
-  app.get('/v1/beaches/:slug/bookings/:bookingId', async (c) => {
+  route({ method: 'get', path: '/v1/beaches/:slug/bookings/:bookingId', summary: "The guest's own booking, with the pass once confirmed", tag: 'Booking', auth: 'booking-token', success: 200, errors: [400, 401, 404] }, async (c) => {
     const beach = await beachBySlug(parse(slugSchema, c.req.param('slug'), 'beach club'));
     const token = /^Bearer ([A-Za-z0-9_-]{20,200})$/.exec(c.req.header('Authorization') ?? '')?.[1];
     if (!token) throw new HttpError(401, 'unauthenticated', 'The booking token is required');
@@ -288,19 +322,19 @@ export function createApp(options: AppOptions): Hono {
     return c.json({ ...rest, beach: publicBeach(beach), ...money(quote) });
   });
 
-  app.post('/v1/manage/beaches/:slug/access-events', async (c) => {
+  route({ method: 'post', path: '/v1/manage/beaches/:slug/access-events', summary: 'Register an entry or an exit from a pass', tag: 'Beach club', auth: 'session', request: accessSchema, success: 201, errors: [400, 401, 403, 409, 422] }, async (c) => {
     const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'access.check');
     return c.json(await checkAccess(db, actor, parse(accessSchema, await body(c.req.raw), 'request'), signingSecret), 201);
   });
 
-  app.get('/v1/manage/beaches/:slug/bookings', async (c) => {
+  route({ method: 'get', path: '/v1/manage/beaches/:slug/bookings', summary: 'Bookings of a day for the front desk', tag: 'Beach club', auth: 'session', query: { day: 'YYYY-MM-DD' }, success: 200, errors: [400, 401, 403] }, async (c) => {
     const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'bookings.read');
     const day = parse(daySchema, c.req.query('day'), 'day');
     return c.json({ day, currency: 'EUR', bookings: await listBookings(db, actor, day) });
   });
 
   // ---- Season holders: their own passes, proposals and statement ----
-  app.get('/v1/season/contracts', async (c) => {
+  route({ method: 'get', path: '/v1/season/contracts', summary: 'Season passes of the signed-in person', tag: 'Season holder', auth: 'session', success: 200, errors: [401] }, async (c) => {
     const user = await currentUser(c.req.header('Authorization'));
     const contracts = await listMyContracts(db, user.userId);
     return c.json({
@@ -317,7 +351,7 @@ export function createApp(options: AppOptions): Hono {
     });
   });
 
-  app.post('/v1/season/contracts/:contractId/proposals', async (c) => {
+  route({ method: 'post', path: '/v1/season/contracts/:contractId/proposals', summary: 'Offer days, singly or as a recurrence', tag: 'Season holder', auth: 'session', request: proposeSchema, success: 200, errors: [400, 401, 404, 409] }, async (c) => {
     const user = await currentUser(c.req.header('Authorization'));
     const contractId = parse(z.uuid(), c.req.param('contractId'), 'season pass');
     const request = parse(proposeSchema, await body(c.req.raw), 'request');
@@ -330,7 +364,7 @@ export function createApp(options: AppOptions): Hono {
     return c.json(await proposeDays(db, user.userId, contractId, days));
   });
 
-  app.post('/v1/season/contracts/:contractId/withdrawals', async (c) => {
+  route({ method: 'post', path: '/v1/season/contracts/:contractId/withdrawals', summary: 'Take back a day that is still free', tag: 'Season holder', auth: 'session', success: 204, errors: [400, 401, 404, 409] }, async (c) => {
     const user = await currentUser(c.req.header('Authorization'));
     const contractId = parse(z.uuid(), c.req.param('contractId'), 'season pass');
     const { day } = parse(z.object({ day: daySchema }), await body(c.req.raw), 'request');
@@ -338,55 +372,55 @@ export function createApp(options: AppOptions): Hono {
     return c.body(null, 204);
   });
 
-  app.get('/v1/season/contracts/:contractId/statement', async (c) => {
+  route({ method: 'get', path: '/v1/season/contracts/:contractId/statement', summary: "Days offered and the holder's share, without guest data", tag: 'Season holder', auth: 'session', success: 200, errors: [401, 404] }, async (c) => {
     const user = await currentUser(c.req.header('Authorization'));
     const contractId = parse(z.uuid(), c.req.param('contractId'), 'season pass');
     return c.json({ currency: 'EUR', days: await holderStatement(db, user.userId, contractId) });
   });
 
   // ---- Beach club: season passes, proposals, reports ----
-  app.post('/v1/manage/beaches/:slug/contracts', async (c) => {
+  route({ method: 'post', path: '/v1/manage/beaches/:slug/contracts', summary: 'Register a season pass', tag: 'Beach club', auth: 'session', request: contractSchema, success: 201, errors: [400, 401, 403, 404, 409] }, async (c) => {
     const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'sharing.manage');
     return c.json(await createContract(db, actor, parse(contractSchema, await body(c.req.raw), 'request')), 201);
   });
 
-  app.post('/v1/manage/beaches/:slug/contracts/:contractId/status', async (c) => {
+  route({ method: 'post', path: '/v1/manage/beaches/:slug/contracts/:contractId/status', summary: 'Suspend or resume a season pass', tag: 'Beach club', auth: 'session', success: 204, errors: [400, 401, 403, 404] }, async (c) => {
     const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'sharing.manage');
     const { status } = parse(z.object({ status: z.enum(['active', 'suspended']) }), await body(c.req.raw), 'request');
     await setContractStatus(db, actor, parse(z.uuid(), c.req.param('contractId'), 'season pass'), status);
     return c.body(null, 204);
   });
 
-  app.get('/v1/manage/beaches/:slug/contracts', async (c) => {
+  route({ method: 'get', path: '/v1/manage/beaches/:slug/contracts', summary: 'Season passes of the beach club', tag: 'Beach club', auth: 'session', success: 200, errors: [401, 403] }, async (c) => {
     const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'sharing.manage');
     return c.json({ contracts: await listContracts(db, actor) });
   });
 
-  app.get('/v1/manage/beaches/:slug/sharing-settings', async (c) => {
+  route({ method: 'get', path: '/v1/manage/beaches/:slug/sharing-settings', summary: 'Daily cap and price of shared days', tag: 'Beach club', auth: 'session', success: 200, errors: [401, 403] }, async (c) => {
     const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'sharing.manage');
     return c.json({ currency: 'EUR', ...(await getSharingSettings(db, actor)) });
   });
 
-  app.put('/v1/manage/beaches/:slug/sharing-settings', async (c) => {
+  route({ method: 'put', path: '/v1/manage/beaches/:slug/sharing-settings', summary: 'Set daily cap and price of shared days', tag: 'Beach club', auth: 'session', request: sharingSettingsSchema, success: 204, errors: [400, 401, 403] }, async (c) => {
     const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'sharing.manage');
     await setSharingSettings(db, actor, parse(sharingSettingsSchema, await body(c.req.raw), 'request'));
     return c.body(null, 204);
   });
 
-  app.get('/v1/manage/beaches/:slug/proposals', async (c) => {
+  route({ method: 'get', path: '/v1/manage/beaches/:slug/proposals', summary: 'Proposals of season holders', tag: 'Beach club', auth: 'session', success: 200, errors: [400, 401, 403] }, async (c) => {
     const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'sharing.manage');
     const status = parse(z.enum(['proposed', 'approved', 'rejected', 'withdrawn']).optional(), c.req.query('status'), 'status');
     return c.json({ proposals: await listProposals(db, actor, status) });
   });
 
-  app.post('/v1/manage/beaches/:slug/proposals/:proposalId/decision', async (c) => {
+  route({ method: 'post', path: '/v1/manage/beaches/:slug/proposals/:proposalId/decision', summary: 'Approve or reject a proposal', tag: 'Beach club', auth: 'session', request: decisionSchema, success: 204, errors: [400, 401, 403, 404, 409] }, async (c) => {
     const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'sharing.manage');
     const decision = parse(decisionSchema, await body(c.req.raw), 'request');
     await decideProposal(db, actor, parse(z.uuid(), c.req.param('proposalId'), 'proposal'), decision);
     return c.body(null, 204);
   });
 
-  app.get('/v1/manage/beaches/:slug/reports/summary', async (c) => {
+  route({ method: 'get', path: '/v1/manage/beaches/:slug/reports/summary', summary: 'Financial summary of a period', tag: 'Beach club', auth: 'session', query: { from: 'YYYY-MM-DD', to: 'YYYY-MM-DD' }, success: 200, errors: [400, 401, 403] }, async (c) => {
     const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'reports.read');
     const from = parse(daySchema, c.req.query('from'), 'start day');
     const to = parse(daySchema, c.req.query('to'), 'end day');
@@ -394,45 +428,45 @@ export function createApp(options: AppOptions): Hono {
   });
 
   // ---- Beach club website: draft, publish, restore ----
-  app.get('/v1/manage/beaches/:slug/site', async (c) => {
+  route({ method: 'get', path: '/v1/manage/beaches/:slug/site', summary: 'Draft, published revision and history of the website', tag: 'Beach club', auth: 'session', success: 200, errors: [401, 403] }, async (c) => {
     const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'site.read');
     return c.json(await getSiteState(db, actor));
   });
 
-  app.put('/v1/manage/beaches/:slug/site/draft', async (c) => {
+  route({ method: 'put', path: '/v1/manage/beaches/:slug/site/draft', summary: 'Save the website draft', tag: 'Beach club', auth: 'session', request: siteDraftSchema, success: 200, errors: [400, 401, 403, 409] }, async (c) => {
     const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'site.edit');
     const draft = parse(siteDraftSchema, await body(c.req.raw), 'website content');
     return c.json(await saveDraft(db, actor, draft.expectedVersion, { template: draft.template, content: draft.content }));
   });
 
-  app.post('/v1/manage/beaches/:slug/site/publish', async (c) => {
+  route({ method: 'post', path: '/v1/manage/beaches/:slug/site/publish', summary: 'Publish the website draft', tag: 'Beach club', auth: 'session', success: 200, errors: [400, 401, 403, 404, 409] }, async (c) => {
     const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'site.edit');
     const { expectedVersion } = parse(z.object({ expectedVersion: z.number().int().min(1) }), await body(c.req.raw), 'request');
     return c.json(await publishDraft(db, actor, expectedVersion));
   });
 
-  app.post('/v1/manage/beaches/:slug/site/restore', async (c) => {
+  route({ method: 'post', path: '/v1/manage/beaches/:slug/site/restore', summary: 'Bring an old revision back as the draft', tag: 'Beach club', auth: 'session', success: 200, errors: [400, 401, 403, 404, 409] }, async (c) => {
     const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'site.edit');
     const { revisionId } = parse(z.object({ revisionId: z.uuid() }), await body(c.req.raw), 'request');
     return c.json(await restoreRevision(db, actor, revisionId));
   });
 
-  app.get('/v1/health', async (c) => {
+  route({ method: 'get', path: '/v1/health', summary: 'Liveness check', tag: 'System', auth: 'none', success: 200, errors: [] }, async (c) => {
     await db.execute(sql`select 1`);
     return c.json({ status: 'ok' });
   });
 
-  app.get('/v1/beaches', async (c) => {
+  route({ method: 'get', path: '/v1/beaches', summary: 'Active beach clubs', tag: 'Public', auth: 'none', success: 200, errors: [] }, async (c) => {
     const beaches = await listActiveBeaches(db);
     return c.json({ beaches: beaches.map(publicBeach) });
   });
 
-  app.get('/v1/beaches/:slug', async (c) => {
+  route({ method: 'get', path: '/v1/beaches/:slug', summary: 'A beach club, its next free day and its published website', tag: 'Public', auth: 'none', success: 200, errors: [400, 404] }, async (c) => {
     const beach = await beachBySlug(parse(slugSchema, c.req.param('slug'), 'beach club'));
     return c.json({ beach: publicBeach(beach), nextAvailableDay: await nextAvailableDay(db, beach), site: await getPublishedSite(db, beach.id) });
   });
 
-  app.get('/v1/beaches/:slug/holds/:holdId', async (c) => {
+  route({ method: 'get', path: '/v1/beaches/:slug/holds/:holdId', summary: 'A hold, by its identifier', tag: 'Booking', auth: 'none', success: 200, errors: [400, 404] }, async (c) => {
     const beach = await beachBySlug(parse(slugSchema, c.req.param('slug'), 'beach club'));
     const held = await getHold(db, beach.id, parse(z.uuid(), c.req.param('holdId'), 'hold'));
     return c.json({
@@ -446,7 +480,7 @@ export function createApp(options: AppOptions): Hono {
     });
   });
 
-  app.get('/v1/beaches/:slug/availability', async (c) => {
+  route({ method: 'get', path: '/v1/beaches/:slug/availability', summary: 'Free spots of a day with prices', tag: 'Public', auth: 'none', query: { day: 'YYYY-MM-DD' }, success: 200, errors: [400, 404] }, async (c) => {
     const slug = parse(slugSchema, c.req.param('slug'), 'beach club');
     const day = parse(daySchema, c.req.query('day'), 'day');
     const beach = await beachBySlug(slug);
@@ -459,14 +493,14 @@ export function createApp(options: AppOptions): Hono {
     });
   });
 
-  app.post('/v1/quotes', async (c) => {
+  route({ method: 'post', path: '/v1/quotes', summary: 'Price of a day as the server computes it', tag: 'Booking', auth: 'none', request: dayRequestSchema, success: 200, errors: [400, 404, 409, 422, 429] }, async (c) => {
     const request = parse(dayRequestSchema, await body(c.req.raw), 'request');
     const beach = await beachBySlug(request.beachSlug);
     const quote = await quoteSpot(db, beach.id, request);
     return c.json({ beachSlug: beach.slug, spotId: request.spotId, day: request.day, ...money(quote) });
   });
 
-  app.post('/v1/holds', async (c) => {
+  route({ method: 'post', path: '/v1/holds', summary: 'Hold a spot for a limited time', tag: 'Booking', auth: 'none', request: dayRequestSchema, headers: { 'Idempotency-Key': 'Chosen by the client: the same key returns the same hold' }, success: 201, errors: [400, 404, 409, 422, 429] }, async (c) => {
     const header = c.req.header('Idempotency-Key');
     if (!header) throw new HttpError(400, 'idempotency_key_required', 'The Idempotency-Key header is required');
     const idempotencyKey = parse(idempotencyKeySchema, header, 'Idempotency-Key header');
@@ -486,6 +520,9 @@ export function createApp(options: AppOptions): Hono {
       held.replayed ? 200 : 201,
     );
   });
+
+  // The document lists exactly the routes registered above.
+  app.get('/v1/openapi.json', (c) => c.json(buildOpenApi(operations, { title: 'Ombrè API', version: '1' })));
 
   app.notFound((c) => c.json({ error: { code: 'not_found', message: 'Not found' } }, 404));
 

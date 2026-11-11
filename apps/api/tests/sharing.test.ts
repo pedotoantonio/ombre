@@ -29,7 +29,7 @@ describe.skipIf(!testAdminUrl)('season sharing, shares and statements', () => {
     await upsertUser(database.adminUrl, { email: 'reception@riva.example', name: 'Reception', password }, [{ beachId: beach.beachId, role: 'reception' }]);
     await upsertUser(database.adminUrl, { email: 'intruso@altra-riva.example', name: 'Intruso', password }, [{ beachId: other.beachId, role: 'manager' }]);
     for (const name of ['anna', 'bruno', 'carla']) await upsertUser(database.adminUrl, { email: `${name}@stagionali.example`, name, password });
-    app = createApp({ db: database.app.db, holdSeconds: 600, signingSecret, sandboxWebhookSecret, log: () => undefined });
+    app = createApp({ db: database.app.db, rateLimiter: { hit: () => 0 }, holdSeconds: 600, signingSecret, sandboxWebhookSecret, log: () => undefined });
     for (const email of ['manager@riva.example', 'accounting@riva.example', 'reception@riva.example', 'intruso@altra-riva.example', 'anna@stagionali.example', 'bruno@stagionali.example', 'carla@stagionali.example']) {
       tokens[email.split('@')[0]!] = ((await call('POST', '/v1/auth/login', { email, password })).body as { token: string }).token;
     }

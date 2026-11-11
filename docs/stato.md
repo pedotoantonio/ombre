@@ -50,6 +50,9 @@ Aggiornato all'11/11/2026.
     grafici sullo stesso contenuto; bozza con anteprima, pubblicazione, archivio delle
     revisioni e ripristino; conflitto segnalato se due persone modificano insieme; solo
     testo semplice, nessun codice accettato;
+  - contratti e protezioni: documento OpenAPI costruito dalle stesse regole che
+    convalidano le richieste, limiti alle richieste per indirizzo sui punti più esposti,
+    intestazione Content-Security-Policy, salvataggio del database e prova di ripristino;
   - `Dockerfile` e compose con database, migrazioni, API, worker e sito.
 - **Non fatto**: secondo fattore di accesso, inviti e recupero password (oggi gli accessi
   li crea l'amministratore da riga di comando), console centrale della piattaforma,
@@ -63,7 +66,7 @@ Aggiornato all'11/11/2026.
 | Controllo | Esito |
 |---|---|
 | Lint e controllo dei tipi | Superati |
-| Test (72, di cui 47 su un PostgreSQL vero) | Superati |
+| Test (76, di cui 47 su un PostgreSQL vero) | Superati |
 | Due acquisti sulla stessa giornata | Dodici richieste simultanee, una sola riserva; ripetuto sull'API in container con dieci richieste: un 201 e nove 409 |
 | Prezzo manipolato nel browser | L'importo inviato dal client è ignorato: vale quello del server |
 | MARE10 su €30 | Totale €27, salvato nella riserva e immutato se il listino cambia |
@@ -82,17 +85,21 @@ Aggiornato all'11/11/2026.
 | Percorso completo sui container (20 verifiche) | Riserva, prenotazione, pagamento di prova firmato, conferma `OM-270617-001`, notifica dal worker, quote 13,50 / 10,80 / 2,70, ruoli e rendiconto dello stagionale |
 | Aree riservate sul sito in container (37 verifiche) | Ospite: dati, pagamento di prova, pass con QR, pagina non apribile con un token errato. Gestore: pubblica, blocca, autorizza. Reception: verifica i pass, non cambia i prezzi. Stagionale: propone, vede la quota di 13,50 senza dati dell'ospite, ritira. Uscita e ruoli rispettati |
 | Sito dello stabilimento (20 verifiche sui container) | La bozza non è visibile al pubblico; pubblicazione e ripristino conservano la storia; cambio di modello senza perdita di contenuti; pagina inglese senza testi italiani quando manca la traduzione; salvataggio su versione vecchia rifiutato; la reception legge ma non modifica |
+| Documento OpenAPI | Un test confronta il documento con le rotte servite: 35 su 35, nessuna in più |
+| Limiti alle richieste | Undicesimo tentativo di accesso in un minuto dallo stesso indirizzo rifiutato con l'attesa indicata; altri indirizzi non toccati |
+| Backup e ripristino | Salvataggio ripristinato su un PostgreSQL vuoto: stesse righe in tutte le 24 tabelle e 26 regole di isolamento presenti |
 | Chiave di idempotenza | Stessa richiesta, stessa riserva; richiesta diversa, errore esplicito |
-| Pagine servite dal container (192 verifiche su 12 pagine) | Superate |
+| Pagine servite dal container (204 verifiche su 12 pagine) | Superate, intestazioni di sicurezza comprese |
 | Percorso di riserva sul sito in container (24 verifiche) | Superato: MARE10 da 30,00 a 27,00, doppio invio del modulo senza doppia riserva, secondo acquirente rimandato alla scelta, modulo inviato da un altro sito rifiutato, dati dimostrativi non indicizzabili |
 | Container | Sito e API non root, in sola lettura; database non pubblicato; ruolo dell'API senza privilegi |
 | Riavvio | Migrazioni e seed ripetibili senza effetti |
 
-Verifiche ancora aperte: documento OpenAPI generato dal codice, limiti alle richieste,
-prova di ripristino da backup, Core Web Vitals misurati, prove con lettore di schermo e
-da tastiera, controllo automatico di accessibilità, intestazione
-Content-Security-Policy, immagine per le anteprime social, pagina 404 con la grafica del
-sito. Il preventivo non è ancora salvato con una scadenza propria.
+Verifiche ancora aperte: Core Web Vitals misurati, prove con lettore di schermo e da
+tastiera, controllo automatico di accessibilità, immagine per le anteprime social,
+pagina 404 con la grafica del sito. La Content-Security-Policy ammette ancora gli script
+in linea, perché il framework scrive in linea i dati delle pagine. I limiti alle
+richieste vivono nella memoria di un solo processo dell'API. Il preventivo non è salvato
+con una scadenza propria.
 
 ## Prossimo risultato da costruire
 
