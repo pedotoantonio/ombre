@@ -7,8 +7,13 @@ function clean(value: string | undefined): string | null {
   return trimmed ? trimmed : null;
 }
 
+const defaultBrandName = 'Ombrè';
+const brandName = clean(process.env.OMBRE_BRAND_NAME) ?? defaultBrandName;
+
 export const config = {
-  brandName: clean(process.env.OMBRE_BRAND_NAME) ?? 'Ombrè',
+  brandName,
+  /** The drawn wordmark spells the default name: with another name the site shows symbol and text instead. */
+  brandHasWordmark: brandName === defaultBrandName,
   siteUrl: (clean(process.env.OMBRE_SITE_URL) ?? 'http://localhost:3210').replace(/\/+$/, ''),
   indexable: flag(process.env.OMBRE_INDEXABLE),
   bookingsOpen: flag(process.env.OMBRE_BOOKINGS_OPEN),

@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { accountPath, config, getDictionary, locales, pathFor, type InnerPageId, type Locale, type PageId } from '@ombre/shared';
-import { Logo } from '@ombre/ui';
+import { Logo, LogoLockup } from '@ombre/ui';
 
 const navPages: readonly InnerPageId[] = ['explore', 'howItWorks', 'forBeachClubs', 'forSeasonHolders', 'help'];
 
@@ -36,8 +36,14 @@ export function PageShell({ locale, page, highlight = true, alternatePath, crumb
       <header className="site-header">
         <div className="container site-header__inner">
           <Link className="brand" href={pathFor('home', locale)} aria-label={`${config.brandName}, ${t.nav.home}`}>
-            <Logo />
-            <span>{config.brandName}</span>
+            {config.brandHasWordmark ? (
+              <LogoLockup label={config.brandName} />
+            ) : (
+              <>
+                <Logo />
+                <span>{config.brandName}</span>
+              </>
+            )}
           </Link>
           <nav className="site-nav" aria-label={t.nav.label}>
             <ul>
@@ -92,8 +98,14 @@ export function PageShell({ locale, page, highlight = true, alternatePath, crumb
         <div className="container site-footer__grid">
           <div>
             <Link className="brand" href={pathFor('home', locale)} aria-label={`${config.brandName}, ${t.nav.home}`}>
-              <Logo tone="onDark" />
-              <span>{config.brandName}</span>
+              {config.brandHasWordmark ? (
+                <LogoLockup tone="onDark" label={config.brandName} />
+              ) : (
+                <>
+                  <Logo tone="onDark" />
+                  <span>{config.brandName}</span>
+                </>
+              )}
             </Link>
             <p className="site-footer__tagline">{t.footer.tagline}</p>
           </div>

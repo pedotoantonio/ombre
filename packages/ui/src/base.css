@@ -205,6 +205,16 @@ svg {
   height: 2.25rem;
 }
 
+/* Symbol and drawn wordmark together: the width follows the artwork. */
+.brand svg[role='img'] {
+  width: auto;
+  height: 2.5rem;
+}
+
+.site-footer .brand svg[role='img'] {
+  height: 3rem;
+}
+
 .site-header__tools {
   grid-area: tools;
   justify-self: end;
