@@ -56,7 +56,43 @@ locale. Piani ipotetici da testare: A (€490 + 5%) e B (€0 + 10%), pareggio a
 
 ## D9 — Dove vive il codice — proposta
 
-Questa cartella contiene oggi solo la documentazione, dentro il repository pizzaclic per
-comodità di avvio. Prima del kickoff tecnico il progetto va spostato in un repository
-dedicato (monorepo TypeScript sul modello SweetHost: pnpm + Turborepo, pacchetti
-`shared`, `ui`, `comms`, `db`).
+Lo sviluppo è partito l'11/11/2026 dentro questa cartella del repository pizzaclic. La
+cartella è autosufficiente (propri `package.json`, lockfile, `Dockerfile` e compose) e
+non dipende dal resto del repository: si può spostare in un repository dedicato senza
+modifiche. Lo spostamento resta da decidere.
+
+## D10 — Requisiti di qualità web dal prompt del committente — accettata (11/11/2026)
+
+Il prompt di miglioramento dei siti ([prompt-qualita-web.md](prompt-qualita-web.md)) è
+applicato al progetto come requisiti e prove di accettazione
+([qualita-web.md](qualita-web.md)): design e interazioni, accessibilità, prestazioni, SEO
+tecnica, AEO e GEO. Non avvia lo sviluppo. Quando le pagine esisteranno, lo stesso prompt
+si esegue sul codice a ogni rilascio delle pagine pubbliche. Conseguenza: sul sito si
+pubblicano solo dati confermati; piani, percentuali e cifre della simulazione restano
+fuori finché sono ipotesi.
+
+## D11 — Indirizzi pubblici nuovi e crawler degli assistenti AI — proposta
+
+Indirizzi non presenti nella v3.0: `/esplora/{località}`, `/come-funziona`,
+`/per-gli-stabilimenti`, `/per-gli-stagionali`, `/assistenza`, `/chi-siamo`, prefisso
+`/en/` per l'inglese. Le pagine pubbliche restano leggibili dai crawler dei motori di
+risposta, condizione per poter essere citate. Entrambe le scelte spettano al committente.
+Il codice usa già questi indirizzi, definiti in un solo file
+(`packages/shared/src/i18n/routes.ts`): cambiarli è una modifica di poche righe.
+
+## D12 — Due lingue dalla base: italiano e inglese — accettata (11/11/2026)
+
+Decisione del committente. L'italiano è la lingua predefinita e non ha prefisso;
+l'inglese sta sotto `/en/` con indirizzi tradotti (`/en/how-it-works`). Ogni testo
+dell'interfaccia vive nei dizionari di `packages/shared`; un test verifica che le due
+lingue abbiano le stesse chiavi e lo stesso numero di voci. `/it/...` reindirizza in modo
+permanente all'indirizzo senza prefisso, così ogni pagina ha un solo indirizzo.
+
+## D13 — Scelte tecniche di avvio — accettata (11/11/2026)
+
+Node 22, pnpm 12, Turborepo, TypeScript 6 in modalità strict (la 7 non è ancora
+supportata dagli strumenti di lint), Next.js 16 con pagine pubbliche prerenderizzate,
+React 19, Vitest. CSS con token propri, senza framework grafico. Il nome della
+piattaforma viene solo dalla configurazione (`OMBRE_BRAND_NAME`), mai scritto nei testi.
+Tutto gira in container: immagine a più stadi, utente non root, file system in sola
+lettura. I reindirizzamenti permanenti usano il codice 308, equivalente al 301.

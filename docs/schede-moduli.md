@@ -32,7 +32,9 @@ posizione precisa dell'utente è facoltativa.
 **API**: `GET /v1/beaches`, `GET /v1/availability` (pubbliche, filtrate).
 **Lavori in coda**: ricalcolo cache di disponibilità aggregata.
 **Integrazioni esterne**: mappe (provider da scegliere).
-**Test minimi**: prezzo "da" sempre acquistabile; nessuna disponibilità non autorizzata esposta.
+**Test minimi**: prezzo "da" sempre acquistabile; nessuna disponibilità non autorizzata esposta;
+title, H1, canonical e contenuti essenziali presenti nell'HTML servito; ricerche con
+parametri non indicizzabili ([qualita-web.md §5](qualita-web.md#5-seo-tecnica-delle-pagine-pubbliche)).
 **Testi**: it/en per ricerca, filtri, assenza risultati.
 
 ### Inventario e disponibilità
@@ -217,7 +219,10 @@ accessibilità veritiere restano responsabilità del gestore; la registrazione d
 **Lavori in coda**: pubblicazione, invalidazione cache, elaborazione media.
 **Integrazioni esterne**: DNS/HTTPS per domini personalizzati; storage media.
 **Test minimi**: due editor → conflitto; pubblicazione verificata su secondo dispositivo;
-anteprime scadute non accessibili.
+anteprime scadute non accessibili; `LocalBusiness` generato dai soli campi compilati e
+uguale al testo visibile; un solo indirizzo canonico per bagno; bagno sospeso fuori dalla
+sitemap; i tre template entro le soglie di prestazione e contrasto
+([qualita-web.md](qualita-web.md)).
 **Testi**: editor e stati di pubblicazione in it/en.
 
 ### Economia e rendiconto

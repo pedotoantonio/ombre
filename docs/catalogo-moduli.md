@@ -118,5 +118,5 @@ Le prime cinque voci si completano **prima** di scrivere codice di dominio.
 - [ ] Health, metriche interne e allarmi
 - [ ] OpenAPI generata e controllata in CI
 - [ ] Stabilimento demo dal seed
-- [ ] Testi in italiano e inglese
+- [ ] Testi in italiano e inglese (fatto per il sito pubblico, con test di parità dei dizionari; da estendere a ogni nuova interfaccia)
 - [x] Registro delle decisioni e documento di stato aperti

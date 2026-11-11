@@ -124,6 +124,11 @@ Linguaggio: accogliente nei contenuti, preciso nei passaggi economici
 ("Riserva attiva per 10 minuti", "Pagamento in verifica", "Prenotazione confermata");
 mai confondere un blocco temporaneo con una conferma.
 
+Regole di interazione e animazione, contrasti verificati della palette e soglie di
+prestazione delle pagine pubbliche sono in [qualita-web.md](qualita-web.md). Per note e
+metadati si usa `#3E5C6B`: il grigio `#7A8B93` su Sabbia arriva a 3,34:1 e va riservato al
+testo grande.
+
 ## Flussi chiave
 
 ### Ricerca e acquisto (ospite)
@@ -330,7 +335,10 @@ richiedono il server. Niente cookie condivisi tra domini estranei né token perm
 negli URL: passaggio sito→account centrale con codici brevi monouso a scadenza. SEO:
 pagine pubbliche renderizzabili, metadata e anteprime social, sitemap dei soli siti
 attivi, canonical sull'host principale scelto; bozze, account e checkout esclusi; nessuna
-recensione generata.
+recensione generata. Il dettaglio pagina per pagina (title, H1, indicizzazione, dati
+strutturati, codici di stato, lingue), le domande dei clienti a cui ogni pagina deve
+rispondere e i criteri per essere citati dagli assistenti AI sono in
+[qualita-web.md](qualita-web.md).
 
 ## Sicurezza, privacy, continuità
 
@@ -407,6 +415,9 @@ controllata.
 | Due scansioni del pass | Una sola transizione d'ingresso; uscita/rientro controllati |
 | Chiusura e spostamento | Ordini individuati; nuova occupazione acquisita prima del rilascio |
 | Accessibilità e smartphone | Percorsi completi da tastiera e vista a elenco; layout senza contenuti coperti |
+| Pagine pubbliche lette senza script | Title, H1, canonical, contenuti essenziali e dati strutturati nell'HTML servito, uguali al testo visibile |
+| Indicizzazione | Sitemap con le sole pagine pubbliche attive; aree riservate, checkout e anteprime esclusi e protetti dall'accesso |
+| Prestazioni su mobile | LCP ≤ 2,5 s, INP ≤ 200 ms, CLS ≤ 0,1 sulle pagine pubbliche |
 | Ripristino dei dati | Backup recuperabile; inventario e rendiconto consistenti |
 
 Ogni esecuzione conserva ambiente, versione del codice, dati di prova, risultato e

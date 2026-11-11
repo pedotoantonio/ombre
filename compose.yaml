@@ -1,0 +1,27 @@
+name: ombre
+
+services:
+  web:
+    image: ombre-web:dev
+    build:
+      context: .
+      args:
+        OMBRE_BRAND_NAME: ${OMBRE_BRAND_NAME:-Ombrè}
+        OMBRE_SITE_URL: ${OMBRE_SITE_URL:-http://localhost:3210}
+        OMBRE_INDEXABLE: ${OMBRE_INDEXABLE:-false}
+        OMBRE_BOOKINGS_OPEN: ${OMBRE_BOOKINGS_OPEN:-false}
+        OMBRE_CONTACT_EMAIL: ${OMBRE_CONTACT_EMAIL:-}
+    # Only reachable from the server itself: a reverse proxy publishes it.
+    ports:
+      - '127.0.0.1:3210:3000'
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /app/apps/web/.next/cache
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    cpus: 1.0
+    mem_limit: 512m
+    restart: unless-stopped
