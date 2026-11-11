@@ -9,6 +9,12 @@ export const demoBeach = {
   promoCode: 'MARE10',
 } as const;
 
+export const demoAccounts = [
+  { email: 'gestore@bagnodelledune.example', name: 'Gestore dimostrativo', role: 'manager' },
+  { email: 'reception@bagnodelledune.example', name: 'Reception dimostrativa', role: 'reception' },
+  { email: 'contabilita@bagnodelledune.example', name: 'Contabilità dimostrativa', role: 'accounting' },
+] as const;
+
 /**
  * Fictional beach club used across the project documents: spots A01-A04 and B01-B04
  * on 17 June 2027 at 30.00 euro, with the MARE10 promotion. Marked as demo data.

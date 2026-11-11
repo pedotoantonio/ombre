@@ -27,3 +27,19 @@ export function withBeach<T>(db: Database, beachId: string, work: (tx: Transacti
     return work(tx);
   });
 }
+
+/** Like `withBeach`, and also records who is acting, for memberships and the audit trail. */
+export function withActor<T>(db: Database, beachId: string, userId: string, work: (tx: Transaction) => Promise<T>): Promise<T> {
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`select set_config('app.beach_id', ${beachId}, true), set_config('app.user_id', ${userId}, true)`);
+    return work(tx);
+  });
+}
+
+/** A transaction for a signed-in person outside any beach club, for example to list their memberships. */
+export function withUser<T>(db: Database, userId: string, work: (tx: Transaction) => Promise<T>): Promise<T> {
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`select set_config('app.user_id', ${userId}, true)`);
+    return work(tx);
+  });
+}

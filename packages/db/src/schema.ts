@@ -1,4 +1,4 @@
-import { boolean, date, integer, pgEnum, pgTable, smallint, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { boolean, date, integer, jsonb, pgEnum, pgTable, smallint, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 
 // Typed view of the tables created by the SQL files in ../migrations, which stay the source of truth.
 
@@ -62,5 +62,23 @@ export const hold = pgTable('hold', {
   totalCents: integer('total_cents').notNull(),
   promoCode: text('promo_code'),
   expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const membershipRole = pgEnum('membership_role', ['manager', 'reception', 'accounting']);
+
+export const membership = pgTable('membership', {
+  userId: uuid('user_id').notNull(),
+  beachId: uuid('beach_id').notNull(),
+  role: membershipRole('role').notNull(),
+});
+
+export const auditEvent = pgTable('audit_event', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  beachId: uuid('beach_id').notNull(),
+  actorUserId: uuid('actor_user_id').notNull(),
+  action: text('action').notNull(),
+  target: text('target'),
+  detail: jsonb('detail').notNull().default({}),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });

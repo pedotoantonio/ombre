@@ -4,7 +4,15 @@ import { quoteDay, type DayQuote } from '@ombre/shared';
 import { withBeach, type Database, type Transaction } from './client';
 import { beach, hold, inventoryDay, promotion, spot } from './schema';
 
-export type DomainErrorCode = 'not_found' | 'inventory_conflict' | 'promo_not_applicable' | 'idempotency_mismatch';
+export type DomainErrorCode =
+  | 'not_found'
+  | 'inventory_conflict'
+  | 'promo_not_applicable'
+  | 'idempotency_mismatch'
+  | 'invalid_credentials'
+  | 'account_locked'
+  | 'forbidden'
+  | 'invalid_state';
 
 /** A refusal the caller can explain to the user. Anything else is an internal fault. */
 export class DomainError extends Error {

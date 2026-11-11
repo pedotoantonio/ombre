@@ -20,8 +20,13 @@ Aggiornato all'11/11/2026.
   - percorso di riserva nel sito, nelle due lingue e senza bisogno di script: pagina
     «Esplora» con gli stabilimenti attivi, scheda del bagno con le postazioni libere per
     fila, riepilogo con prezzo e codice promozionale, riserva e pagina della riserva;
+  - accessi e ruoli nell'API: password verificate dentro il database, blocco dopo cinque
+    tentativi, sessioni revocabili, ruoli gestore, reception e contabilità per
+    stabilimento, registro delle azioni;
+  - gestione dell'inventario nell'API: pubblicazione di una giornata, blocco operativo,
+    cambio di prezzo, vista completa delle postazioni;
   - `Dockerfile` e compose con database, migrazioni, API e sito.
-- **Non fatto**: autenticazione e ruoli, aree riservate (ospite, stagionale, gestione,
+- **Non fatto**: secondo fattore di accesso, inviti e recupero password, aree riservate (ospite, stagionale, gestione,
   reception, console), condivisione stagionale, prenotazione confermata, pagamenti, pass,
   rendiconto, worker. Dopo la riserva il percorso si ferma: il pagamento non esiste
   ancora e la pagina lo dice. Nessun dominio registrato, nessuna pubblicazione. Il sito dichiara che il
@@ -32,13 +37,15 @@ Aggiornato all'11/11/2026.
 | Controllo | Esito |
 |---|---|
 | Lint e controllo dei tipi | Superati |
-| Test (31, di cui 13 su un PostgreSQL vero) | Superati |
+| Test (38, di cui 20 su un PostgreSQL vero) | Superati |
 | Due acquisti sulla stessa giornata | Dodici richieste simultanee, una sola riserva; ripetuto sull'API in container con dieci richieste: un 201 e nove 409 |
 | Prezzo manipolato nel browser | L'importo inviato dal client è ignorato: vale quello del server |
 | MARE10 su €30 | Totale €27, salvato nella riserva e immutato se il listino cambia |
 | Ultimo utilizzo di una promozione conteso | Limite rispettato; l'utilizzo torna disponibile al rilascio |
 | Riserva scaduta | La giornata torna acquistabile anche senza job di pulizia |
 | Accesso a un altro stabilimento | Zero righe lette e zero scritte dal database, qualunque sia la query |
+| Ruoli | La reception blocca ma non cambia i prezzi; la contabilità non tocca l'inventario; un gestore non entra in un altro stabilimento; ogni azione finisce nel registro |
+| Accessi | Risposta identica per password errata e utente inesistente; blocco al quinto errore; uscita e rimozione dell'appartenenza hanno effetto immediato |
 | Chiave di idempotenza | Stessa richiesta, stessa riserva; richiesta diversa, errore esplicito |
 | Pagine servite dal container (192 verifiche su 12 pagine) | Superate |
 | Percorso di riserva sul sito in container (24 verifiche) | Superato: MARE10 da 30,00 a 27,00, doppio invio del modulo senza doppia riserva, secondo acquirente rimandato alla scelta, modulo inviato da un altro sito rifiutato, dati dimostrativi non indicizzabili |
@@ -57,15 +64,14 @@ ripulisce le riserve scadute (oggi la scadenza è valutata al momento della rich
 Un incremento operativo verificabile in ambiente di prova che colleghi:
 sito personale → autorizzazione stagionale → acquisto → inventario → reception →
 rendiconto. Inventario, riserva e percorso nel sito ci sono; il prossimo anello sono
-gli accessi e la gestione da parte dello stabilimento.
+la prenotazione confermata: pagamento di prova, pass e verifica alla reception.
 
 ## Passi successivi in ordine
 
-1. Autenticazione, ruoli e gestione (inventario, prezzi, blocchi) con i test di permesso.
-2. Prenotazione confermata con pagamento in sandbox, pass e verifica alla reception.
-3. Condivisione stagionale, worker con outbox, rendiconto.
-4. Aree riservate nel sito, sito del bagno con modelli e revisioni.
-5. In parallelo, fuori dal codice: chiudere le decisioni di avvio (marchio e domini,
+1. Prenotazione confermata con pagamento in sandbox, pass e verifica alla reception.
+2. Condivisione stagionale, worker con outbox, rendiconto.
+3. Aree riservate nel sito, sito del bagno con modelli e revisioni.
+4. In parallelo, fuori dal codice: chiudere le decisioni di avvio (marchio e domini,
    soggetto venditore, provider pagamenti, condizioni) e scegliere i partner pilota.
 
 ## Dipendenze esterne aperte

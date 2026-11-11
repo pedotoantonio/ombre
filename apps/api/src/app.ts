@@ -3,42 +3,58 @@ import { sql } from 'drizzle-orm';
 import { z } from 'zod';
 import {
   acquireHold,
+  authorize,
   DomainError,
   findActiveBeach,
   getHold,
   listActiveBeaches,
   listAvailability,
+  listInventory,
+  listMemberships,
+  login,
+  logout,
   nextAvailableDay,
+  publishDay,
+  resolveSession,
+  setBlocked,
+  setPrice,
   quoteSpot,
   type Database,
   type DomainErrorCode,
   type PublicBeach,
+  type SessionUser,
 } from '@ombre/db';
-import type { DayQuote } from '@ombre/shared';
+import type { Action, DayQuote } from '@ombre/shared';
 
 export interface AppOptions {
   db: Database;
   /** How long a hold keeps a spot, in seconds. */
   holdSeconds: number;
+  /** How long a sign-in lasts, in seconds. Twelve hours when not given. */
+  sessionSeconds?: number;
   log?: (message: string, error: unknown) => void;
 }
 
 class HttpError extends Error {
-  readonly status: 400 | 404;
+  readonly status: 400 | 401 | 404;
   readonly code: string;
 
-  constructor(status: 400 | 404, code: string, message: string) {
+  constructor(status: 400 | 401 | 404, code: string, message: string) {
     super(message);
     this.status = status;
     this.code = code;
   }
 }
 
-const domainStatus: Record<DomainErrorCode, 404 | 409 | 422> = {
+const domainStatus: Record<DomainErrorCode, 401 | 403 | 404 | 409 | 422 | 429> = {
   not_found: 404,
   inventory_conflict: 409,
   promo_not_applicable: 422,
   idempotency_mismatch: 422,
+  invalid_credentials: 401,
+  account_locked: 429,
+  forbidden: 403,
+  invalid_state: 409,
 };
 
 const slugSchema = z.string().regex(/^[a-z0-9]+(-[a-z0-9]+)*$/).max(80);
@@ -49,6 +65,11 @@ const dayRequestSchema = z.object({
   day: daySchema,
   promoCode: z.string().trim().min(1).max(40).optional(),
 });
+const loginSchema = z.object({ email: z.email().max(200), password: z.string().min(1).max(200) });
+const priceSchema = z.number().int().min(0).max(1_000_000);
+const publishSchema = z.object({ day: daySchema, priceCents: priceSchema, spotIds: z.array(z.uuid()).min(1).max(500).optional() });
+const blockSchema = z.object({ spotId: z.uuid(), day: daySchema, blocked: z.boolean(), reason: z.string().trim().max(200).optional() });
+const spotPriceSchema = z.object({ spotId: z.uuid(), day: daySchema, priceCents: priceSchema });
 const idempotencyKeySchema = z.string().min(8).max(200).regex(/^[\x21-\x7e]+$/);
 
 function parse<T>(schema: z.ZodType<T>, value: unknown, what: string): T {
@@ -71,7 +92,7 @@ function publicBeach(beach: PublicBeach) {
   return { slug: beach.slug, name: beach.name, locality: beach.locality, timezone: beach.timezone, demo: beach.demo };
 }
 
-export function createApp({ db, holdSeconds, log = console.error }: AppOptions): Hono {
+export function createApp({ db, holdSeconds, sessionSeconds = 12 * 60 * 60, log = console.error }: AppOptions): Hono {
   const app = new Hono();
 
   async function beachBySlug(slug: string): Promise<PublicBeach> {
@@ -87,6 +108,63 @@ export function createApp({ db, holdSeconds, log = console.error }: AppOptions):
       throw new HttpError(400, 'invalid_request', 'The body must be JSON');
     }
   }
+
+  async function currentUser(authorization: string | undefined): Promise<SessionUser & { token: string }> {
+    const token = /^Bearer ([A-Za-z0-9_-]{20,200})$/.exec(authorization ?? '')?.[1];
+    const user = token ? await resolveSession(db, token) : null;
+    if (!token || !user) throw new HttpError(401, 'unauthenticated', 'Sign in to continue');
+    return { ...user, token };
+  }
+
+  /** Signed-in person, member of the beach club, with a role that allows the action. */
+  async function actorFor(authorization: string | undefined, slug: string | undefined, action: Action) {
+    const user = await currentUser(authorization);
+    return authorize(db, user.userId, parse(slugSchema, slug, 'beach club'), action);
+  }
+
+  app.post('/v1/auth/login', async (c) => {
+    const credentials = parse(loginSchema, await body(c.req.raw), 'credentials');
+    const session = await login(db, credentials.email, credentials.password, sessionSeconds);
+    return c.json({ token: session.token, expiresAt: session.expiresAt.toISOString() });
+  });
+
+  app.post('/v1/auth/logout', async (c) => {
+    const user = await currentUser(c.req.header('Authorization'));
+    await logout(db, user.token);
+    return c.body(null, 204);
+  });
+
+  app.get('/v1/me', async (c) => {
+    const user = await currentUser(c.req.header('Authorization'));
+    const memberships = await listMemberships(db, user.userId);
+    return c.json({
+      user: { email: user.email, name: user.name, platformRole: user.platformRole },
+      memberships: memberships.map(({ beachSlug, beachName, role }) => ({ beachSlug, beachName, role })),
+    });
+  });
+
+  app.get('/v1/manage/beaches/:slug/inventory', async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'inventory.read');
+    const day = parse(daySchema, c.req.query('day'), 'day');
+    return c.json({ day, currency: 'EUR', spots: await listInventory(db, actor, day) });
+  });
+
+  app.post('/v1/manage/beaches/:slug/inventory/publish', async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'inventory.publish');
+    return c.json(await publishDay(db, actor, parse(publishSchema, await body(c.req.raw), 'request')));
+  });
+
+  app.post('/v1/manage/beaches/:slug/inventory/block', async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'inventory.block');
+    await setBlocked(db, actor, parse(blockSchema, await body(c.req.raw), 'request'));
+    return c.body(null, 204);
+  });
+
+  app.put('/v1/manage/beaches/:slug/inventory/price', async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'inventory.price');
+    await setPrice(db, actor, parse(spotPriceSchema, await body(c.req.raw), 'request'));
+    return c.body(null, 204);
+  });
 
   app.get('/v1/health', async (c) => {
     await db.execute(sql`select 1`);
