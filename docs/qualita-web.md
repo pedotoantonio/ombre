@@ -96,6 +96,9 @@ l'aspetto: l'identità di Ombrè resta quella definita in
 
 Obiettivo confermato: WCAG 2.2 AA, verificato sulle pagine reali.
 
+> La tabella che segue riguarda la palette della v3.0. Per la palette in uso dall'11/11/2026
+> i contrasti sono in [progetto-grafico.md](progetto-grafico.md).
+
 **Verificato oggi** — contrasti della palette, calcolati con la formula WCAG:
 
 | Coppia (testo su fondo) | Rapporto | Uso consentito |

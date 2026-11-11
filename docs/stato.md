@@ -11,15 +11,19 @@ indicizzato.
 
 **Fatto e provato in container**
 
+- Grafica «Solar & Fresh» del committente su tutto il sito, con il suo logo ridisegnato
+  in vettoriale ([progetto-grafico.md](progetto-grafico.md), [marchio](marchio/marchio.md)).
 - Sito pubblico in italiano e inglese: sei pagine per lingua, più «Esplora» e la scheda
-  di ogni stabilimento.
+  di ogni stabilimento. Ricerca per località, giorno, ospiti e giornate condivise, con
+  postazioni libere e prezzo «da» reale; planimetria a colori con barra di riepilogo.
 - Prenotazione dell'ospite: scelta della postazione, riepilogo con codice promozionale,
   riserva, dati, pagamento di prova, pass con codice QR e codice breve.
 - Reception: verifica del pass con ingresso, uscita e rientro, prenotazione al banco,
   spostamento di postazione, elenco del giorno.
 - Gestione dello stabilimento: giornate, prezzi, blocchi, annullamento con rimborso
   registrato, proposte degli stagionali, regole della condivisione, abbonamenti,
-  riepilogo economico, sito con tre modelli, bozze e revisioni.
+  riepilogo economico, sito con tre modelli, bozze, revisioni, copertina e galleria
+  scelte tra le immagini dimostrative.
 - Stagionale: proposte anche ricorrenti, ritiro delle date libere, rendiconto con la
   propria quota e senza dati dell'ospite.
 - Economia: ripartizione di ogni vendita, registro che si può solo estendere,
@@ -39,26 +43,34 @@ indicizzato.
 - Console centrale della piattaforma, gruppi e cooperative, piani in `plan_feature`.
 - Annullamento da parte dell'ospite: aspetta le condizioni di cancellazione.
 - Chiusura di un'intera giornata con annullamento di tutte le prenotazioni.
-- Immagini e dominio personalizzato nel sito dello stabilimento.
-- Pagine di località, «Chi siamo», mappa.
+- Caricamento di foto proprie e dominio personalizzato nel sito dello stabilimento.
+- Pagine di località, «Chi siamo», mappa interattiva, recensioni, distanza dalla spiaggia.
+- Console della reception a griglia («Ombrè Skipper»), banner «Dritta Ombrè», elenco
+  degli stabilimenti in pagina iniziale: vedi i limiti in
+  [progetto-grafico.md](progetto-grafico.md).
 - Metriche, allarmi, backup pianificato, CI collegata a un repository.
 
 ## Collaudo
 
-Esito completo in [collaudo.md](collaudo.md). In sintesi, l'11/11/2026: 85 test e 332
-controlli sul sistema in esecuzione superati, backup ripristinato. Dei 15 scenari di
+Esito completo in [collaudo.md](collaudo.md). In sintesi, l'11/11/2026, dopo il nuovo
+progetto grafico: 102 test e 462 controlli sul sistema in esecuzione superati, backup
+ripristinato. Una revisione indipendente di grafica e accessibilità ha trovato venti
+rilievi, nessuno bloccante: quindici corretti, gli altri registrati tra i limiti. Dei 15 scenari di
 accettazione del progetto, 12 sono superati e 3 lo sono in parte (rimborsi eseguiti,
 chiusura di un'intera giornata, prove di accessibilità con persone).
 
 Limiti noti del codice: la Content-Security-Policy ammette gli script in linea, perché
 il framework scrive in linea i dati delle pagine; i limiti alle richieste vivono nella
 memoria di un solo processo dell'API; il preventivo non è salvato con una scadenza
-propria; il segreto della verifica in due passaggi è salvato in chiaro nel database.
+propria; il segreto della verifica in due passaggi è salvato in chiaro nel database; la
+pagina «non trovata» di un indirizzo ben formato ma senza dati (per esempio uno
+stabilimento inesistente) ha il codice 404 giusto, ma senza script appare vuota.
 
 ## Ambiente dimostrativo
 
 Progetto compose `ombre-demo`, porte 3220 (sito) e 3221 (API), segreti in `.env.demo`
-(non versionato). Si avvia e si ferma così, dalla cartella `ombre/`:
+(non versionato). Contiene due stabilimenti di fantasia, tra cui «Lido Aurora» con
+immagini, abbonamenti e prenotazioni già fatte: guida in [demo.md](demo.md). Si avvia e si ferma così, dalla cartella `ombre/`:
 
 ```bash
 docker compose --env-file .env.demo -p ombre-demo --profile tunnel up -d

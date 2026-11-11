@@ -151,5 +151,27 @@ Su richiesta del committente esiste un ambiente dimostrativo separato (progetto 
 `ombre-demo`, porte 3220 e 3221, segreti generati in `.env.demo`, non versionato)
 raggiungibile da un indirizzo temporaneo creato dal profilo `tunnel`. Contiene solo dati
 dimostrativi e il fornitore di pagamento di prova. Non è un rilascio: il sito resta non
-indicizzabile e dichiara che il servizio è in preparazione.
+indicizzabile e, con `OMBRE_DEMO_MODE=true`, dichiara in ogni pagina di essere un
+ambiente dimostrativo con dati di esempio e senza pagamenti reali.
+
+## D20 — Progetto grafico e logo del committente — accettata (11/11/2026)
+
+Il sito adotta il progetto «Solar & Fresh» fornito dal committente: palette (Deep Ocean
+Teal, Seafoam Tint, Sand Amber, Slate Abyss, Ivory Sand), ricerca in evidenza,
+planimetria a colori con barra di riepilogo. Sostituisce l'identità proposta nella v3.0.
+Il logo è quello del committente, ricalcato in vettoriale dalla sua scheda; la scritta è
+in Nunito Bold convertita in tracciati. Le versioni che la scheda non mostra
+(orizzontale, su fondo scuro, a un colore, icona semplificata) sono derivate e attendono
+la sua approvazione; un originale vettoriale, se esiste, sostituisce il ricalco.
+I colori di stato della planimetria non reggono il testo sopra: riempiono solo segni
+grafici, e lo stato è sempre indicato anche da forma ed etichetta.
+
+## D21 — Solo dati veri nell'interfaccia; immagini dimostrative dichiarate — accettata (11/11/2026)
+
+Gli elementi del progetto grafico senza dati dietro non compaiono: fotografie, punteggi
+da recensioni, distanza dalla spiaggia, mappa interattiva, portafogli di pagamento. Le
+immagini dell'ambiente dimostrativo sono illustrazioni originali dichiarate come tali, e
+il sito dello stabilimento può scegliere solo tra quelle finché non esiste il
+caricamento di foto proprie. Lo stabilimento «Lido Aurora» è di fantasia e segnalato in
+ogni pagina.
 

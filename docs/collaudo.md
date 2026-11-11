@@ -1,9 +1,9 @@
 # Collaudo
 
 Esito del collaudo dell'11/11/2026, eseguito con `pnpm collaudo` su container creati da
-zero e rimossi alla fine. Il comando esegue lint e controllo dei tipi, 85 test (47 su un
+zero e rimossi alla fine. Il comando esegue lint e controllo dei tipi, 102 test (72 su un
 PostgreSQL vero), costruisce le immagini, avvia database, API, worker e sito, percorre
-sette verifiche sul sistema in esecuzione (332 controlli) e ripristina un backup.
+sette verifiche sul sistema in esecuzione (462 controlli) e ripristina un backup.
 
 Tutti i dati sono dimostrativi: lo stabilimento «Bagno delle Dune» è fittizio e il
 pagamento passa da un fornitore di prova che non muove denaro.
@@ -13,11 +13,11 @@ pagamento passa da un fornitore di prova che non muove denaro.
 | Parte | Controlli | Esito |
 |---|---|---|
 | Lint e tipi | tutto il codice | Superati |
-| Test | 85 | Superati |
-| Pagine pubbliche (`smoke`) | 204 | Superati |
-| Percorso di riserva sul sito (`smoke:flow`) | 24 | Superati |
-| Aree riservate sul sito (`smoke:areas`) | 45 | Superati |
-| Sito dello stabilimento (`smoke:site`) | 20 | Superati |
+| Test | 102 | Superati |
+| Pagine pubbliche e pagina «non trovata» (`smoke`) | 264 | Superati |
+| Ricerca, planimetria e percorso di riserva sul sito (`smoke:flow`) | 68 | Superati |
+| Aree riservate sul sito (`smoke:areas`) | 67 | Superati |
+| Sito dello stabilimento (`smoke:site`) | 24 | Superati |
 | Prenotazione e ruoli sull'API (`smoke:booking`) | 15 | Superati |
 | Acquisti simultanei sull'API (`smoke:api`) | 13 | Superati |
 | Verifica in due passaggi (`smoke:2fa`) | 11 | Superati |
@@ -61,3 +61,14 @@ pagamento passa da un fornitore di prova che non muove denaro.
 - Prove con persone: accessibilità assistita, personale della reception, ospiti.
 - Verifica di sicurezza indipendente e prove di intrusione.
 - Aspetti legali e fiscali, che il progetto affida ai professionisti.
+
+## Revisione indipendente della grafica
+
+Dopo l'applicazione del progetto grafico del committente, un revisore che non aveva
+partecipato al lavoro ha esaminato il sito in esecuzione a 390 e 1280 px, senza script e
+da tastiera. Nessun difetto bloccante. Ha trovato solidi contrasti (minimo 5,49:1),
+struttura dei titoli, etichette, testi alternativi, bersagli di tocco, uso senza script e
+parità tra le lingue. Dei venti rilievi, quindici sono stati corretti e verificati con
+nuovi controlli automatici; gli altri sono scelte rimandate, elencate tra i limiti di
+[progetto-grafico.md](progetto-grafico.md).
+

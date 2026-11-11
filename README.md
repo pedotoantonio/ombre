@@ -21,6 +21,9 @@ reception lavora sullo stesso inventario del sito: nessuna agenda parallela.
 | [docs/qualita-web.md](docs/qualita-web.md) | Requisiti di design, accessibilità, prestazioni, SEO, AEO e GEO: pagine pubbliche, domande dei clienti, dati da confermare, verifiche |
 | [docs/prompt-qualita-web.md](docs/prompt-qualita-web.md) | Il prompt di qualità web del committente, da rieseguire sul codice quando esisteranno le pagine |
 | [docs/struttura-logica.png](docs/struttura-logica.png) | Schema della struttura logica: attori, superfici, API e moduli, dati (sorgente in `struttura-logica.svg`) |
+| [docs/progetto-grafico.md](docs/progetto-grafico.md) | Il progetto grafico del committente: palette, contrasti, cosa chiede e cosa resta fuori |
+| [docs/marchio/marchio.md](docs/marchio/marchio.md) | Il logo nelle sue versioni e le regole d'uso |
+| [docs/demo.md](docs/demo.md) | L'ambiente dimostrativo: stabilimenti di fantasia, accessi e percorsi da provare |
 | [docs/collaudo.md](docs/collaudo.md) | Esito del collaudo: i 15 scenari di accettazione, cosa li verifica, cosa resta aperto |
 | [docs/decisioni.md](docs/decisioni.md) | Registro delle decisioni (ADR brevi) |
 | [docs/stato.md](docs/stato.md) | Stato del progetto e prossimo risultato da costruire |

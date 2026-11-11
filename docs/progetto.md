@@ -96,6 +96,10 @@ L'identità visiva non è una protezione dei dati: i controlli appartengono al s
 
 ## Identità visiva e accessibilità
 
+> Palette e logo di questa sezione sono quelli proposti nella v3.0. Dall'11/11/2026 vale
+> il progetto grafico del committente: vedi [progetto-grafico.md](progetto-grafico.md) e
+> la decisione D20. Restano valide le regole su accessibilità, stati e linguaggio.
+
 | Token | Colore | Uso |
 |---|---|---|
 | Laguna / primario | `#023047` | Testi, navigazione, pulsanti principali |
