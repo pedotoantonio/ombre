@@ -220,3 +220,4 @@ export function CoastScene(): ReactElement {
     </svg>
   );
 }
+export * from './icons';
