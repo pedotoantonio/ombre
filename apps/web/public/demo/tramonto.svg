@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800"><title>Tramonto sul mare: il sole all'orizzonte, il riflesso sull'acqua e gli ombrelloni chiusi in controluce</title>
+<defs>
+<linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F9D48B"/><stop offset="1" stop-color="#F4976C"/></linearGradient>
+<g id="c"><rect x="-3.5" y="-190" width="7" height="190" rx="3"/><path d="M0-200C13-172 20-120 17-84Q0-76-17-84C-20-120-13-172 0-200Z"/></g>
+<g id="b"><ellipse cx="0" cy="1" rx="62" ry="6" fill="#8C5A40" opacity=".45"/><path d="M-44 0v-16M24 0v-16" stroke="#16314F" stroke-width="5" stroke-linecap="round"/><path d="M-58-26h80l31-33a6 6 0 0 1 9 8l-34 36h-86a5.5 5.5 0 0 1 0-11z"/></g>
+</defs>
+<rect width="1200" height="440" fill="url(#g)"/>
+<circle cx="600" cy="430" r="170" fill="#FFE2A8" opacity=".35"/><circle cx="600" cy="430" r="96" fill="#FFF0CC"/>
+<g fill="#F7A072" opacity=".7"><rect x="120" y="150" width="280" height="22" rx="11"/><rect x="200" y="186" width="150" height="16" rx="8"/><rect x="820" y="110" width="250" height="22" rx="11"/><rect x="900" y="146" width="220" height="16" rx="8"/><rect x="60" y="300" width="200" height="14" rx="7"/><rect x="930" y="290" width="180" height="14" rx="7"/></g>
+<path d="M380 250q8 -9 16 0q8 -9 16 0" fill="none" stroke="#16314F" stroke-width="3" stroke-linecap="round"/>
+<path d="M430 222q5.6 -6.3 11.2 0q5.6 -6.3 11.2 0" fill="none" stroke="#16314F" stroke-width="2.1" stroke-linecap="round"/>
+<path d="M760 200q6.4 -7.2 12.8 0q6.4 -7.2 12.8 0" fill="none" stroke="#16314F" stroke-width="2.4" stroke-linecap="round"/>
+<path d="M0 432V396C90 366 190 372 270 404L330 432Z" fill="#5B5470"/>
+<rect y="430" width="1200" height="170" fill="#005F73"/>
+<path d="M-40 480q65 -4 130 0t130 0t130 0t130 0t130 0t130 0t130 0t130 0t130 0t130 0V600H-40Z" fill="#0A5165"/>
+<path d="M-130 530q55 -5 110 0t110 0t110 0t110 0t110 0t110 0t110 0t110 0t110 0t110 0t110 0t110 0t110 0V600H-130Z" fill="#12435B"/>
+<g fill="#FFD9A0"><rect x="520" y="440" width="160" height="9" rx="4.5"/><rect x="540" y="460" width="120" height="8" rx="4" opacity=".9"/><rect x="505" y="480" width="150" height="8" rx="4" opacity=".8"/><rect x="560" y="500" width="110" height="8" rx="4" opacity=".7"/><rect x="530" y="522" width="90" height="8" rx="4" opacity=".6"/><rect x="575" y="544" width="80" height="8" rx="4" opacity=".5"/></g>
+<path d="M-20 566q45 -6 90 0t90 0t90 0t90 0t90 0t90 0t90 0t90 0t90 0t90 0t90 0t90 0t90 0t90 0V610H-20Z" fill="#F9C99A"/>
+<path d="M-50 580q45 -6 90 0t90 0t90 0t90 0t90 0t90 0t90 0t90 0t90 0t90 0t90 0t90 0t90 0t90 0V620H-50Z" fill="#B9795A"/>
+<path d="M-70 592q45 -6 90 0t90 0t90 0t90 0t90 0t90 0t90 0t90 0t90 0t90 0t90 0t90 0t90 0t90 0t90 0V800H-70Z" fill="#D99A6C"/>
+<path d="M0 700Q300 660 620 700T1200 676V800H0Z" fill="#C4835B"/>
+<g fill="#16314F"><use href="#b" transform="translate(159 664)scale(0.7)" fill="#16314F"/><use href="#b" transform="translate(271 664)scale(-0.7 0.7)" fill="#16314F"/><use href="#c" transform="translate(215 660)scale(0.7)"/></g>
+<g fill="#16314F"><use href="#b" transform="translate(432 664)scale(0.7)" fill="#16314F"/><use href="#b" transform="translate(544 664)scale(-0.7 0.7)" fill="#16314F"/><use href="#c" transform="translate(488 660)scale(0.7)"/></g>
+<g fill="#16314F"><use href="#b" transform="translate(656 664)scale(0.7)" fill="#16314F"/><use href="#b" transform="translate(768 664)scale(-0.7 0.7)" fill="#16314F"/><use href="#c" transform="translate(712 660)scale(0.7)"/></g>
+<g fill="#16314F"><use href="#b" transform="translate(929 664)scale(0.7)" fill="#16314F"/><use href="#b" transform="translate(1041 664)scale(-0.7 0.7)" fill="#16314F"/><use href="#c" transform="translate(985 660)scale(0.7)"/></g>
+<g fill="#16314F"><use href="#b" transform="translate(-30 786)scale(1.1)" fill="#16314F"/><use href="#b" transform="translate(130 786)scale(-1.1 1.1)" fill="#16314F"/><use href="#c" transform="translate(50 780)scale(1.1)"/></g>
+<g fill="#16314F"><use href="#b" transform="translate(300 786)scale(1.1)" fill="#16314F"/><use href="#b" transform="translate(460 786)scale(-1.1 1.1)" fill="#16314F"/><use href="#c" transform="translate(380 780)scale(1.1)"/></g>
+<g fill="#16314F"><use href="#b" transform="translate(740 786)scale(1.1)" fill="#16314F"/><use href="#b" transform="translate(900 786)scale(-1.1 1.1)" fill="#16314F"/><use href="#c" transform="translate(820 780)scale(1.1)"/></g>
+<g fill="#16314F"><use href="#b" transform="translate(1070 786)scale(1.1)" fill="#16314F"/><use href="#b" transform="translate(1230 786)scale(-1.1 1.1)" fill="#16314F"/><use href="#c" transform="translate(1150 780)scale(1.1)"/></g>
+</svg>
