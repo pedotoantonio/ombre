@@ -188,3 +188,28 @@ sono stati ripresi la scritta «Ombrè» con le grazie (vale il logo della sched
 committente) né il pulsante corallo con testo bianco (3,09:1). Prima di una
 pubblicazione il committente deve confermare provenienza e diritti della fotografia.
 
+
+## D23 — Mappa con Leaflet e tasselli OpenStreetMap; coordinate sul `beach` — accettata (15/11/2026)
+
+Il committente chiede la navigazione su mappa come modalità principale per identificare
+i lidi dalla pagina iniziale. Si supera il rinvio della mappa interattiva: libreria
+Leaflet installata da npm e servita dal dominio di Ombrè (nessuno script esterno, come
+da qualità web §4), tasselli raster di OpenStreetMap con attribuzione visibile, unica
+aggiunta alla Content-Security-Policy in `img-src`. Le coordinate sono due colonne
+facoltative su `beach`, impostate dal gestore: uno stabilimento senza coordinate non
+compare sulla mappa e resta in lista (coerente con D21). La mappa si carica pigramente,
+non è mai un requisito: la lista rimane la via completa ed equivalente, e in «Esplora»
+mappa e lista mostrano la stessa selezione. Niente geolocalizzazione del visitatore.
+Specifica in [specifica-mappa-gestore.md](specifica-mappa-gestore.md).
+
+## D24 — Zone riva/monte, lettini singoli e tipo di affitto sul posto — accettata (15/11/2026)
+
+Il layout resta sulla sola tabella `spot`, estesa con la zona (`riva`, `ombrelloni`,
+`monte`, fila contata dentro la zona) e con `rental_type` e `rental_notes`, dati
+gestionali mai pubblici; su `beach` le distanze `shore_gap_rows` e `land_gap_rows`
+(file di distacco dei lettini dagli ombrelloni, richieste dal committente). Un lettino
+singolo è una postazione ordinaria (0 ombrelloni, 1 lettino, 1 ospite): prenotabile,
+bloccabile, con prezzo per giornata. L'etichetta «Stagionale» è una classificazione del
+gestore e non crea né richiede un `season_contract`. Il gestore configura struttura e
+tipi con il nuovo permesso `layout.edit`; la reception può cambiare le sole distanze.
+L'eliminazione di una postazione è ammessa solo se mai usata.
