@@ -22,6 +22,7 @@ L'accesso è in fondo a ogni pagina, «Area riservata».
 | Stagionale Anna | `anna@lidoaurora.example` | Postazioni B03 e B04 di Lido Aurora |
 | Stagionale Bruno | `bruno@lidoaurora.example` | Postazioni C02 e C05 di Lido Aurora |
 | Stagionale | `stagionale@bagnodelledune.example` | B02 del Bagno delle Dune, D01 e D06 di Lido Aurora |
+| Titolare di cabina | `cabina@lidoaurora.example` | Solo le proprie cabine del mare di Lido Aurora, con proposte di subaffitto |
 
 ## Lido Aurora in breve
 
@@ -29,6 +30,19 @@ L'accesso è in fondo a ogni pagina, «Area riservata».
   E €28. Le file D ed E hanno più lettini e accolgono più ospiti.
 - **Lettini singoli**: sei in zona riva (`R01`–`R06`, a una fila dagli ombrelloni) e
   quattro sul lato monte (`M01`–`M04`, a due file), in vendita come le altre postazioni.
+- **Tipi di postazione**: oltre ai tre tipi di base (Ombrellone, Lettino singolo,
+  Gazebo) c'è il tipo personalizzato «Tenda araba». Nella fila 6 degli ombrelloni:
+  due gazebo `G01`–`G02` (4 ospiti, prezzo predefinito 60 €) e la tenda `T01` (50 €).
+  Il prezzo del tipo vale alla pubblicazione delle giornate nuove; per gli altri vale
+  il prezzo base.
+- **Disegno della spiaggia**: mare in alto, una passerella verticale dopo la colonna 4,
+  una passerella orizzontale dopo la fila C, la struttura «Bar» sul lato monte e un
+  blocco di cabine disegnato in fila 2 del lato monte. Tutto si modifica dalla sezione
+  «Disegno» della pagina «Spiaggia», senza JavaScript.
+- **Cabine del mare**: quattro cabine `CAB1`–`CAB4` agganciate al blocco disegnato.
+  `CAB1` è affidata al titolare dimostrativo con accesso (`cabina@lidoaurora.example`),
+  con un subaffitto approvato in corso e una proposta in attesa; `CAB2` è affidata a un
+  titolare senza accesso, che esiste solo nei registri del gestore.
 - **Tipi di affitto d'esempio** (annotazioni del gestore, mai pubbliche): `A07`
   «Albergo» con nota sulla convenzione, `B03` «Stagionale» (coerente con il contratto di
   Anna), `E05` «Animazione bimbi» con nota, per mostrare anche un'etichetta
@@ -77,11 +91,29 @@ L'accesso è in fondo a ogni pagina, «Area riservata».
 5. **Mappa** (ospite). Dalla pagina iniziale naviga la mappa, apri la scheda di un lido
    dal segnaposto e prenota un lettino di riva (`R01`–`R06`) come ogni altra
    postazione, fino al pass.
-6. **Stagionale**. Entra come Anna → postazione B03 → proponi i martedì e i giovedì delle
+6. **Disegno** (gestore). In «Spiaggia», sezione «Disegno»: scegli il lato del mare
+   (in basso si inverte solo la disposizione visiva), poi uno strumento — passerella
+   orizzontale o verticale, struttura con etichetta, blocco cabine, gomma — e tocca le
+   celle libere della griglia, in due passi per gli elementi estesi; oppure usa il
+   modulo a coordinate. Una sovrapposizione è rifiutata con il motivo accanto alla
+   griglia, e la planimetria pubblica rispecchia subito il disegno.
+7. **Tipi** (gestore). In «Spiaggia», sezione «Tipi di postazione»: crea un tipo con
+   segno dal repertorio, dotazione e prezzo predefinito; aggiungi una fila con quel
+   tipo e ritrova il nome del tipo nell'etichetta pubblica; prova a eliminare un tipo
+   usato o uno di base per vedere il rifiuto.
+8. **Cabine** (gestore). Dalla gestione di Lido Aurora apri «Cabine»: autorizza o
+   rifiuta la proposta in attesa, affida una cabina libera per un periodo (titolare
+   con o senza accesso), chiudi un affidamento prima della scadenza e guarda il
+   troncamento dei subaffitti. Gli affidamenti sovrapposti sono rifiutati.
+9. **Titolare di cabina**. Entra come `cabina@lidoaurora.example`: vedi solo le tue
+   cabine, i periodi e le tue proposte; proponi un subaffitto dentro il periodo (fuori
+   periodo o sovrapposto a uno approvato è rifiutato). La reception vede «Cabine di
+   oggi» nella sua pagina e non decide nulla; al pubblico le cabine non compaiono mai.
+10. **Stagionale**. Entra come Anna → postazione B03 → proponi i martedì e i giovedì delle
    prossime due settimane → guarda nel rendiconto la quota maturata sulla B04.
-7. **Ruoli**. Entra come contabilità: vedi solo l'economia. Entra come reception: i
+11. **Ruoli**. Entra come contabilità: vedi solo l'economia. Entra come reception: i
    prezzi non si possono cambiare.
-8. **Due lingue**. Ripeti un percorso dall'indirizzo inglese, con «English» in alto.
+12. **Due lingue**. Ripeti un percorso dall'indirizzo inglese, con «English» in alto.
 
 ## Avvio
 

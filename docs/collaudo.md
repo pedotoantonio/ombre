@@ -1,5 +1,72 @@
 # Collaudo
 
+## Collaudo del 15/11/2026 (sera) — editor del disegno, tipi di postazione, cabine del mare
+
+Collaudo della [specifica editor, tipi e cabine](specifica-editor-tipi-cabine.md)
+(commit `e846fb4`, `5ef0ccd`, `2522b29`, `36b604d`), eseguito su uno stack Docker
+dedicato ricostruito da zero (progetto `ombre-collaudo`, seed dimostrativi e vetrina)
+con `pnpm check`, `pnpm test:db`, i sette collaudi fumo e la verifica HTTP dei nove
+criteri di accettazione (0–8), nei panni di gestore, titolare di cabina, reception e
+ospite, con `curl` e moduli POST, senza JavaScript.
+
+### Test e collaudi fumo
+
+| Parte | Controlli | Esito |
+|---|---|---|
+| Lint, tipi e build (`pnpm check`) | tutto il codice, contratto OpenAPI incluso | Superati |
+| Test con PostgreSQL vero (`pnpm test:db`) | 129 (28 shared, 2 comms, 25 db, 68 api, 6 worker) | Superati |
+| Pagine pubbliche (`smoke`) | 272 | Superati |
+| Ricerca, planimetria e riserva (`smoke:flow`) | 69 | Superati |
+| Aree riservate (`smoke:areas`) | 67 | Superati |
+| Sito dello stabilimento (`smoke:site`) | 24 | Superati |
+| Prenotazione e ruoli sull'API (`smoke:booking`) | 15 | Superati |
+| Acquisti simultanei sull'API (`smoke:api`) | 13 | Superati |
+| Verifica in due passaggi (`smoke:2fa`) | 11 | Superati |
+
+I collaudi fumo sono stati eseguiti nell'ordine di `scripts/collaudo.sh` sullo stack
+appena seminato, con `OMBRE_SITE_URL=http://localhost:3210` (il valore cotto
+nell'immagine del sito) e gli indirizzi reali `127.0.0.1:3232/3231`.
+
+### Criteri di accettazione della specifica
+
+| # | Criterio | Esito |
+|---|---|---|
+| 0 | Dopo le migrazioni nessuna postazione senza `col` né senza `type_id` (61 postazioni, nessun duplicato di colonna); prezzi e prenotazioni del seed coerenti (G01/G02 a 60 €, T01 a 50 €, 20 prenotazioni, 1.135 giornate); le rotte pubbliche (`/v1/beaches`, scheda, `availability`, sito) non espongono nessuna chiave `rental_*`, `retired`, `cabin*`, `holder*`, `sublet*`, `assignment*` — verificato sul JSON vivo oltre che dal test | Superato |
+| 1 | Mare in basso da modulo POST: nell'HTML pubblico compaiono solo le classi `--flip` (4 occorrenze), DOM, sequenza dei tag ed elenco identici; riportato in alto l'HTML torna **byte per byte** uguale a prima | Superato |
+| 2 | Disegnate da HTTP, strumento nella query string e due passi espliciti: passerella orizzontale (ombrelloni, dopo fila 5), verticale (colonna 7), struttura «Docce» e blocco cabine; planimetria pubblica e anteprima del gestore con la stessa sequenza di 85 etichette e codici; gomma su tre elementi (`dok=Elemento rimosso.`); sovrapposizione su «Bar» rifiutata con `element_overlap` e messaggio `role="alert"` accanto alla griglia | Superato |
+| 3 | I tre tipi di base ci sono; creato «Letto king» (mark daybed, 70 €); fila `K01`–`K02` in riva nata con quel tipo e i suoi predefiniti; etichetta pubblica «Letto king K01»; eliminazione rifiutata per tipo usato, builtin e tipo appena usato (`type_in_use`, messaggio sulla pagina) | Superato |
+| 4 | Giornata nuova (25/12) pubblicata a 20 €: G01/G02 a 60 €, T01 a 50 €, K01/K02 a 70 €, tutte le altre a 20 €; gazebo G01 prenotato dal pubblico fino al pass con QR (`OM-261225-001`) | Superato |
+| 5 | CAB3 affidata a un titolare senza accesso (solo nome e contatto); affidamento sovrapposto rifiutato con `assignment_invalid` e messaggio chiaro | Superato |
+| 6 | Il titolare `cabina@lidoaurora.example` vede solo CAB1 e CAB4 (403 sulle rotte del gestore); proposta valida approvata dal gestore; fuori periodo e sovrapposta a un subaffitto approvato rifiutate (`sublet_invalid`); chiusura anticipata di CAB4 al 25/12 con 1 subaffitto troncato e l'avviso nella pagina del titolare; la reception vede «Cabine di oggi» e riceve `forbidden`/404 sulle decisioni; tutto in `audit_event` (`cabins.assign`, `cabins.assignment-end`, `cabins.sublet-propose/-approve/-truncate`, `types.*`, `layout.element-add/-remove`, `layout.sea-side`) | Superato |
+| 7 | Nessuna traccia di cabine, affidamenti, subaffitti o titolari in home, «Esplora», scheda del lido, prenota, `/dati/mappa` e nelle rotte pubbliche dell'API; nella planimetria pubblica resta solo il blocco disegnato con l'etichetta «Cabine», come da specifica | Superato |
+| 8 | `pnpm check` e `pnpm test:db` verdi (rieseguiti dopo la correzione); contratto OpenAPI aggiornato: **69 rotte** (61 percorsi); collaudi fumo verdi; sette schermate nuove desktop e telefono | Superato |
+
+### Difetti trovati e correzioni
+
+- **Conteggio d'uso dei tipi sempre a zero** (`GET /v1/manage/beaches/:slug/types`):
+  nella sottoquery correlata di `listSpotTypes` Drizzle rende le colonne della lista
+  di selezione senza qualificarle, così `spot_type.id` diventava `"id"` e si risolveva
+  su `spot.id`: il conteggio era sempre 0 e la sezione «Tipi di postazione» offriva
+  «Elimina» anche per i tipi usati (l'API rifiutava comunque: nessun effetto sui
+  dati). Corretto qualificando la coppia correlata in
+  `packages/db/src/spot-types.ts`; test di regressione aggiunto in
+  `apps/api/tests/canvas.test.ts` (Ombrellone > 0, Gazebo = 0 sul seed di prova);
+  immagini ricostruite e conteggi verificati di nuovo da HTTP (40/10/2/1/2).
+- Nessun altro difetto: tutte le altre verifiche sono passate alla prima esecuzione.
+
+### Limiti residui
+
+- I collaudi fumo non percorrono ancora le sezioni nuove (disegno, tipi, cabine): la
+  loro verifica resta quella dei criteri da HTTP di questo collaudo. Le suite sono
+  state eseguite prima della correzione del conteggio, che non tocca nulla di ciò che
+  misurano; `pnpm check` e `pnpm test:db` sono stati rieseguiti dopo.
+- Le schermate mostrano anche le aggiunte del collaudo (fila `K01`–`K02` «Letto
+  king», struttura «Docce», affidamenti su CAB3 e CAB4, prenotazione del gazebo):
+  sono la prova che i percorsi dal gestore funzionano, e l'ambiente resta in piedi
+  con questi dati.
+- Come prima: suite fumo da eseguire in ordine su un database appena seminato;
+  esclusi pagamenti reali, posta, carico, prove con persone e lettore di schermo.
+
 ## Collaudo del 15/11/2026 — mappa in evidenza e gestione della spiaggia
 
 Collaudo della [specifica mappa e gestione della spiaggia](specifica-mappa-gestore.md)
