@@ -250,17 +250,6 @@ const markComponents: Record<SpotMarkKind, (props: { status: ApiMapSpot['status'
   daybed: DaybedMark,
 };
 
-/**
- * The mark a spot is drawn with. The manager's pages know the mark of the type; the
- * public availability carries the type name only, so the three builtin names map to
- * their fixed marks and any custom type falls back to the equipment shape.
- */
-export function markFor(typeName: string, umbrellas: number): SpotMarkKind {
-  if (typeName === 'Ombrellone') return 'umbrella';
-  if (typeName === 'Lettino singolo') return 'sunbed';
-  if (typeName === 'Gazebo') return 'gazebo';
-  return umbrellas === 0 ? 'sunbed' : 'umbrella';
-}
 
 /** The mark of a spot, from the fixed repertoire. Without a mark, the equipment decides. */
 export function SpotMark({ mark, umbrellas = 1, status, selected = false }: { mark?: SpotMarkKind; umbrellas?: number; status: ApiMapSpot['status']; selected?: boolean }) {
@@ -272,7 +261,7 @@ function MapSpot({ locale, beach, spot, day, selected }: { locale: Locale; beach
   const t = getDictionary(locale, config.brandName).booking;
   const content = (
     <>
-      <SpotMark mark={markFor(spot.typeName, spot.umbrellas)} status={spot.status} selected={selected} />
+      <SpotMark mark={spot.typeMark} status={spot.status} selected={selected} />
       <span className="plan-spot__code" aria-hidden="true">
         {spot.code}
       </span>
@@ -631,7 +620,7 @@ function BeachMap({
           <UmbrellaMark status="free" selected />
           {t.status.selected}
         </li>
-        <MarkLegendItems locale={locale} marks={layout.map((spot) => markFor(spot.typeName, spot.umbrellas))} />
+        <MarkLegendItems locale={locale} marks={layout.map((spot) => spot.typeMark)} />
       </ul>
       <PlanCanvas
         locale={locale}

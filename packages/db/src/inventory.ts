@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { and, asc, eq, gte, ilike, or, sql } from 'drizzle-orm';
-import { quoteDay, type DayQuote, type SeaSide } from '@ombre/shared';
+import { quoteDay, type DayQuote, type SeaSide, type SpotMark } from '@ombre/shared';
 import { withBeach, type Database, type Transaction } from './client';
 import { listElements, type LayoutElementView } from './layout';
 import { beach, hold, inventoryDay, promotion, spot, spotType } from './schema';
@@ -86,6 +86,7 @@ export interface AvailableSpot {
   rowNumber: number;
   col: number;
   typeName: string;
+  typeMark: SpotMark;
   umbrellas: number;
   sunbeds: number;
   maxGuests: number;
@@ -107,6 +108,7 @@ export function listAvailability(db: Database, beachId: string, day: string): Pr
         rowNumber: spot.rowNumber,
         col: spot.col,
         typeName: spotType.name,
+        typeMark: spotType.mark,
         umbrellas: spot.umbrellas,
         sunbeds: spot.sunbeds,
         maxGuests: spot.maxGuests,
@@ -131,6 +133,8 @@ export interface DaySpot {
   col: number;
   /** Name of the spot type, shown on the public label. */
   typeName: string;
+  /** Mark of the spot type, so the public drawing uses the exact sign. */
+  typeMark: SpotMark;
   umbrellas: number;
   sunbeds: number;
   maxGuests: number;
@@ -151,6 +155,7 @@ export function listDayMap(db: Database, beachId: string, day: string): Promise<
         rowNumber: spot.rowNumber,
         col: spot.col,
         typeName: spotType.name,
+        typeMark: spotType.mark,
         umbrellas: spot.umbrellas,
         sunbeds: spot.sunbeds,
         maxGuests: spot.maxGuests,

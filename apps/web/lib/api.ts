@@ -39,6 +39,8 @@ export interface ApiMapSpot {
   col: number;
   /** Name of the spot type, part of the public label. */
   typeName: string;
+  /** Mark of the type, so the drawing uses the exact sign even for custom types. */
+  typeMark: 'umbrella' | 'sunbed' | 'gazebo' | 'tent' | 'daybed';
   umbrellas: number;
   sunbeds: number;
   maxGuests: number;
@@ -53,6 +55,7 @@ export interface ApiSpot {
   rowNumber: number;
   col: number;
   typeName: string;
+  typeMark: 'umbrella' | 'sunbed' | 'gazebo' | 'tent' | 'daybed';
   umbrellas: number;
   sunbeds: number;
   maxGuests: number;
