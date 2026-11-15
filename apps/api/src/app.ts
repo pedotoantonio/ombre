@@ -4,43 +4,59 @@ import { sql } from 'drizzle-orm';
 import { z } from 'zod';
 import {
   acquireHold,
+  addElement,
   addRow,
   addSpot,
   applyPaymentOutcome,
+  assignCabin,
   authorize,
   beginTwoFactor,
+  cabinHistory,
+  cabinsToday,
   cancelByBeachClub,
   checkAccess,
   confirmTwoFactor,
+  createCabin,
   createContract,
+  createSpotType,
   decideProposal,
+  decideSublet,
+  deleteCabin,
   deleteSpot,
+  deleteSpotType,
   deskBooking,
   DomainError,
+  endAssignment,
   findActiveBeach,
   getBooking,
   getHold,
   getLayout,
+  getPublicCanvas,
   getPublishedSite,
   getSharingSettings,
   getSiteState,
-  getZoneGaps,
   holderStatement,
   listActiveBeaches,
+  listCabins,
   listDayMap,
   listBookings,
   listContracts,
   listInventory,
+  listMyCabins,
   listMyContracts,
+  listPendingSublets,
   listProposals,
   listMemberships,
+  listSpotTypes,
   login,
   logout,
   moveBooking,
   nextAvailableDay,
   proposeDays,
+  proposeSublet,
   publishDraft,
   publishDay,
+  removeElement,
   reportSummary,
   resolveSession,
   restoreRevision,
@@ -53,9 +69,13 @@ import {
   setPrice,
   setRetired,
   setRowRental,
+  setSeaSide,
   setSharingSettings,
+  setSpotType,
   startCheckout,
+  updateCabin,
   updateSpot,
+  updateSpotType,
   withdrawDay,
   quoteSpot,
   type Database,
@@ -65,7 +85,28 @@ import {
 } from '@ombre/db';
 import { buildOpenApi, type Operation } from './openapi';
 import { createRateLimiter, type RateLimiter } from './rate-limit';
-import { base32Encode, expandRecurrence, maxGapRows, rentalNotesMaxLength, rentalTypeMaxLength, siteTemplates, siteTextLimits, spotZones, type Action, type DayQuote } from '@ombre/shared';
+import {
+  base32Encode,
+  cabinCodeMaxLength,
+  cabinNotesMaxLength,
+  elementLabelMaxLength,
+  expandRecurrence,
+  holderContactMaxLength,
+  holderNameMaxLength,
+  maxColumns,
+  maxGapRows,
+  occupantNameMaxLength,
+  rentalNotesMaxLength,
+  rentalTypeMaxLength,
+  seaSides,
+  siteTemplates,
+  siteTextLimits,
+  spotMarks,
+  spotTypeNameMaxLength,
+  spotZones,
+  type Action,
+  type DayQuote,
+} from '@ombre/shared';
 
 export interface AppOptions {
   db: Database;
@@ -197,15 +238,75 @@ const equipmentFields = {
 };
 const rentalTypeSchema = z.string().trim().min(1).max(rentalTypeMaxLength);
 const rentalNotesSchema = z.string().trim().min(1).max(rentalNotesMaxLength);
-const addRowSchema = z.object({ zone: zoneSchema, prefix: z.string().regex(/^[A-Z]{1,4}$/), count: z.number().int().min(1).max(50), ...equipmentFields });
+const colSchema = z.number().int().min(1).max(maxColumns);
+const addRowSchema = z.object({ zone: zoneSchema, prefix: z.string().regex(/^[A-Z]{1,4}$/), count: z.number().int().min(1).max(50), typeId: z.uuid().optional(), ...equipmentFields });
 const addSpotSchema = z.object({
   zone: zoneSchema,
   code: z.string().regex(/^[A-Z0-9][A-Z0-9-]{0,9}$/),
   rowNumber: z.number().int().min(1).max(200).optional(),
+  col: colSchema.optional(),
+  typeId: z.uuid().optional(),
   ...equipmentFields,
   rentalType: rentalTypeSchema.nullable().optional(),
   rentalNotes: rentalNotesSchema.nullable().optional(),
 });
+// ---- The drawing of the beach ----
+const seaSideSchema = z.object({ seaSide: z.enum(seaSides) });
+const elementLabelSchema = z.string().trim().min(1).max(elementLabelMaxLength);
+// A horizontal walkway is its own lane after a row (0 = before row 1); a vertical
+// one runs in the gap after a column; structures and cabin blocks occupy free cells.
+const elementSchema = z.union([
+  z.object({ kind: z.literal('walkway'), orientation: z.literal('horizontal'), zone: zoneSchema, rowAfter: z.number().int().min(0).max(200), colStart: colSchema, colEnd: colSchema, label: elementLabelSchema.optional() }),
+  z.object({ kind: z.literal('walkway'), orientation: z.literal('vertical'), zone: zoneSchema.nullable().optional(), colStart: colSchema, label: elementLabelSchema.optional() }),
+  z.object({ kind: z.literal('structure'), zone: zoneSchema, rowNumber: z.number().int().min(1).max(200), colStart: colSchema, colEnd: colSchema, label: elementLabelSchema }),
+  z.object({ kind: z.literal('cabin_block'), zone: zoneSchema, rowNumber: z.number().int().min(1).max(200), colStart: colSchema, colEnd: colSchema, label: elementLabelSchema.optional() }),
+]);
+// ---- Spot types ----
+const spotTypeFields = {
+  name: z.string().trim().min(1).max(spotTypeNameMaxLength),
+  mark: z.enum(spotMarks),
+  umbrellas: z.number().int().min(0).max(10),
+  sunbeds: z.number().int().min(0).max(10),
+  maxGuests: z.number().int().min(1).max(20),
+  defaultPriceCents: priceSchema.nullable(),
+};
+const spotTypeSchema = z.object({ ...spotTypeFields, defaultPriceCents: priceSchema.nullable().optional() });
+const spotTypeUpdateSchema = z
+  .object({
+    name: spotTypeFields.name.optional(),
+    mark: spotTypeFields.mark.optional(),
+    umbrellas: spotTypeFields.umbrellas.optional(),
+    sunbeds: spotTypeFields.sunbeds.optional(),
+    maxGuests: spotTypeFields.maxGuests.optional(),
+    defaultPriceCents: priceSchema.nullable().optional(),
+  })
+  .refine((change) => Object.values(change).some((value) => value !== undefined));
+const spotTypeRefSchema = z.object({ typeId: z.uuid() });
+// ---- Cabins ----
+const cabinCodeSchema = z.string().regex(new RegExp(`^[A-Z0-9][A-Z0-9-]{0,${cabinCodeMaxLength - 1}}$`));
+const cabinNotesSchema = z.string().trim().min(1).max(cabinNotesMaxLength);
+const cabinSchema = z.object({ code: cabinCodeSchema, elementId: z.uuid().nullable().optional(), notes: cabinNotesSchema.nullable().optional() });
+const cabinUpdateSchema = z
+  .object({ code: cabinCodeSchema.optional(), elementId: z.uuid().nullable().optional(), notes: cabinNotesSchema.nullable().optional() })
+  .refine((change) => Object.values(change).some((value) => value !== undefined));
+// The holder has an account email, a written name, or both; never neither.
+const assignmentSchema = z
+  .object({
+    holderEmail: z.email().max(200).optional(),
+    holderName: z.string().trim().min(1).max(holderNameMaxLength).optional(),
+    holderContact: z.string().trim().min(1).max(holderContactMaxLength).optional(),
+    validFrom: daySchema,
+    validTo: daySchema,
+  })
+  .refine((assignment) => assignment.holderEmail !== undefined || assignment.holderName !== undefined);
+const endAssignmentSchema = z.object({ endOn: daySchema });
+const subletProposalSchema = z.object({
+  fromDay: daySchema,
+  toDay: daySchema,
+  occupantName: z.string().trim().min(1).max(occupantNameMaxLength),
+  occupantContact: z.string().trim().min(1).max(holderContactMaxLength).optional(),
+});
+const subletDecisionSchema = z.object({ approve: z.boolean() });
 // Absent leaves a field as it is; an explicit null clears an annotation.
 const updateSpotSchema = z
   .object({ ...equipmentFields, rentalType: rentalTypeSchema.nullable().optional(), rentalNotes: rentalNotesSchema.nullable().optional() })
@@ -621,6 +722,122 @@ export function createApp(options: AppOptions): Hono {
     return c.body(null, 204);
   });
 
+  // ---- The drawing of the beach: sea side and elements ----
+  route({ method: 'put', path: '/v1/manage/beaches/:slug/layout/sea-side', summary: 'Choose on which side the sea is drawn', tag: 'Beach club', auth: 'session', request: seaSideSchema, success: 204, errors: [400, 401, 403] }, async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'layout.edit');
+    const { seaSide } = parse(seaSideSchema, await body(c.req.raw), 'sea side');
+    await setSeaSide(db, actor, seaSide);
+    return c.body(null, 204);
+  });
+
+  route({ method: 'post', path: '/v1/manage/beaches/:slug/layout/elements', summary: 'Draw a walkway, a structure or a cabin block on the grid', tag: 'Beach club', auth: 'session', request: elementSchema, success: 201, errors: [400, 401, 403, 409] }, async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'layout.edit');
+    return c.json(await addElement(db, actor, parse(elementSchema, await body(c.req.raw), 'element')), 201);
+  });
+
+  route({ method: 'delete', path: '/v1/manage/beaches/:slug/layout/elements/:elementId', summary: 'Erase an element; cabins of an erased block stay, no longer drawn', tag: 'Beach club', auth: 'session', success: 200, errors: [400, 401, 403, 404] }, async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'layout.edit');
+    return c.json(await removeElement(db, actor, { elementId: parse(z.uuid(), c.req.param('elementId'), 'element') }));
+  });
+
+  route({ method: 'put', path: '/v1/manage/beaches/:slug/layout/spots/:spotId/type', summary: 'Change the type of a spot without touching its equipment', tag: 'Beach club', auth: 'session', request: spotTypeRefSchema, success: 204, errors: [400, 401, 403, 404] }, async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'layout.edit');
+    const { typeId } = parse(spotTypeRefSchema, await body(c.req.raw), 'type');
+    await setSpotType(db, actor, { spotId: parse(z.uuid(), c.req.param('spotId'), 'spot'), typeId });
+    return c.body(null, 204);
+  });
+
+  // ---- Spot types ----
+  route({ method: 'get', path: '/v1/manage/beaches/:slug/types', summary: 'Spot types of the beach club, builtins first', tag: 'Beach club', auth: 'session', success: 200, errors: [401, 403] }, async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'layout.edit');
+    return c.json({ currency: 'EUR', types: await listSpotTypes(db, actor) });
+  });
+
+  route({ method: 'post', path: '/v1/manage/beaches/:slug/types', summary: 'Create a custom spot type', tag: 'Beach club', auth: 'session', request: spotTypeSchema, success: 201, errors: [400, 401, 403, 409] }, async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'layout.edit');
+    return c.json(await createSpotType(db, actor, parse(spotTypeSchema, await body(c.req.raw), 'type')), 201);
+  });
+
+  route({ method: 'put', path: '/v1/manage/beaches/:slug/types/:typeId', summary: 'Edit a spot type; existing spots are never touched', tag: 'Beach club', auth: 'session', request: spotTypeUpdateSchema, success: 204, errors: [400, 401, 403, 404, 409] }, async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'layout.edit');
+    await updateSpotType(db, actor, { typeId: parse(z.uuid(), c.req.param('typeId'), 'type'), ...parse(spotTypeUpdateSchema, await body(c.req.raw), 'change') });
+    return c.body(null, 204);
+  });
+
+  route({ method: 'delete', path: '/v1/manage/beaches/:slug/types/:typeId', summary: 'Delete a custom spot type that no spot uses', tag: 'Beach club', auth: 'session', success: 204, errors: [400, 401, 403, 404, 409] }, async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'layout.edit');
+    await deleteSpotType(db, actor, { typeId: parse(z.uuid(), c.req.param('typeId'), 'type') });
+    return c.body(null, 204);
+  });
+
+  // ---- Cabins: register, assignments and sublets ----
+  route({ method: 'get', path: '/v1/manage/beaches/:slug/cabins/today', summary: "Today's occupant of every cabin, for the front desk", tag: 'Beach club', auth: 'session', success: 200, errors: [401, 403] }, async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'bookings.read');
+    return c.json({ cabins: await cabinsToday(db, actor) });
+  });
+
+  route({ method: 'get', path: '/v1/manage/beaches/:slug/cabins', summary: 'Every cabin with its position, current assignment and occupant of today', tag: 'Beach club', auth: 'session', success: 200, errors: [401, 403] }, async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'cabins.manage');
+    return c.json({ cabins: await listCabins(db, actor) });
+  });
+
+  route({ method: 'post', path: '/v1/manage/beaches/:slug/cabins', summary: 'Register a sea cabin, optionally inside a drawn cabin block', tag: 'Beach club', auth: 'session', request: cabinSchema, success: 201, errors: [400, 401, 403, 404, 409] }, async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'cabins.manage');
+    return c.json(await createCabin(db, actor, parse(cabinSchema, await body(c.req.raw), 'cabin')), 201);
+  });
+
+  route({ method: 'get', path: '/v1/manage/beaches/:slug/cabins/:cabinId', summary: 'The seasonal trace of one cabin: every assignment with its sublets', tag: 'Beach club', auth: 'session', success: 200, errors: [400, 401, 403, 404] }, async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'cabins.manage');
+    return c.json(await cabinHistory(db, actor, parse(z.uuid(), c.req.param('cabinId'), 'cabin')));
+  });
+
+  route({ method: 'put', path: '/v1/manage/beaches/:slug/cabins/:cabinId', summary: 'Change code, block or notes of a cabin', tag: 'Beach club', auth: 'session', request: cabinUpdateSchema, success: 204, errors: [400, 401, 403, 404, 409] }, async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'cabins.manage');
+    await updateCabin(db, actor, { cabinId: parse(z.uuid(), c.req.param('cabinId'), 'cabin'), ...parse(cabinUpdateSchema, await body(c.req.raw), 'change') });
+    return c.body(null, 204);
+  });
+
+  route({ method: 'delete', path: '/v1/manage/beaches/:slug/cabins/:cabinId', summary: 'Delete a cabin that was never assigned', tag: 'Beach club', auth: 'session', success: 204, errors: [400, 401, 403, 404, 409] }, async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'cabins.manage');
+    await deleteCabin(db, actor, { cabinId: parse(z.uuid(), c.req.param('cabinId'), 'cabin') });
+    return c.body(null, 204);
+  });
+
+  route({ method: 'post', path: '/v1/manage/beaches/:slug/cabins/:cabinId/assignments', summary: 'Assign a cabin to a holder for a period, with or without an account', tag: 'Beach club', auth: 'session', request: assignmentSchema, success: 201, errors: [400, 401, 403, 404, 409] }, async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'cabins.manage');
+    const assignment = parse(assignmentSchema, await body(c.req.raw), 'assignment');
+    return c.json(await assignCabin(db, actor, { cabinId: parse(z.uuid(), c.req.param('cabinId'), 'cabin'), ...assignment }), 201);
+  });
+
+  route({ method: 'post', path: '/v1/manage/beaches/:slug/cabin-assignments/:assignmentId/end', summary: 'End an assignment, early or not; sublets beyond the new end are truncated or closed', tag: 'Beach club', auth: 'session', request: endAssignmentSchema, success: 200, errors: [400, 401, 403, 404, 409] }, async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'cabins.manage');
+    const { endOn } = parse(endAssignmentSchema, await body(c.req.raw), 'request');
+    return c.json(await endAssignment(db, actor, { assignmentId: parse(z.uuid(), c.req.param('assignmentId'), 'assignment'), endOn }));
+  });
+
+  route({ method: 'get', path: '/v1/manage/beaches/:slug/cabin-sublets', summary: 'Sublet proposals waiting for a decision', tag: 'Beach club', auth: 'session', success: 200, errors: [401, 403] }, async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'cabins.manage');
+    return c.json({ sublets: await listPendingSublets(db, actor) });
+  });
+
+  route({ method: 'post', path: '/v1/manage/beaches/:slug/cabin-sublets/:subletId/decision', summary: 'Approve or reject a sublet proposal', tag: 'Beach club', auth: 'session', request: subletDecisionSchema, success: 204, errors: [400, 401, 403, 404, 409] }, async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'cabins.manage');
+    await decideSublet(db, actor, parse(z.uuid(), c.req.param('subletId'), 'sublet'), parse(subletDecisionSchema, await body(c.req.raw), 'decision'));
+    return c.body(null, 204);
+  });
+
+  // ---- Cabin holders: their own cabins and proposals ----
+  route({ method: 'get', path: '/v1/my/cabins', summary: 'Cabins assigned to the signed-in holder, with their sublets', tag: 'Cabin holder', auth: 'session', success: 200, errors: [401] }, async (c) => {
+    const user = await currentUser(c.req.header('Authorization'));
+    return c.json({ assignments: await listMyCabins(db, user.userId) });
+  });
+
+  route({ method: 'post', path: '/v1/my/assignments/:assignmentId/sublets', summary: 'Propose a sublet inside an own assignment period', tag: 'Cabin holder', auth: 'session', request: subletProposalSchema, success: 201, errors: [400, 401, 404, 409] }, async (c) => {
+    const user = await currentUser(c.req.header('Authorization'));
+    const proposal = parse(subletProposalSchema, await body(c.req.raw), 'proposal');
+    return c.json(await proposeSublet(db, user.userId, { assignmentId: parse(z.uuid(), c.req.param('assignmentId'), 'assignment'), ...proposal }), 201);
+  });
+
   route({ method: 'get', path: '/v1/health', summary: 'Liveness check', tag: 'System', auth: 'none', success: 200, errors: [] }, async (c) => {
     await db.execute(sql`select 1`);
     return c.json({ status: 'ok' });
@@ -677,18 +894,21 @@ export function createApp(options: AppOptions): Hono {
     });
   });
 
-  route({ method: 'get', path: '/v1/beaches/:slug/availability', summary: 'Free spots of a day with prices, every spot with its state and zone for the map, and the distances between zones', tag: 'Public', auth: 'none', query: { day: 'YYYY-MM-DD' }, success: 200, errors: [400, 404] }, async (c) => {
+  route({ method: 'get', path: '/v1/beaches/:slug/availability', summary: 'Free spots of a day with prices, every spot with its cell and type for the map, and the drawing of the beach', tag: 'Public', auth: 'none', query: { day: 'YYYY-MM-DD' }, success: 200, errors: [400, 404] }, async (c) => {
     const slug = parse(slugSchema, c.req.param('slug'), 'beach club');
     const day = parse(daySchema, c.req.query('day'), 'day');
     const beach = await beachBySlug(slug);
     // One reading for both lists, so that they can never disagree.
     const layout = await listDayMap(db, beach.id, day);
+    const { seaSide, elements, ...gaps } = await getPublicCanvas(db, beach.id);
     return c.json({
       beach: publicBeach(beach),
       day,
       currency: 'EUR',
-      // Empty corridor rows between the zones, for drawing the map to scale.
-      gaps: await getZoneGaps(db, beach.id),
+      // The drawing: side of the sea, corridor rows between the zones, walkways and other elements.
+      seaSide,
+      gaps,
+      elements,
       spots: layout.flatMap(({ status, priceCents, ...spot }) => (priceCents === null ? [] : [{ ...spot, priceCents, shared: status === 'shared' }])),
       layout,
     });
