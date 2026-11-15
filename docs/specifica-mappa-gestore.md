@@ -51,7 +51,10 @@ alternativa equivalente. In «Esplora», mappa e lista mostrano **la stessa sele
   (latitudine, longitudine) con aiuto testuale, azione `PUT
   /v1/manage/beaches/:slug/position` (autorizzazione: le stesse impostazioni di
   configurazione dello stabilimento già riservate al gestore). Servono GRANT di UPDATE
-  sulle due colonne e la relativa policy RLS.
+  sulle due colonne e la relativa policy RLS. Formato: numeri decimali con il punto,
+  negli intervalli −90…90 e −180…180; l'errore compare accanto al campo. Finché le
+  coordinate mancano, «Gestione» avvisa: «Il lido non compare sulla mappa finché non
+  imposti la posizione».
 - Seed dimostrativi: coordinate di fantasia ma plausibili per «Lido Aurora» (Marina
   Azzurra) e «Bagno delle Dune» (Lido di Pomposa), dichiarate dimostrative in
   [demo.md](demo.md).
@@ -72,7 +75,17 @@ alternativa equivalente. In «Esplora», mappa e lista mostrano **la stessa sele
 
 - Nel blocco di apertura la **mappa è la modalità principale**: riquadro grande con i
   segnaposti di tutti gli stabilimenti attivi con coordinate; il modulo di ricerca
-  attuale resta accanto/sotto come alternativa, con gli stessi campi di oggi.
+  attuale resta come alternativa, con gli stessi campi di oggi. Nell'ordine del
+  documento (DOM) il modulo di ricerca e il collegamento a «Esplora» vengono **prima**
+  del riquadro della mappa: sono loro l'«alternativa a elenco» della pagina iniziale.
+- Il riquadro ha tre stati, ciascuno con il suo testo: **senza JavaScript** mostra un
+  invito statico a «Esplora»; **in attesa o in errore** (script non pronto, `/dati/mappa`
+  o tasselli falliti) mostra lo stesso invito con la dicitura «Mappa non disponibile»;
+  **caricata** mostra mappa e segnaposti. L'altezza del riquadro è riservata in ogni
+  stato: nessun salto di layout.
+- La mappa si carica **al comparire del riquadro nel viewport** (o alla prima
+  interazione), mai in modo bloccante: il riquadro statico è leggero e la mappa non
+  deve diventare l'elemento LCP della pagina.
 - La pagina iniziale è prerenderizzata e non legge dati: i dati dei segnaposti arrivano
   **dopo, via script**, da una rotta interna del sito (per esempio `GET /dati/mappa`,
   gestita da `apps/web` che interroga l'API dal server), così il browser non deve
@@ -93,11 +106,15 @@ alternativa equivalente. In «Esplora», mappa e lista mostrano **la stessa sele
 
 ### Accessibilità e prestazioni
 
-- La mappa è utilizzabile da tastiera (Leaflet lo prevede); ogni segnaposto ha
-  un'etichetta testuale; l'alternativa a elenco è sempre presente e raggiungibile
-  prima della mappa nell'ordine di lettura.
-- Nessun salto di layout: il riquadro riserva la sua altezza; LCP resta l'immagine o il
-  titolo di apertura, non la mappa.
+Punti di verifica concreti (per il collaudo):
+
+- Con Tab si raggiunge ogni segnaposto; Invio apre la scheda, Esc la chiude; nessuna
+  trappola di focus; i controlli della mappa misurano almeno 44×44 px; ogni segnaposto
+  ha un'etichetta testuale.
+- La pagina regge lo zoom al 200% senza scorrimento orizzontale; l'alternativa a
+  elenco precede la mappa nell'ordine di lettura ed è sempre completa.
+- Nessun salto di layout (altezza riservata in ogni stato); lo script della mappa non
+  è mai bloccante e si carica solo al comparire del riquadro o all'interazione.
 
 ## Funzione 2 — Gestione della spiaggia da parte del gestore
 
@@ -113,28 +130,43 @@ perché il gestionale segue tutti gli ombrelloni per l'intera stagione.
 Su `spot`:
 
 - `zone text NOT NULL DEFAULT 'ombrelloni' CHECK (zone IN ('riva','ombrelloni','monte'))`.
-  La fila (`row_number`) resta ≥ 1 e si conta **dentro la zona**; l'ordine di
-  disegno e di elenco diventa: riva (dal mare), poi ombrelloni, poi monte.
+  La fila (`row_number`) resta ≥ 1 e si conta **dentro la zona**, con una sola
+  convenzione ovunque: **la fila 1 è la più vicina al mare**. L'ordine di disegno e di
+  elenco è: riva (dal mare), poi ombrelloni, poi monte. Il codice (`code`) resta unico
+  per stabilimento (vincolo già in schema) e la «colonna» resta la posizione nel codice
+  della fila (A01, A02, …); per i lettini si suggeriscono prefissi `R` (riva) e `M`
+  (monte), ma il prefisso lo sceglie il gestore.
+- `retired boolean NOT NULL DEFAULT false`: postazione **ritirata dalla vendita**. Una
+  postazione già usata non si può eliminare, ma si può ritirare: non entra nelle
+  giornate pubblicate da quel momento in poi e non compare al pubblico; la storia resta.
+  Il ritiro è reversibile («rimetti in vendita»).
 - `rental_type text` facoltativo (massimo 40 caratteri): etichetta del tipo di
   affitto. Valori suggeriti «Stagionale» e «Albergo», ma il gestore scrive ciò che
   vuole (personalizzato).
 - `rental_notes text` facoltativo (massimo 500 caratteri): note libere del gestore.
 - Tipo e note sono **gestionali e mai pubblici**: non escono dalle rotte pubbliche.
-  L'etichetta «Stagionale» è una classificazione del gestore e non crea né richiede un
-  `season_contract`: i contratti restano il meccanismo operativo; dove esiste un
-  contratto attivo l'interfaccia lo mostra accanto all'etichetta.
+  L'etichetta «Stagionale» è una **annotazione** del gestore: non crea né richiede un
+  `season_contract`, che resta il meccanismo operativo. L'interfaccia mostra accanto
+  all'etichetta il contratto attivo se c'è e un avviso testuale quando le due cose non
+  coincidono (etichetta «Stagionale» senza contratto attivo, o contratto attivo con
+  etichetta diversa): un'incoerenza è ammessa, ma mai silenziosa.
 
 Su `beach`:
 
 - `shore_gap_rows smallint NOT NULL DEFAULT 1 CHECK (shore_gap_rows BETWEEN 0 AND 10)`:
-  numero di file di distanza tra la prima fila di ombrelloni e i lettini della riva.
-- `land_gap_rows smallint NOT NULL DEFAULT 1` (stesso CHECK): distanza tra l'ultima
-  fila di ombrelloni e i lettini del lato monte.
+  numero di **file vuote** (corridoio) tra la zona riva e la prima fila di ombrelloni.
+- `land_gap_rows smallint NOT NULL DEFAULT 1` (stesso CHECK): file vuote tra l'ultima
+  fila di ombrelloni e la zona monte.
+- Semantica: 0 = zone adiacenti, nessun corridoio; 1 = un corridoio alto quanto una
+  fila; e così via. Esempio: con cinque file di ombrelloni e `shore_gap_rows = 2`, tra
+  i lettini di riva e la fila A ci sono due file vuote. Se la zona ombrelloni è vuota,
+  le distanze non hanno effetto e le zone si disegnano adiacenti.
 
-Permessi e sicurezza: nuovo permesso `layout.edit` in
-`packages/shared/src/domain/permissions.ts`. La **struttura** (file, postazioni,
-tipo di affitto) la modifica il solo gestore; le **distanze riva/monte** anche la
-reception (il «bagnino» del committente). GRANT di INSERT/UPDATE/DELETE su `spot` (e
+Permessi e sicurezza: **due permessi distinti** in
+`packages/shared/src/domain/permissions.ts`: `layout.edit` (struttura: file,
+postazioni, tipo di affitto, ritiro) al solo gestore; `layout.gaps` (le sole distanze
+riva/monte) anche alla reception, che qui fa le veci del «bagnino» del committente
+(corrispondenza da confermare con lui). GRANT di INSERT/UPDATE/DELETE su `spot` (e
 UPDATE sulle nuove colonne di `beach`) a `ombre_app`, con policy RLS di scrittura
 vincolate allo stabilimento corrente.
 
@@ -151,8 +183,11 @@ implementa, purché documentate in OpenAPI e coperte dal test di contratto):
   singolo: 0 ombrelloni, 1 lettino, 1 ospite);
 - aggiungere una singola postazione (il «lettino singolo» del committente);
 - modificare una postazione (dotazione, capienza, tipo di affitto, note);
+- applicare tipo di affitto e note **a una fila intera** in una sola azione;
+- ritirare dalla vendita una postazione e rimetterla in vendita;
 - eliminare una postazione **solo se mai usata** (nessun `inventory_day`, nessuna
-  prenotazione, nessun contratto): altrimenti rifiuto con `DomainError` spiegato.
+  prenotazione, nessun contratto): altrimenti rifiuto con `DomainError` che spiega
+  l'alternativa del ritiro.
 
 Le scritture passano dalle funzioni in `packages/db` con `withActor`/`withBeach` e
 finiscono nel registro (`audit_event`) come le altre azioni del gestore.
@@ -166,8 +201,11 @@ finiscono nel registro (`audit_event`) come le altre azioni del gestore.
   - distanze riva e monte (due campi numerici, «file di distanza dagli ombrelloni»);
   - aggiungi fila / aggiungi postazione per zona;
   - per ogni postazione: dotazione, capienza, **tipo di affitto** (scelta rapida
-    «Stagionale», «Albergo» o testo personalizzato) e **note**; accanto, se c'è, il
-    contratto stagionale attivo.
+    «Stagionale», «Albergo», un valore già usato nel lido, o testo personalizzato) e
+    **note**; accanto, se c'è, il contratto stagionale attivo, con l'avviso di
+    incoerenza della specifica dei dati; ritiro e rimessa in vendita;
+  - un'azione per **fila intera**: stesso tipo di affitto e note per tutte le
+    postazioni della fila.
 - Le azioni passano da `apps/web/app/azioni/[action]/route.ts` come le esistenti.
 - Testi it/en in `packages/shared/src/i18n` (l'inglese ricalca la forma dell'italiano).
 
@@ -187,6 +225,12 @@ finiscono nel registro (`audit_event`) come le altre azioni del gestore.
 (`M01`–`M04`, distanza 2), con giornate pubblicate come le altre postazioni; alcuni
 ombrelloni ricevono tipo di affitto e note d'esempio (almeno uno «Stagionale», uno
 «Albergo», uno personalizzato). [demo.md](demo.md) va aggiornata.
+
+### Documenti da tenere allineati
+
+Con l'implementazione vanno aggiornati: la voce «Mappa interattiva» nei «limiti
+onesti» di [progetto-grafico.md](progetto-grafico.md) (non è più rimandata),
+[demo.md](demo.md), [collaudo.md](collaudo.md) e [stato.md](stato.md).
 
 ## Fuori ambito (esplicito)
 
@@ -208,8 +252,12 @@ ombrelloni ricevono tipo di affitto e note d'esempio (almeno uno «Stagionale»,
 4. Il gestore crea file e postazioni nelle tre zone; le distanze riva/monte cambiano
    il disegno; la reception può cambiare le sole distanze.
 5. Un lettino singolo in riva si prenota dal pubblico come ogni altra postazione.
-6. Tipo di affitto e note si impostano per postazione, restano per tutta la stagione,
-   compaiono solo nell'area riservata e sono registrate in `audit_event`.
-7. Una postazione mai usata si elimina; una usata no, con messaggio chiaro.
+6. Tipo di affitto e note si impostano per postazione **e per fila intera**, restano
+   per tutta la stagione, compaiono solo nell'area riservata e sono registrate in
+   `audit_event`; l'incoerenza tra etichetta «Stagionale» e contratti è segnalata a
+   testo.
+7. Una postazione mai usata si elimina; una usata no, con un messaggio che indica il
+   ritiro dalla vendita; una postazione ritirata non entra nelle nuove giornate
+   pubblicate e non compare al pubblico, e si può rimettere in vendita.
 8. `pnpm check` e i test con database passano; il test di contratto OpenAPI è
    aggiornato; i collaudi fumo esistenti restano verdi.

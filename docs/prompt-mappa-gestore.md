@@ -42,16 +42,18 @@ RUOLO 2 — SVILUPPO BACKEND E DATI
 1. Migrazione `009_beach_position.sql`: coordinate facoltative su `beach` con CHECK
    di intervallo e vincolo «o entrambe o nessuna»; GRANT e policy RLS per
    l'aggiornamento da parte del gestore.
-2. Migrazione `010_beach_layout.sql`: `zone`, `rental_type`, `rental_notes` su `spot`;
-   `shore_gap_rows` e `land_gap_rows` su `beach`; GRANT e policy RLS di scrittura su
-   `spot` vincolate allo stabilimento.
+2. Migrazione `010_beach_layout.sql`: `zone`, `rental_type`, `rental_notes`, `retired`
+   su `spot`; `shore_gap_rows` e `land_gap_rows` su `beach`; GRANT e policy RLS di
+   scrittura su `spot` vincolate allo stabilimento.
 3. Funzioni in `packages/db` (`withActor`/`withBeach`, scritture nel registro
    `audit_event`): lettura del layout, distanze, aggiunta di fila e di postazione,
-   modifica (dotazione, capienza, tipo, note), eliminazione guardata con `DomainError`.
+   modifica (dotazione, capienza, tipo, note; anche per fila intera), ritiro e rimessa
+   in vendita, eliminazione guardata con `DomainError`; la pubblicazione delle giornate
+   salta le postazioni ritirate.
 4. Rotte API: `PUT /v1/manage/beaches/:slug/position`; le capacità di layout della
    specifica sotto `/v1/manage/beaches/:slug/layout…`; `latitude`/`longitude` esposte
-   da `GET /v1/beaches`. Nuovo permesso `layout.edit` (gestore; le sole distanze anche
-   alla reception). OpenAPI e test di contratto aggiornati (conta delle rotte).
+   da `GET /v1/beaches`. Due permessi: `layout.edit` (gestore) e `layout.gaps`
+   (gestore e reception). OpenAPI e test di contratto aggiornati (conta delle rotte).
 5. Seed: coordinate dimostrative per i due lidi; lettini riva/monte e tipi di affitto
    d'esempio su «Lido Aurora» come da specifica.
 6. Test vitest per le nuove funzioni e rotte (successi e rifiuti: permessi, postazione
@@ -66,9 +68,13 @@ RUOLO 3 — SVILUPPO FRONTEND
    ricerca attuale resta come alternativa; senza JavaScript nessun contenuto perso.
 3. «Esplora»: mappa sopra i risultati con la stessa selezione della lista, coordinate
    passate dal server come proprietà.
-4. «Gestione»: campi latitudine/longitudine; nuova pagina «Spiaggia» con anteprima
-   della planimetria a zone e i moduli della specifica (distanze, file, postazioni,
-   tipo di affitto con scelta rapida e testo personalizzato, note).
+4. «Gestione»: campi latitudine/longitudine con l'avviso finché mancano; nuova pagina
+   «Spiaggia» con anteprima della planimetria a zone e i moduli della specifica
+   (distanze, file, postazioni, tipo di affitto con scelta rapida, valori già usati e
+   testo personalizzato, note, azione per fila intera, ritiro e rimessa in vendita,
+   avviso di incoerenza con i contratti stagionali).
+   Aggiorna anche la voce «Mappa interattiva» nei «limiti onesti» di
+   `docs/progetto-grafico.md`.
 5. `BeachMap` a tre fasce (riva, ombrelloni, monte) con etichette e spazi
    proporzionali alle distanze; segno grafico distinto per il lettino singolo.
 6. Testi it/en; stili in `packages/ui` coerenti con il progetto grafico.
