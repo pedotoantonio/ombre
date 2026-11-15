@@ -47,17 +47,25 @@ esistente, che diventa esplicita.
 Su `spot` (migrazione):
 
 - `col smallint NOT NULL CHECK (col >= 1)`: colonna esplicita dentro la fila, con
-  riempimento automatico dall'ordine attuale dei codici. Vincolo di unicità
-  (stabilimento, zona, fila, colonna). La colonna permette buchi (una fila può avere
-  le colonne 1, 2, 5, 6): il disegno può essere irregolare.
+  riempimento automatico: per ogni fila, ordine per codice e `col` = 1..n senza
+  buchi. Vincolo di unicità (stabilimento, zona, fila, colonna). Da qui in poi
+  **`col` è l'unica fonte del disegno e il codice è solo un'etichetta** (questo
+  supera il «fuori ambito» della specifica precedente, registrato in D25); dopo il
+  riempimento la colonna permette buchi (1, 2, 5, 6): il disegno può essere
+  irregolare. Un test verifica che il venduto e le postazioni esistenti escono dalla
+  migrazione invariati (nessuna postazione senza `col`, prezzi e prenotazioni
+  intatti).
 
 Su `beach`:
 
 - `sea_side text NOT NULL DEFAULT 'top' CHECK (sea_side IN ('top','bottom'))`: da che
-  parte si disegna il mare. Con `bottom` l'intera planimetria si specchia in
-  verticale (fascia del mare in basso, riva subito sopra, poi ombrelloni, poi monte in
-  alto); la **fila 1 resta la più vicina al mare** in ogni caso: cambia solo il
-  disegno, mai la semantica. Mare a sinistra/destra: fuori ambito.
+  parte si disegna il mare. Con `bottom` si inverte **solo la disposizione dei
+  blocchi** (fascia del mare in basso, riva subito sopra, poi ombrelloni, poi monte
+  in alto): il testo resta leggibile, mai specchiato; `row_after`, le distanze e la
+  **fila 1 restano riferiti al mare** in ogni caso. L'ordine del documento (DOM) e la
+  vista a elenco **non cambiano mai**: riva, ombrelloni, monte, fila 1 per prima
+  (qualità web §3: l'elenco equivalente è stabile). Mare a sinistra/destra: fuori
+  ambito.
 
 Nuova tabella `layout_element`:
 
@@ -65,26 +73,40 @@ Nuova tabella `layout_element`:
   `label text` (obbligatoria per `structure`, per esempio «Bar», «Docce»; facoltativa
   altrove), `orientation text CHECK (orientation IN ('horizontal','vertical'))`,
   `zone`/`row_after` e `col_start`/`col_end` secondo l'orientamento:
-  - **passerella orizzontale**: corre lungo un intervallo di colonne, collocata dopo
-    una fila di una zona (o prima della fila 1);
+  - **passerella orizzontale**: corre lungo un intervallo di colonne ed è uno
+    **strato a parte**: aggiunge una propria riga di disegno dopo la fila
+    `row_after` di una zona (0 = prima della fila 1), senza entrare nel conteggio di
+    `row_number`;
   - **passerella verticale**: corre tra due colonne (occupa l'interstizio dopo
-    `col_start`), attraversando una zona o tutte;
+    `col_start`); `zone` indica la zona attraversata, nulla = tutte;
   - **`structure`** (elemento generico con etichetta): occupa un rettangolo di celle
     libere (zona, fila, colonne da-a);
   - **`cabin_block`** è riservato alla Funzione 3: un blocco di cabine disegnato come
-    gli altri elementi.
-- Un elemento non può sovrapporsi a una postazione né a un altro elemento: rifiuto
-  con `DomainError` spiegato.
+    una `structure`.
+- I **corridoi delle distanze** (`shore_gap_rows`, `land_gap_rows`) restano un'altra
+  cosa: nessun elemento vi si colloca dentro; le passerelle hanno le proprie righe e
+  si sommano visivamente ai corridoi.
+- Un elemento non può sovrapporsi a una postazione (nemmeno ritirata: la cella resta
+  occupata nell'editor) né a un altro elemento: rifiuto con `DomainError` spiegato.
 
 ### Interfaccia del gestore («Spiaggia», sezione nuova «Disegno»)
 
 - Scelta del lato del mare (alto/basso).
-- Anteprima della griglia dove **ogni cella libera è un pulsante**: si sceglie lo
-  strumento (passerella orizzontale/verticale, struttura con etichetta, blocco
-  cabine, gomma) da un semplice modulo e si clicca la cella o l'interstizio di
-  destinazione; il server applica e ridisegna. Funziona senza JavaScript (ogni cella
-  è un submit con le sue coordinate); con JavaScript non serve altro: niente
-  trascinamento.
+- Anteprima della griglia dove **ogni cella libera è un pulsante**: lo strumento
+  scelto (passerella orizzontale/verticale, struttura con etichetta, blocco cabine,
+  gomma) vive **nella query string** (`?strumento=…`), così sopravvive tra un invio
+  e l'altro senza JavaScript; gli elementi che coprono più celle si disegnano in
+  **due passi espliciti** («scegli l'inizio», poi «scegli la fine», con il passo
+  annunciato sopra la griglia e un «Annulla») oppure con il modulo equivalente a
+  coordinate (zona, fila, colonne da–a) sempre presente sotto la griglia.
+- Dopo ogni invio si torna alla griglia con l'ancora (`#disegno`) e il messaggio di
+  esito accanto alla griglia; il server applica e ridisegna. Niente trascinamento;
+  con JavaScript non serve nulla di più.
+- Accessibilità dell'editor: ogni cella ha un'etichetta con coordinate e stato
+  («Riva, fila 1, colonna 3: libera»), bersagli di almeno 44×44 px con 8 px di
+  distacco anche nell'anteprima, lettura per fila con le passerelle annunciate
+  («Passerella»); una griglia larga scorre localmente, senza scorrimento orizzontale
+  dell'intera pagina.
 - Gli elementi esistenti si eliminano con lo strumento gomma o da un elenco sotto la
   griglia (etichetta, posizione, pulsante «Rimuovi»).
 - Permesso: `layout.edit` (solo gestore).
@@ -94,8 +116,12 @@ Nuova tabella `layout_element`:
 - La planimetria pubblica e l'anteprima del gestore disegnano: fascia del mare dal
   lato scelto, passerelle come corsie chiare con etichetta accessibile («Passerella»),
   strutture come riquadri con la loro etichetta, cabine come la Funzione 3. Mai solo
-  colore: ogni elemento ha forma ed etichetta.
-- Le celle vuote (buchi di colonna) si disegnano come sabbia, senza segnaposto.
+  colore: **ogni segno (anche gazebo, tenda, daybed) ha forma propria, etichetta e
+  testo alternativo, e compare in legenda con la stessa forma**.
+- Le celle vuote (buchi di colonna) si disegnano come sabbia, senza segnaposto e non
+  selezionabili; non sono uno stato di disponibilità e non compaiono in legenda come
+  tale. Le postazioni ritirate non si disegnano al pubblico, ma nell'editor occupano
+  ancora la loro cella.
 
 ## Funzione 2 — Tipi di postazione (gazebo e altri)
 
@@ -117,16 +143,21 @@ Nuova tabella `spot_type`:
   (mark umbrella), Lettino singolo (mark sunbed), Gazebo (mark gazebo). Le postazioni
   esistenti vengono agganciate: `spot.type_id` NOT NULL dopo il riempimento
   (ombrelloni → Ombrellone, lettini riva/monte → Lettino singolo).
-- La dotazione della singola postazione resta modificabile (il tipo dà i predefiniti,
-  non una gabbia); il nome del tipo compare nell'etichetta pubblica della postazione
-  («Gazebo G01, 4 ospiti…»).
+- I predefiniti del tipo si **copiano alla creazione** della postazione e non si
+  propagano mai: modificare un tipo tocca solo le postazioni create dopo. Il cambio
+  di tipo di una postazione esistente è un'azione esplicita che **non** tocca la sua
+  dotazione. L'etichetta pubblica mostra il nome del tipo e la **dotazione propria
+  della postazione** («Gazebo G01 … la sua dotazione reale»).
 
 ### Prezzo
 
 - `publishDay` continua a prendere il prezzo base della giornata; se il tipo della
   postazione ha `default_price_cents`, per quella postazione vale il suo prezzo.
-  `setPrice` per giornata e postazione resta sovrano. Nessun cambiamento al venduto
-  esistente.
+  Il prezzo del tipo agisce **solo alla pubblicazione di giornate nuove**: non
+  riscrive mai `inventory_day` esistenti né prenotazioni; cambiare
+  `default_price_cents` non tocca le giornate già pubblicate. `setPrice` per
+  giornata e postazione resta sovrano. Un test verifica che venduto e prezzi già
+  fissati restano invariati dopo le migrazioni.
 
 ### Interfaccia
 
@@ -167,15 +198,24 @@ ancora attivo).
 
 ### Ruoli e flussi
 
-- **Gestore** (`layout.edit` per il censimento; nuovo permesso `cabins.manage` per
-  affidamenti e decisioni): crea le cabine (dal disegno o dall'elenco), affida,
-  chiude un affidamento, approva o rifiuta i subaffitti, vede il quadro completo
-  («chi usa cosa», per giorno).
-- **Titolare della cabina**: se ha un accesso (nuovo ruolo `cabin_holder`, creato
-  dall'amministratore come gli altri accessi), vede le proprie cabine e i propri
-  periodi, propone un subaffitto (periodo + nome e contatto dell'occupante), vede lo
-  stato delle proposte; non vede nulla d'altro dello stabilimento. Il flusso ricalca
-  le proposte degli stagionali.
+- Ripartizione esatta dei permessi: il **blocco cabine nel disegno** si crea e si
+  rimuove con `layout.edit`; **cabina, affidamenti e decisioni** con il nuovo
+  permesso `cabins.manage` (entrambi del solo gestore). Rimuovere con la gomma un
+  blocco a cui sono agganciate cabine è permesso: le cabine restano, con `element_id`
+  a NULL (non più disegnate), e l'elenco lo segnala.
+- **Gestore**: crea le cabine (dal disegno o dall'elenco), affida, chiude un
+  affidamento, approva o rifiuta i subaffitti, vede il quadro completo («chi usa
+  cosa», per giorno). Chiudere un affidamento prima della scadenza **tronca o chiude
+  i subaffitti** oltre la nuova data (riga in `audit_event`), e il titolare lo vede
+  segnalato nella sua pagina.
+- **Titolare della cabina**: se ha un accesso (nuovo ruolo `cabin_holder`, per
+  stabilimento, creato dall'amministratore come gli altri accessi; RLS su
+  `holder_account_id`), vede **esattamente**: le proprie cabine (codice, posizione),
+  i propri periodi di affidamento, le proprie proposte con stato ed eventuale esito
+  del gestore, e gli occupanti da lui stesso indicati. Propone un subaffitto
+  (periodo + nome e contatto dell'occupante) dentro il proprio periodo. Non vede
+  nulla d'altro dello stabilimento. Un titolare senza accesso non vede nulla: esiste
+  solo nei registri del gestore. Il flusso ricalca le proposte degli stagionali.
 - **Reception**: vede l'elenco «cabine di oggi» (occupante corrente per cabina) per
   l'operatività; non decide nulla.
 - La scheda pubblica dello stabilimento non mostra le cabine: sono gestionali, come
@@ -221,11 +261,19 @@ attesa; `CAB2` affidata a un titolare senza accesso. [demo.md](demo.md) aggiorna
 
 ## Criteri di accettazione
 
-1. Il gestore sposta il mare in basso e la planimetria (pubblica e anteprima) si
-   specchia, fila 1 sempre verso il mare; riportato in alto torna com'era.
+0. Dopo le migrazioni: nessuna postazione senza `col` né senza `type_id`; prezzi
+   delle giornate pubblicate, prenotazioni e contratti invariati (confronto prima/
+   dopo); le rotte pubbliche non contengono nessun campo gestionale nuovo
+   (`rental_*`, `retired`, cabine, affidamenti, subaffitti), verificato da un test
+   sul JSON.
+1. Il gestore sposta il mare in basso: nell'HTML la fascia del mare e l'ordine
+   visivo dei blocchi si invertono, mentre l'ordine del DOM e la vista a elenco
+   restano identici; riportato in alto, l'HTML torna uguale a prima (confronto).
 2. Il gestore disegna una passerella orizzontale e una verticale, una struttura con
-   etichetta e un blocco cabine cliccando le celle, senza JavaScript; gli elementi
-   compaiono identici al pubblico, con etichette testuali; la gomma li toglie; una
+   etichetta e un blocco cabine cliccando le celle, senza JavaScript (strumento
+   nella query string, due passi per gli elementi estesi); la struttura della
+   planimetria risultante è la stessa nell'anteprima e nella pagina pubblica
+   (stesse righe, stessi elementi, stesse etichette); la gomma li toglie; una
    sovrapposizione è rifiutata con messaggio chiaro.
 3. Esistono i tre tipi di base; il gestore crea un tipo personalizzato con segno dal
    repertorio, dotazione, capienza e prezzo predefinito; una fila nuova nasce con quel
