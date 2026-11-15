@@ -213,3 +213,34 @@ bloccabile, con prezzo per giornata. L'etichetta «Stagionale» è una classific
 gestore e non crea né richiede un `season_contract`. Il gestore configura struttura e
 tipi con il nuovo permesso `layout.edit`; la reception può cambiare le sole distanze.
 L'eliminazione di una postazione è ammessa solo se mai usata.
+
+## D25 — Il disegno della spiaggia è la griglia, con elementi e lato del mare — accettata (15/11/2026)
+
+Il committente chiede di «disegnare» la propria struttura: posizione del mare,
+passerelle, ombrelloni e altri elementi. Si resta sulla griglia (niente canvas a pixel
+né trascinamento): la colonna diventa esplicita su `spot` (con buchi ammessi), il lato
+del mare è una scelta dello stabilimento (alto o basso, la fila 1 resta la più vicina
+al mare), e passerelle, strutture etichettate e blocchi di cabine sono elementi della
+nuova tabella `layout_element`, senza sovrapposizioni. L'editor funziona senza
+JavaScript: ogni cella libera è un pulsante e lo strumento scelto si applica alla
+cella cliccata. La planimetria pubblica rispecchia il disegno uno a uno.
+
+## D26 — Tipi di postazione per stabilimento con repertorio fisso di segni — accettata (15/11/2026)
+
+Oltre all'ombrellone: tabella `spot_type` per stabilimento con nome, segno grafico da
+un repertorio fisso (umbrella, sunbed, gazebo, tent, daybed), dotazione, capienza e
+prezzo predefinito facoltativo; tre tipi di base non eliminabili (Ombrellone, Lettino
+singolo, Gazebo) e tipi personalizzati del gestore. `spot.type_id` obbligatorio dopo
+il riempimento; la dotazione della singola postazione resta modificabile; in
+pubblicazione vale il prezzo predefinito del tipo dove c'è, altrimenti il prezzo base
+della giornata.
+
+## D27 — Cabine del mare: affidamento e subaffitto senza denaro — accettata (15/11/2026)
+
+Le cabine sono censite nel disegno (`cabin`, agganciabile a un blocco cabine) e
+gestite con `cabin_assignment` (affidamento del gestore a un titolare, con o senza
+accesso, senza sovrapposizioni) e `cabin_sublet` (proposta del titolare, approvazione
+del gestore, occupante tracciato). Nuovo ruolo `cabin_holder` e permesso
+`cabins.manage`. Nessun denaro nel sistema: periodi, persone e approvazioni; i canoni
+si regolano fuori, come oggi per i flussi economici non attivi. Le cabine non
+compaiono nel pubblico.
