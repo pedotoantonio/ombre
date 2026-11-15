@@ -42,7 +42,10 @@ const exploreForm = /<form class="portal-search"[^>]*>[^]*?<\/form>/.exec((await
 const firstDay = /name="day"[^>]*min="(\d{4}-\d{2}-\d{2})"|min="(\d{4}-\d{2}-\d{2})"[^>]*name="day"/.exec(exploreForm);
 const romeToday = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome' }).format(new Date());
 check((firstDay?.[1] ?? firstDay?.[2]) === romeToday, `explore: the search does not start from today (${firstDay?.[1] ?? firstDay?.[2]})`);
-check(count(form, /type="submit"/g) === 1 && count(home.html, /class="button[ "]/g) === 1, 'home: expected exactly one main button, the search');
+// Besides the search, the only other button is the invitation to Explore inside the map box.
+const mapBox = /<div class="portal-map__invite">[^]*?<\/div>/.exec(home.html)?.[0] ?? '';
+check(count(form, /type="submit"/g) === 1 && count(home.html.replace(mapBox, ''), /class="button[ "]/g) === 1, 'home: expected exactly one main button, the search');
+check(mapBox.includes('href="/esplora"') && home.html.indexOf('class="portal-search"') < home.html.indexOf('class="portal-map'), 'home: the map box has no invitation to Explore after the search form');
 check(/action="\/en\/explore#risultati"/.test((await page('/en')).html), 'english home: the search does not open the English explore page');
 check(/action="\/esplora#risultati"/.test(exploreForm), 'explore: a new search does not land on the results');
 
@@ -102,7 +105,8 @@ const selected = await page(selectHref);
 const bar = /<aside class="plan-bar"[^>]*>[^]*?<\/aside>/.exec(selected.html)?.[0] ?? '';
 const bookHref = /href="(\/bagni\/bagno-delle-dune\/prenota\?spot=[0-9a-f-]{36}&day=\d{4}-\d{2}-\d{2})"/.exec(bar)?.[1] ?? '';
 check(bookHref === `${beach}/prenota?spot=${spotId}&day=${day}`, `choice: the bar does not lead to the summary of the chosen spot (${bookHref})`);
-check(bar.includes('30,00') && bar.includes('Fila ') && bar.includes('ombrellone') && count(bar, /<a /g) === 1, 'choice: the bar does not show row, equipment and price with one button');
+// The title of the bar names the spot with its zone and row: "Postazione A02, ombrelloni, fila 1".
+check(bar.includes('30,00') && /fila \d/.test(bar) && bar.includes('ombrellone') && count(bar, /<a /g) === 1, 'choice: the bar does not show row, equipment and price with one button');
 check(count(selected.html, /<a class="plan-spot[^"]*plan-spot--selected"[^>]*aria-current="true"/g) === 1, 'choice: the chosen spot is not marked on the map');
 check(selected.html.includes('Hai scelto la postazione') && selected.html.includes('href="#scelta"'), 'choice: the choice is not stated in words');
 check(!(await page(`${beach}?day=${day}&spot=non-valido`)).html.includes('class="plan-bar"'), 'choice: an invalid spot opened the bar');
