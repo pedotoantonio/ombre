@@ -1,4 +1,4 @@
-import { config, getDictionary, type DayParts, type SiteContent, type SiteTemplate } from '@ombre/shared';
+import { config, getDictionary, type DayParts, type SiteContent, type SiteTemplate, type SpotZone } from '@ombre/shared';
 
 // Server-side client of the Ombrè API. The address is read at request time.
 
@@ -10,6 +10,9 @@ export interface ApiBeach {
   locality: string;
   timezone: string;
   demo: boolean;
+  /** Null until the manager sets the position: the club then stays off the map. */
+  latitude: number | null;
+  longitude: number | null;
 }
 
 /** A beach club in a search by day: what it can sell for those guests, and from which price. */
@@ -30,6 +33,7 @@ export interface BeachSearch {
 export interface ApiMapSpot {
   spotId: string;
   code: string;
+  zone: SpotZone;
   rowNumber: number;
   umbrellas: number;
   sunbeds: number;
@@ -41,12 +45,19 @@ export interface ApiMapSpot {
 export interface ApiSpot {
   spotId: string;
   code: string;
+  zone: SpotZone;
   rowNumber: number;
   umbrellas: number;
   sunbeds: number;
   maxGuests: number;
   priceCents: number;
   shared: boolean;
+}
+
+/** Empty corridor rows between the zones, for drawing the map to scale. */
+export interface ApiZoneGaps {
+  shoreGapRows: number;
+  landGapRows: number;
 }
 
 export interface ApiQuote {
@@ -132,7 +143,7 @@ export const api = {
   beach: (slug: string) =>
     call<{ beach: ApiBeach; nextAvailableDay: string | null; site: { template: SiteTemplate; content: SiteContent } | null }>(`/v1/beaches/${encodeURIComponent(slug)}`),
   availability: (slug: string, day: string) =>
-    call<{ spots: ApiSpot[]; layout: ApiMapSpot[] }>(`/v1/beaches/${encodeURIComponent(slug)}/availability?day=${encodeURIComponent(day)}`),
+    call<{ spots: ApiSpot[]; layout: ApiMapSpot[]; gaps: ApiZoneGaps }>(`/v1/beaches/${encodeURIComponent(slug)}/availability?day=${encodeURIComponent(day)}`),
   quote: (request: DayRequest) => post<ApiQuote>('/v1/quotes', request),
   hold: (request: DayRequest, idempotencyKey: string) =>
     post<{ holdId: string }>('/v1/holds', request, { 'Idempotency-Key': idempotencyKey }),

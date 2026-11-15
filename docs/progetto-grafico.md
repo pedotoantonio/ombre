@@ -69,7 +69,7 @@ non compaiono:
 | Fotografie | L'apertura della pagina iniziale usa la fotografia della costa fornita dal committente, ricavata dal suo bozzetto (1960×713 px, titolo e pulsante rimossi per ricostruzione): va sostituita con l'originale ad alta risoluzione, e il committente deve confermarne provenienza e diritti. Per gli stabilimenti restano le illustrazioni dimostrative finché non esiste il caricamento dei media |
 | Punteggio da recensioni | Nessuna recensione esiste: non si mostra alcun punteggio |
 | Distanza dalla spiaggia | Dato non raccolto: non si mostra |
-| Mappa interattiva | Richiede un fornitore di mappe e le coordinate degli stabilimenti: rimandata |
+| Mappa interattiva | Realizzata: Leaflet installato da npm e servito dal sito, tasselli raster di OpenStreetMap con attribuzione visibile. In pagina iniziale e in «Esplora» compaiono i soli stabilimenti con coordinate impostate dal gestore; la mappa si carica pigramente e senza JavaScript resta l'invito a «Esplora» |
 | Filtri «Accesso disabili», «Area giochi» | I servizi sono testo libero: il filtro arriverà con i servizi strutturati |
 | Apple Pay e Google Pay | Dipendono dal fornitore di pagamento reale |
 | Colori scelti dal gestore, logo e galleria nell'editor | Rimandati con il caricamento dei media |

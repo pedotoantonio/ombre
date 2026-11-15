@@ -1,4 +1,4 @@
-import { cache, type CSSProperties } from 'react';
+import { cache, Fragment, type CSSProperties, type ReactNode } from 'react';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -15,11 +15,13 @@ import {
   isLocale,
   locales,
   pathFor,
+  spotZones,
   type Locale,
   type SiteContent,
   type SiteTemplate,
+  type SpotZone,
 } from '@ombre/shared';
-import { api, dayPattern, formatDay, formatTime, isDay, slugPattern, uuidPattern, type ApiBeach, type ApiMapSpot, type ApiSpot } from '@/lib/api';
+import { api, dayPattern, formatDay, formatTime, isDay, slugPattern, uuidPattern, type ApiBeach, type ApiMapSpot, type ApiSpot, type ApiZoneGaps } from '@/lib/api';
 import { JsonLd, privateMetadata } from '@/lib/seo';
 import { PageHead, PageShell, type Crumb } from './PageShell';
 import { BeachSite, localBusinessData } from './site-view';
@@ -154,26 +156,52 @@ function UmbrellaMark({ status, selected = false }: { status: ApiMapSpot['status
           <circle className="plan-mark__top" cx="24" cy="24" r="3" />
         </>
       )}
-      {selected ? (
-        <>
-          <circle className="plan-mark__badge" cx="38" cy="10" r="8.5" />
-          <path className="plan-mark__check" d="M33.8 10.2l3 3 5.4-6" />
-        </>
-      ) : null}
+      {selected ? <SelectedBadge /> : null}
     </svg>
   );
+}
+
+/** Check badge of the chosen spot, on top of its mark. */
+function SelectedBadge() {
+  return (
+    <>
+      <circle className="plan-mark__badge" cx="38" cy="10" r="8.5" />
+      <path className="plan-mark__check" d="M33.8 10.2l3 3 5.4-6" />
+    </>
+  );
+}
+
+/**
+ * A single sunbed seen from above: a bed with its pillow, a different shape from the umbrella.
+ * The state stays in the drawing too: bands for a shared day, a cross when not available.
+ */
+function SunbedMark({ status, selected = false }: { status: ApiMapSpot['status']; selected?: boolean }) {
+  return (
+    <svg className={`plan-mark plan-mark--${status}`} viewBox="0 0 48 48" aria-hidden="true" focusable="false">
+      <rect className="plan-mark__canopy" x="15" y="6" width="18" height="36" rx="5" />
+      {status === 'shared' ? <path className="plan-mark__bands" d="M16 22h16M16 31h16" /> : null}
+      {status === 'unavailable' ? <path className="plan-mark__cross" d="M18 18l12 12M30 18L18 30" /> : <path className="plan-mark__pillow" d="M20 13h8" />}
+      {selected ? <SelectedBadge /> : null}
+    </svg>
+  );
+}
+
+/** The mark of a spot: an umbrella, or a sunbed when the spot has no umbrella at all. */
+export function SpotMark({ umbrellas, status, selected = false }: { umbrellas: number; status: ApiMapSpot['status']; selected?: boolean }) {
+  return umbrellas === 0 ? <SunbedMark status={status} selected={selected} /> : <UmbrellaMark status={status} selected={selected} />;
 }
 
 function MapSpot({ locale, beach, spot, day, selected }: { locale: Locale; beach: ApiBeach; spot: ApiMapSpot; day: string; selected: boolean }) {
   const t = getDictionary(locale, config.brandName).booking;
   const content = (
     <>
-      <UmbrellaMark status={spot.status} selected={selected} />
+      <SpotMark umbrellas={spot.umbrellas} status={spot.status} selected={selected} />
       <span className="plan-spot__code" aria-hidden="true">
         {spot.code}
       </span>
       <span className="visually-hidden">
         {t.mapSpot(spot.code, t.status[spot.status], spot.priceCents === null ? undefined : formatMoney(spot.priceCents, locale))}
+        {`. ${t.equipment(spot.umbrellas, spot.sunbeds)}`}
         {selected ? `. ${t.status.selected}` : ''}
       </span>
     </>
@@ -201,14 +229,136 @@ function MapSpot({ locale, beach, spot, day, selected }: { locale: Locale; beach
   );
 }
 
-function BeachMap({ locale, beach, layout, day, selected }: { locale: Locale; beach: ApiBeach; layout: ApiMapSpot[]; day: string; selected: ApiMapSpot | undefined }) {
+/** What the shared drawing needs to place a spot: the rest is up to who renders it. */
+export interface PlanPlace {
+  code: string;
+  zone: SpotZone;
+  rowNumber: number;
+}
+
+export interface PlanZoneRows<T extends PlanPlace> {
+  zone: SpotZone;
+  rows: { row: number; spots: T[] }[];
+}
+
+/** Spots grouped by zone and row, in drawing order: shore, umbrellas, land side; row 1 first. */
+export function zoneRows<T extends PlanPlace>(spots: T[]): PlanZoneRows<T>[] {
+  return spotZones
+    .map((zone) => {
+      const inZone = spots.filter((spot) => spot.zone === zone);
+      const rows = [...new Set(inZone.map((spot) => spot.rowNumber))].sort((a, b) => a - b);
+      return { zone, rows: rows.map((row) => ({ row, spots: inZone.filter((spot) => spot.rowNumber === row) })) };
+    })
+    .filter((zone) => zone.rows.length > 0);
+}
+
+/** How many spots the longest row holds: the width the drawing reserves. */
+export function widestRow(spots: PlanPlace[]): number {
+  const counts = new Map<string, number>();
+  for (const spot of spots) {
+    const key = `${spot.zone}/${spot.rowNumber}`;
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return Math.max(1, ...counts.values());
+}
+
+/**
+ * The drawing shared by the public map and the manager's preview: the sea band, then the
+ * shore, umbrella and land zones with their text labels, separated by corridors proportional
+ * to the configured empty rows. With no umbrella zone the distances have no effect and the
+ * zones are drawn adjacent. Row 1 of every zone is the closest to the sea.
+ */
+export function PlanCanvas<T extends PlanPlace>({
+  locale,
+  gaps,
+  spots,
+  idPrefix,
+  renderSpot,
+}: {
+  locale: Locale;
+  gaps: ApiZoneGaps;
+  spots: T[];
+  idPrefix: string;
+  renderSpot: (spot: T) => ReactNode;
+}) {
   const t = getDictionary(locale, config.brandName).booking;
-  const rows = [...new Set(layout.map((spot) => spot.rowNumber))].sort((a, b) => a - b);
-  const free = layout.filter((spot) => spot.status !== 'unavailable').length;
-  // The longest row sets the width the map needs: the hint about scrolling shows only when it does not fit.
-  const widest = Math.max(...rows.map((row) => layout.filter((spot) => spot.rowNumber === row).length));
+  const zones = zoneRows(spots);
+  const hasUmbrellas = zones.some((zone) => zone.zone === 'ombrelloni');
   return (
-    <div className="plan" id="planimetria" role="group" aria-labelledby="planimetria-titolo" style={{ '--plan-cols': widest } as CSSProperties}>
+    <div className="plan__map">
+      <p className="plan__hint" aria-hidden="true">
+        <svg viewBox="0 0 24 24" focusable="false">
+          <path d="M4 12h16M8 8l-4 4 4 4M16 8l4 4-4 4" />
+        </svg>
+        {t.planScrollHint}
+      </p>
+      {/* Every row stays on one line: the map scrolls sideways inside this region, the page never does. */}
+      <div className="plan__scroll" role="region" aria-label={t.planRegion} tabIndex={0}>
+        <div className="plan__rows">
+          <p className="plan__sea">
+            <span className="plan__sea-label">
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M2 9c2.5 0 2.5-2 5-2s2.5 2 5 2 2.5-2 5-2 2.5 2 5 2M2 15c2.5 0 2.5-2 5-2s2.5 2 5 2 2.5-2 5-2 2.5 2 5 2" />
+              </svg>
+              {t.planSea}
+              <span className="visually-hidden">, {t.planSeaNote}</span>
+            </span>
+          </p>
+          {zones.map(({ zone, rows }, index) => {
+            // Corridor above this zone, only between two drawn zones with umbrellas in play.
+            const gap = index === 0 || !hasUmbrellas ? 0 : zone === 'ombrelloni' ? gaps.shoreGapRows : zone === 'monte' ? gaps.landGapRows : 0;
+            const note = !hasUmbrellas || zone === 'ombrelloni' ? 0 : zone === 'riva' ? gaps.shoreGapRows : gaps.landGapRows;
+            return (
+              <Fragment key={zone}>
+                {gap > 0 ? <div className="plan-gap" style={{ '--plan-gap-rows': gap } as CSSProperties} aria-hidden="true" /> : null}
+                <section className="plan-zone" aria-labelledby={`${idPrefix}-zona-${zone}`}>
+                  <p className="plan-zone__label" id={`${idPrefix}-zona-${zone}`}>
+                    <strong>{t.zones[zone]}</strong>
+                    {note > 0 ? <span className="plan-zone__gap">, {t.zoneGap(note)}</span> : null}
+                  </p>
+                  {rows.map(({ row, spots: inRow }) => (
+                    <div className="plan-row" key={row}>
+                      <p className="plan-row__label" id={`${idPrefix}-${zone}-fila-${row}`}>
+                        {t.row(row)}
+                      </p>
+                      <ol className="plan-row__spots" aria-labelledby={`${idPrefix}-${zone}-fila-${row}`}>
+                        {inRow.map((spot) => (
+                          <Fragment key={spot.code}>{renderSpot(spot)}</Fragment>
+                        ))}
+                      </ol>
+                    </div>
+                  ))}
+                </section>
+              </Fragment>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BeachMap({
+  locale,
+  beach,
+  layout,
+  gaps,
+  day,
+  selected,
+}: {
+  locale: Locale;
+  beach: ApiBeach;
+  layout: ApiMapSpot[];
+  gaps: ApiZoneGaps;
+  day: string;
+  selected: ApiMapSpot | undefined;
+}) {
+  const t = getDictionary(locale, config.brandName).booking;
+  const free = layout.filter((spot) => spot.status !== 'unavailable').length;
+  const hasSunbeds = layout.some((spot) => spot.umbrellas === 0);
+  // The longest row sets the width the map needs: the hint about scrolling shows only when it does not fit.
+  return (
+    <div className="plan" id="planimetria" role="group" aria-labelledby="planimetria-titolo" style={{ '--plan-cols': widestRow(layout) } as CSSProperties}>
       <div className="plan__head">
         <h3 id="planimetria-titolo">{t.planTitle}</h3>
         <p>{t.planLead}</p>
@@ -239,43 +389,20 @@ function BeachMap({ locale, beach, layout, day, selected }: { locale: Locale; be
           <UmbrellaMark status="free" selected />
           {t.status.selected}
         </li>
+        {hasSunbeds ? (
+          <li>
+            <SunbedMark status="free" />
+            {t.sunbedMark}
+          </li>
+        ) : null}
       </ul>
-      <div className="plan__map">
-        <p className="plan__hint" aria-hidden="true">
-          <svg viewBox="0 0 24 24" focusable="false">
-            <path d="M4 12h16M8 8l-4 4 4 4M16 8l4 4-4 4" />
-          </svg>
-          {t.planScrollHint}
-        </p>
-        {/* Every row stays on one line: the map scrolls sideways inside this region, the page never does. */}
-        <div className="plan__scroll" role="region" aria-label={t.planRegion} tabIndex={0}>
-          <div className="plan__rows">
-            <p className="plan__sea">
-              <span className="plan__sea-label">
-                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                  <path d="M2 9c2.5 0 2.5-2 5-2s2.5 2 5 2 2.5-2 5-2 2.5 2 5 2M2 15c2.5 0 2.5-2 5-2s2.5 2 5 2 2.5-2 5-2 2.5 2 5 2" />
-                </svg>
-                {t.planSea}
-                <span className="visually-hidden">, {t.planSeaNote}</span>
-              </span>
-            </p>
-            {rows.map((row) => (
-              <div className="plan-row" key={row}>
-                <p className="plan-row__label" id={`planimetria-fila-${row}`}>
-                  {t.row(row)}
-                </p>
-                <ol className="plan-row__spots" aria-labelledby={`planimetria-fila-${row}`}>
-                  {layout
-                    .filter((spot) => spot.rowNumber === row)
-                    .map((spot) => (
-                      <MapSpot key={spot.code} locale={locale} beach={beach} spot={spot} day={day} selected={spot.spotId === selected?.spotId} />
-                    ))}
-                </ol>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
+      <PlanCanvas
+        locale={locale}
+        gaps={gaps}
+        spots={layout}
+        idPrefix="planimetria"
+        renderSpot={(spot) => <MapSpot locale={locale} beach={beach} spot={spot} day={day} selected={spot.spotId === selected?.spotId} />}
+      />
     </div>
   );
 }
@@ -287,7 +414,7 @@ function SelectionBar({ locale, beach, spot, day }: { locale: Locale; beach: Api
     <aside className="plan-bar" id="scelta" aria-label={t.barLabel}>
       <div className="container plan-bar__inner">
         <p className="plan-bar__title">
-          {t.spot(spot.code)}, {t.row(spot.rowNumber)}
+          {t.spot(spot.code)}, {t.zones[spot.zone].toLowerCase()}, {t.row(spot.rowNumber).toLowerCase()}
         </p>
         <p className="plan-bar__price">{formatMoney(spot.priceCents, locale)}</p>
         <p className="plan-bar__detail">
@@ -310,7 +437,9 @@ export async function BeachView({ lang, section, slug, query }: { lang: string; 
   const availability = day ? await api.availability(beach.slug, day) : null;
   const spots = availability?.ok ? availability.data.spots : [];
   const layout = availability?.ok ? availability.data.layout : [];
-  const rows = [...new Set(spots.map((spot) => spot.rowNumber))].sort((a, b) => a - b);
+  const gaps = availability?.ok ? availability.data.gaps : { shoreGapRows: 1, landGapRows: 1 };
+  const spotZonesRows = zoneRows(spots);
+  const manyZones = spotZonesRows.length > 1;
   const taken = layout.filter((spot) => spot.status === 'unavailable').map((spot) => spot.code);
 
   const askedSpot = first(query.spot);
@@ -366,7 +495,7 @@ export async function BeachView({ lang, section, slug, query }: { lang: string; 
                 </div>
               ) : (
                 <>
-                  {layout.length > 0 ? <BeachMap locale={locale} beach={beach} layout={layout} day={day} selected={selected} /> : null}
+                  {layout.length > 0 ? <BeachMap locale={locale} beach={beach} layout={layout} gaps={gaps} day={day} selected={selected} /> : null}
                   {spots.length === 0 ? (
                     <div className="empty">
                       <h3>{t.noSpotsTitle}</h3>
@@ -376,18 +505,18 @@ export async function BeachView({ lang, section, slug, query }: { lang: string; 
                     <div className="plan-list" id="elenco">
                       <h2>{t.listTitle}</h2>
                       <div className="spot-rows">
-                        {rows.map((row) => (
-                          <div className="spot-row" key={row}>
-                            <h3>{t.row(row)}</h3>
-                            <ul className="spots">
-                              {spots
-                                .filter((spot) => spot.rowNumber === row)
-                                .map((spot) => (
+                        {spotZonesRows.flatMap(({ zone, rows: zoneRowList }) =>
+                          zoneRowList.map(({ row, spots: inRow }) => (
+                            <div className="spot-row" key={`${zone}-${row}`}>
+                              <h3>{manyZones ? `${t.zones[zone]} · ${t.row(row)}` : t.row(row)}</h3>
+                              <ul className="spots">
+                                {inRow.map((spot) => (
                                   <SpotCard key={spot.spotId} locale={locale} beach={beach} spot={spot} day={day} selected={spot.spotId === selected?.spotId} />
                                 ))}
-                            </ul>
-                          </div>
-                        ))}
+                              </ul>
+                            </div>
+                          )),
+                        )}
                       </div>
                       {taken.length > 0 ? <p className="plan-list__taken">{t.unavailableList(taken.join(', '))}</p> : null}
                     </div>

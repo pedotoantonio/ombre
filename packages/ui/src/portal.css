@@ -796,3 +796,291 @@ html:has(.plan-bar) {
     transition: none;
   }
 }
+
+/* ---- Mappa dei lidi: riquadro ad altezza riservata in ogni stato, Leaflet servito dal sito ---- */
+.portal-map-lead {
+  max-width: 65ch;
+  margin-block: var(--spazio-2) var(--spazio-4);
+  color: var(--testo-secondario);
+}
+
+.portal-map-block {
+  display: grid;
+}
+
+/* L'altezza è la stessa con e senza mappa: nessun salto di layout tra i tre stati. */
+.portal-map {
+  position: relative;
+  height: clamp(20rem, 55vh, 30rem);
+  overflow: hidden;
+  border: 1px solid var(--bordo);
+  border-radius: var(--raggio-grande);
+  background: var(--spuma);
+}
+
+.portal-map__invite {
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: var(--spazio-3);
+  height: 100%;
+  padding: var(--spazio-6);
+  color: var(--abisso);
+  text-align: center;
+}
+
+.portal-map__invite p {
+  max-width: 48ch;
+}
+
+.portal-map__status {
+  color: var(--testo-secondario);
+  font-weight: 700;
+}
+
+.portal-map__canvas {
+  width: 100%;
+  height: 100%;
+}
+
+/* Il carattere del sito anche dentro la mappa; i controlli raggiungono i 44 px richiesti. */
+.portal-map .leaflet-container {
+  font-family: inherit;
+  font-size: 0.875rem;
+}
+
+.portal-map .leaflet-bar.leaflet-control-zoom a {
+  width: 2.75rem;
+  height: 2.75rem;
+  color: var(--abisso);
+  font-size: 1.375rem;
+  line-height: 2.75rem;
+}
+
+.portal-map .leaflet-popup .leaflet-popup-content {
+  margin: var(--spazio-4) var(--spazio-6) var(--spazio-4) var(--spazio-4);
+  font: inherit;
+  line-height: 1.4;
+}
+
+.portal-map .leaflet-popup a.leaflet-popup-close-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  color: var(--abisso);
+  font-size: 1.25rem;
+}
+
+/* Segnaposto: etichetta testuale sempre visibile, mai un pallino solo. */
+.map-pin-anchor {
+  background: none;
+  border: none;
+}
+
+.map-pin {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: grid;
+  gap: 0.125rem;
+  justify-items: center;
+  width: max-content;
+  padding: 0.25rem;
+  transform: translate(-50%, -50%);
+  cursor: pointer;
+}
+
+.map-pin__dot {
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid var(--carta);
+  border-radius: 50%;
+  background: var(--oceano);
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--abisso) 40%, transparent);
+}
+
+.map-pin__name {
+  order: -1;
+  padding: 0.25rem 0.625rem;
+  border: 1px solid var(--bordo);
+  border-radius: var(--raggio-pillola);
+  background: var(--carta);
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--abisso) 25%, transparent);
+  color: var(--abisso);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.portal-map .leaflet-marker-icon:focus-visible {
+  outline: none;
+}
+
+.portal-map .leaflet-marker-icon:focus-visible .map-pin__name {
+  outline: 3px solid var(--fuoco);
+  outline-offset: 2px;
+}
+
+/* Scheda del segnaposto: nome, località, prezzo «da» e collegamento alla pagina del lido. */
+.map-card {
+  display: grid;
+  gap: var(--spazio-1);
+  min-width: 11rem;
+}
+
+.map-card__name {
+  color: var(--abisso);
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.map-card__place {
+  color: var(--testo-secondario);
+}
+
+.map-card__price {
+  color: var(--abisso);
+  font-weight: 700;
+}
+
+.portal-map .map-card a.map-card__link {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tocco);
+  color: var(--oceano);
+  font-weight: 700;
+  text-decoration: underline;
+}
+
+/* ---- Planimetria a zone: riva, ombrelloni, lato monte ---- */
+.plan-zone {
+  display: grid;
+  gap: var(--spazio-3);
+}
+
+/* L'etichetta della zona è testo, resta in vista mentre la planimetria scorre di lato. */
+.plan-zone__label {
+  position: sticky;
+  inset-inline-start: 0;
+  width: max-content;
+  max-width: 100%;
+  color: var(--abisso);
+  font-size: 0.9375rem;
+}
+
+.plan-zone__label strong {
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.plan-zone__gap {
+  color: var(--testo-secondario);
+}
+
+/* Corridoio tra le zone: alto quante file vuote sono configurate. */
+.plan-gap {
+  height: calc(var(--plan-gap-rows, 1) * 1.5rem);
+  border-block: 1px dashed var(--bordo-campo);
+  background: color-mix(in srgb, var(--ambra) 8%, transparent);
+}
+
+/* Lettino singolo: la forma distingue, le classi di stato colorano come per gli ombrelloni. */
+.plan-mark__bands {
+  fill: none;
+  stroke: var(--carta);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+.plan-mark__pillow {
+  fill: none;
+  stroke: var(--carta);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+}
+
+/* ---- Area gestione: collegamenti, errori accanto ai campi, pagina «Spiaggia» ---- */
+.manage-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spazio-3);
+}
+
+.field__error {
+  margin-top: var(--spazio-1);
+  color: var(--occupato-testo);
+  font-size: 0.9375rem;
+  font-weight: 700;
+}
+
+.field__hint {
+  max-width: 44ch;
+  margin-top: var(--spazio-1);
+  color: var(--testo-secondario);
+  font-size: 0.875rem;
+}
+
+/* L'avviso di incoerenza non si affida al solo colore: il testo inizia con «Avviso». */
+.layout-warn {
+  max-width: 65ch;
+  padding: var(--spazio-2) var(--spazio-3);
+  border-inline-start: 4px solid var(--ambra);
+  background: color-mix(in srgb, var(--ambra) 12%, var(--carta));
+  border-radius: var(--raggio-piccolo);
+  color: var(--abisso);
+  font-size: 0.9375rem;
+}
+
+.layout-row {
+  display: grid;
+  gap: var(--spazio-3);
+  padding-top: var(--spazio-4);
+  border-top: 1px solid var(--bordo);
+}
+
+.layout-row__lead {
+  flex: 1 1 100%;
+  max-width: 65ch;
+  color: var(--testo-secondario);
+  font-size: 0.9375rem;
+}
+
+.layout-spots {
+  display: grid;
+  gap: var(--spazio-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.layout-spot {
+  display: grid;
+  gap: var(--spazio-2);
+  padding: var(--spazio-4);
+  border: 1px solid var(--bordo);
+  border-radius: var(--raggio);
+  background: var(--carta);
+}
+
+.layout-spot__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spazio-2);
+  color: var(--abisso);
+  font-size: 1.0625rem;
+}
+
+.layout-spot__contract,
+.layout-spot__note {
+  color: var(--testo-secondario);
+  font-size: 0.9375rem;
+}
+
+.layout-spot__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spazio-2);
+}

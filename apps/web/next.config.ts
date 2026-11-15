@@ -16,7 +16,8 @@ const securityHeaders = [
       "default-src 'self'",
       "script-src 'self' 'unsafe-inline'",
       "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' data:",
+      // The OpenStreetMap tiles of the map are the only pictures from outside.
+      "img-src 'self' data: https://tile.openstreetmap.org https://*.tile.openstreetmap.org",
       "font-src 'self'",
       "connect-src 'self'",
       "form-action 'self'",

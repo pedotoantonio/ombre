@@ -3,8 +3,9 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import QRCode from 'qrcode';
-import { accountPages, accountPath, accountSection, can, config, formatMoney, getDictionary, isLocale, locales, type AccountPage, type Locale } from '@ombre/shared';
-import { apiCall, dayPattern, formatDate, formatDay, formatPeriod, slugPattern, uuidPattern } from '@/lib/api';
+import { accountPages, accountPath, accountSection, beachLayoutPath, beachLayoutSegment, can, config, formatMoney, getDictionary, isLocale, locales, type AccountPage, type Locale } from '@ombre/shared';
+import { api, apiCall, dayPattern, formatDate, formatDay, formatPeriod, slugPattern, uuidPattern } from '@/lib/api';
+import { BeachLayoutView } from './beach-layout';
 import { privateMetadata } from '@/lib/seo';
 import { signedIn, type Me } from '@/lib/session';
 import { PageHead, PageShell } from './PageShell';
@@ -36,7 +37,7 @@ function pageFromSegment(locale: Locale, segment: string): AccountPage | null {
 }
 
 /** Signed-in person, or a redirect to the sign-in page. */
-async function requireMe(locale: Locale): Promise<{ me: Me; token: string }> {
+export async function requireMe(locale: Locale): Promise<{ me: Me; token: string }> {
   const session = await signedIn();
   if (!session) redirect(accountPath(locale, 'signIn'));
   return session;
@@ -54,6 +55,11 @@ export async function accountMetadata(locale: Locale, segments: string[]): Promi
     const title = page === 'signIn' ? t.account.signInTitle : page === 'overview' ? t.account.overviewTitle : page === 'twoFactor' ? t.account.twoFactorTitle : null;
     return privateMetadata(locale, title ?? t.nav.reservedArea);
   }
+  if (segments.length === 3 && page === 'manage' && segments[2] === beachLayoutSegment[locale]) {
+    const beachSession = await signedIn();
+    const club = beachSession?.me.memberships.find((entry) => entry.beachSlug === id)?.beachName;
+    return privateMetadata(locale, t.layout.short, { club });
+  }
   const session = segments.length === 2 ? await signedIn() : null;
   if (session && (page === 'manage' || page === 'site')) {
     const club = session.me.memberships.find((entry) => entry.beachSlug === id)?.beachName;
@@ -67,7 +73,7 @@ export async function accountMetadata(locale: Locale, segments: string[]): Promi
   return privateMetadata(locale, t.nav.reservedArea);
 }
 
-function Notice({ locale, query }: { locale: Locale; query: Query }) {
+export function Notice({ locale, query }: { locale: Locale; query: Query }) {
   const t = getDictionary(locale, config.brandName).account;
   const error = first(query.err);
   const done = first(query.ok);
@@ -79,7 +85,7 @@ function Notice({ locale, query }: { locale: Locale; query: Query }) {
   return null;
 }
 
-function Hidden({ values }: { values: Record<string, string> }) {
+export function Hidden({ values }: { values: Record<string, string> }) {
   return (
     <>
       {Object.entries(values).map(([name, value]) => (
@@ -268,14 +274,22 @@ async function ManageView({ locale, beachSlug, query }: { locale: Locale; beachS
   const month = `${day.slice(0, 8)}01`;
   const monthEnd = new Date(Date.UTC(Number(day.slice(0, 4)), Number(day.slice(5, 7)), 0)).toISOString().slice(0, 10);
 
-  const [inventory, bookings, proposals, settings, contracts, report] = await Promise.all([
+  const [inventory, bookings, proposals, settings, contracts, report, beachCard] = await Promise.all([
     can(role, 'inventory.read') ? apiCall<{ spots: InventoryRow[] }>('GET', `${base}/inventory?day=${day}`, { token }) : null,
     can(role, 'bookings.read') ? apiCall<{ bookings: BookingRow[] }>('GET', `${base}/bookings?day=${day}`, { token }) : null,
     can(role, 'sharing.manage') ? apiCall<{ proposals: Proposal[] }>('GET', `${base}/proposals?status=proposed`, { token }) : null,
     can(role, 'sharing.manage') ? apiCall<{ dailySharedCap: number | null; sharedPriceCents: number | null }>('GET', `${base}/sharing-settings`, { token }) : null,
     can(role, 'sharing.manage') ? apiCall<{ contracts: (Omit<Contract, 'beachSlug' | 'beachName'>)[] }>('GET', `${base}/contracts`, { token }) : null,
     can(role, 'reports.read') ? apiCall<Report>('GET', `${base}/reports/summary?from=${month}&to=${monthEnd}`, { token }) : null,
+    // The coordinates of the club come from its public card: the position is public by nature.
+    can(role, 'layout.edit') ? api.beach(beachSlug) : null,
   ]);
+  const position = beachCard?.ok ? { latitude: beachCard.data.beach.latitude, longitude: beachCard.data.beach.longitude } : null;
+  // After a refused save the typed values come back in the address, next to their errors.
+  const latAsked = first(query.lat);
+  const lngAsked = first(query.lng);
+  const latError = first(query.latErr) === '1';
+  const lngError = first(query.lngErr) === '1';
   const freeSpots = inventory?.ok ? inventory.data.spots.filter((row) => row.state === 'available') : [];
   const euro = (cents: number | null) => (cents === null ? '' : (cents / 100).toFixed(2).replace('.', locale === 'it' ? ',' : '.'));
 
@@ -291,10 +305,60 @@ async function ManageView({ locale, beachSlug, query }: { locale: Locale; beachS
       <section className="section">
         <div className="container stack">
           <Notice locale={locale} query={query} />
-          {can(role, 'site.read') ? (
-            <Link className="button button--secondary" href={accountPath(locale, 'site', beachSlug)}>
-              {getDictionary(locale, config.brandName).site.openEditor}
-            </Link>
+          <p className="manage-links">
+            {can(role, 'site.read') ? (
+              <Link className="button button--secondary" href={accountPath(locale, 'site', beachSlug)}>
+                {getDictionary(locale, config.brandName).site.openEditor}
+              </Link>
+            ) : null}
+            {can(role, 'layout.gaps') ? (
+              <Link className="button button--secondary" href={beachLayoutPath(locale, beachSlug)}>
+                {t.openLayout}
+              </Link>
+            ) : null}
+          </p>
+          {can(role, 'layout.edit') && position ? (
+            <div className="panel" id="posizione">
+              <h2>{t.positionTitle}</h2>
+              <p className="prose">{t.positionLead}</p>
+              {position.latitude === null || position.longitude === null ? (
+                <p className="alert" role="status">{t.positionMissing}</p>
+              ) : null}
+              <form method="post" action="/azioni/gestione-posizione" className="form-row">
+                <Hidden values={{ lang: locale, beach: beachSlug, day }} />
+                <div className="field">
+                  <label htmlFor="latitudine">{t.latitude}</label>
+                  <input
+                    id="latitudine"
+                    name="lat"
+                    inputMode="decimal"
+                    autoComplete="off"
+                    defaultValue={latAsked ?? (position.latitude === null ? '' : String(position.latitude))}
+                    aria-invalid={latError || undefined}
+                    aria-describedby={latError ? 'latitudine-errore' : undefined}
+                  />
+                  {latError ? (
+                    <p className="field__error" id="latitudine-errore">{t.latitudeError}</p>
+                  ) : null}
+                </div>
+                <div className="field">
+                  <label htmlFor="longitudine">{t.longitude}</label>
+                  <input
+                    id="longitudine"
+                    name="lng"
+                    inputMode="decimal"
+                    autoComplete="off"
+                    defaultValue={lngAsked ?? (position.longitude === null ? '' : String(position.longitude))}
+                    aria-invalid={lngError || undefined}
+                    aria-describedby={lngError ? 'longitudine-errore' : undefined}
+                  />
+                  {lngError ? (
+                    <p className="field__error" id="longitudine-errore">{t.longitudeError}</p>
+                  ) : null}
+                </div>
+                <button className="button button--secondary" type="submit">{t.savePosition}</button>
+              </form>
+            </div>
           ) : null}
           <form className="form-row" method="get" action={accountPath(locale, 'manage', beachSlug)}>
             <div className="field">
@@ -668,6 +732,8 @@ export async function AccountRoute({ locale, segments, query }: { locale: Locale
   if (segments.length === 1 && page === 'overview') return <OverviewView locale={locale} />;
   if (segments.length === 1 && page === 'twoFactor') return <TwoFactorView locale={locale} query={query} />;
   if (segments.length === 2 && page === 'manage') return <ManageView locale={locale} beachSlug={segments[1]!} query={query} />;
+  if (segments.length === 3 && page === 'manage' && segments[2] === beachLayoutSegment[locale])
+    return <BeachLayoutView locale={locale} beachSlug={segments[1]!} query={query} />;
   if (segments.length === 2 && page === 'season') return <SeasonView locale={locale} contractId={segments[1]!} query={query} />;
   if (segments.length === 2 && page === 'site') return <SiteEditorView locale={locale} beachSlug={segments[1]!} query={query} />;
   notFound();

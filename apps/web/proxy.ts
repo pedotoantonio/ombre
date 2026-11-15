@@ -12,6 +12,6 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // Pages only: framework files, form actions and anything that looks like a file pass through.
-  matcher: ['/((?!_next/|azioni/|.*\\.[^/]*$).*)'],
+  // Pages only: framework files, form actions, data routes and anything that looks like a file pass through.
+  matcher: ['/((?!_next/|azioni/|dati/|.*\\.[^/]*$).*)'],
 };

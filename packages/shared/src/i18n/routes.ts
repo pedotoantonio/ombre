@@ -82,6 +82,14 @@ export function accountPath(locale: Locale, page: AccountPage, id?: string): str
   return id ? `${base}/${id}` : base;
 }
 
+/** Last segment of the beach layout page, under the management page of a beach club. */
+export const beachLayoutSegment: Record<Locale, string> = { it: 'spiaggia', en: 'beach-layout' };
+
+/** Address of the beach layout page of a beach club, inside the reserved area. */
+export function beachLayoutPath(locale: Locale, beachSlug: string): string {
+  return `${accountPath(locale, 'manage', beachSlug)}/${beachLayoutSegment[locale]}`;
+}
+
 /** Internal address of the page shown for unknown addresses. It is never linked. */
 export const notFoundSegment = 'pagina-non-trovata';
 
@@ -109,7 +117,10 @@ export function readAddress(pathname: string): { locale: Locale; known: boolean 
   }
   if (first === accountSection[locale]) {
     const page = (Object.keys(accountPages) as AccountPage[]).find((id) => accountPages[id][locale] === second);
-    return { locale, known: page !== undefined && accountDepth[page] === rest.length };
+    if (page === undefined) return { locale, known: false };
+    // The beach layout page lives one level under the management page of a beach club.
+    if (page === 'manage' && rest.length === 4) return { locale, known: rest[3] === beachLayoutSegment[locale] };
+    return { locale, known: accountDepth[page] === rest.length };
   }
   return { locale, known: false };
 }

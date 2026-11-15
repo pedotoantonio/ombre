@@ -5,6 +5,7 @@ import { api, formatDay, isDay, today, type ApiBeachOffer } from '@/lib/api';
 import { FeatureIcon, type FeatureIconName } from '@ombre/ui';
 import { breadcrumbData, JsonLd, pageUrl } from '@/lib/seo';
 import { Contact, NextStep, PageHead } from './PageShell';
+import { MapPanel, type MapLabels, type MapMarker } from './map-panel';
 
 interface PageProps {
   locale: Locale;
@@ -64,6 +65,21 @@ function StepList({ steps }: { steps: readonly { title: string; text: string }[]
 
 /** Where a search lands on the explore page: the results, not the form again. */
 const resultsAnchor = 'risultati';
+
+/** Texts of the map box as plain strings: they cross to the client component. */
+function mapLabels(locale: Locale, where: 'home' | 'explore'): MapLabels {
+  const t = getDictionary(locale, config.brandName).map;
+  return {
+    invite: where === 'home' ? t.inviteExplore : t.inviteList,
+    inviteCta: where === 'home' ? t.goExplore : t.goList,
+    inviteHref: where === 'home' ? pathFor('explore', locale) : `#${resultsAnchor}`,
+    unavailable: t.unavailable,
+    region: t.region,
+    open: t.open,
+    zoomIn: t.zoomIn,
+    zoomOut: t.zoomOut,
+  };
+}
 
 /** Plain form that opens the explore page with the search in the address. It works without scripts. */
 function SearchForm({ locale, search, minDay }: { locale: Locale; search: ExploreSearch; minDay?: string }) {
@@ -148,11 +164,21 @@ export function HomePage({ locale }: PageProps) {
             <h1>{copy.h1}</h1>
             <p className="lead">{copy.lead}</p>
             <SearchForm locale={locale} search={{ place: '', day: null, guests: defaultGuests, sharedOnly: false }} />
+            {/* The list way in comes before the map box in the reading order: search form, then Explore. */}
             <p className="portal-hero__links">
+              <Link href={pathFor('explore', locale)}>{t.nav.explore}</Link>
               <Link href={pathFor('howItWorks', locale)}>{copy.ctaHowItWorks}</Link>
               <Link href={pathFor('forBeachClubs', locale)}>{copy.ctaBeachClubs}</Link>
             </p>
           </div>
+        </div>
+      </section>
+      <section className="section portal-map-section" aria-labelledby="mappa-titolo">
+        <div className="container">
+          <h2 id="mappa-titolo">{t.map.homeTitle}</h2>
+          <p className="portal-map-lead">{t.map.homeLead}</p>
+          {/* The page is prerendered: the pins arrive later, from an internal route of this site. */}
+          <MapPanel sourceUrl={`/dati/mappa?lang=${locale}`} labels={mapLabels(locale, 'home')} />
         </div>
       </section>
       <section className="section">
@@ -259,6 +285,26 @@ async function ExplorePage({ locale, query = {} }: PageProps & { query?: Query }
   const notes = search.day ? [copy.resultsFor(search.guests), ...(search.sharedOnly ? [copy.sharedOnlyNote] : [])] : [copy.needDay];
   if (search.place) notes.push(copy.placeNote(search.place));
 
+  // The same selection as the list, as pins: a club without coordinates stays in the list only.
+  const listed = search.day ? open : beaches;
+  const markers: MapMarker[] = listed.flatMap((beach) =>
+    beach.latitude === null || beach.longitude === null
+      ? []
+      : [
+          {
+            slug: beach.slug,
+            name: beach.name,
+            locality: beach.locality,
+            latitude: beach.latitude,
+            longitude: beach.longitude,
+            href: `${beachPath(locale, beach.slug)}${search.day ? `?day=${search.day}` : ''}`,
+            ...(search.day && typeof beach.priceFromCents === 'number'
+              ? { priceFromText: copy.priceFrom(formatMoney(beach.priceFromCents, locale)) }
+              : {}),
+          },
+        ],
+  );
+
   return (
     <>
       <PageHead title={copy.h1} lead={copy.lead} />
@@ -296,6 +342,13 @@ async function ExplorePage({ locale, query = {} }: PageProps & { query?: Query }
               </div>
             ) : (
               <>
+                {markers.length > 0 ? (
+                  <div className="portal-map-block" aria-labelledby="mappa-risultati">
+                    <h2 id="mappa-risultati">{t.map.exploreTitle}</h2>
+                    <p className="portal-map-lead">{t.map.exploreLead}</p>
+                    <MapPanel markers={markers} labels={mapLabels(locale, 'explore')} />
+                  </div>
+                ) : null}
                 <div className="portal-results__head">
                   <h2>{search.day ? copy.resultsTitle(formatDay(search.day, locale)) : copy.listTitle}</h2>
                   <p>{notes.join(' ')}</p>
