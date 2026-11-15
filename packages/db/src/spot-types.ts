@@ -46,7 +46,9 @@ const typeColumns = {
 export function listSpotTypes(db: Database, actor: Actor): Promise<SpotTypeView[]> {
   return withActor(db, actor.beachId, actor.userId, (tx) =>
     tx
-      .select({ ...typeColumns, spots: sql<number>`(select count(*) from ${spot} where ${spot.typeId} = ${spotType.id})::int` })
+      // Columns interpolated in the field list render unqualified, so the correlated
+      // pair is spelled out: the bare names would both resolve inside the subquery.
+      .select({ ...typeColumns, spots: sql<number>`(select count(*) from ${spot} where ${spot}."type_id" = ${spotType}."id")::int` })
       .from(spotType)
       .orderBy(desc(spotType.builtin), asc(spotType.name)),
   );

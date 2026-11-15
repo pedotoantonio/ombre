@@ -132,6 +132,9 @@ describe.skipIf(!testAdminUrl)('the drawing of the beach and the spot types', ()
   it('ships the three base types and lets the manager define, edit and guard them', async () => {
     const base = await types();
     expect(base.filter((type) => type.builtin).map((type) => type.name)).toEqual(['Gazebo', 'Lettino singolo', 'Ombrellone']);
+    // The usage count guards deletion and the list says it: the demo spots are umbrellas.
+    expect(base.find((type) => type.name === 'Ombrellone')!.spots).toBeGreaterThan(0);
+    expect(base.find((type) => type.name === 'Gazebo')!.spots).toBe(0);
     expect((await send('GET', `${manage}/types`, undefined, reception())).status).toBe(403);
 
     const created = await send('POST', `${manage}/types`, { name: 'Tenda araba', mark: 'tent', umbrellas: 0, sunbeds: 2, maxGuests: 3, defaultPriceCents: 5500 }, manager());
