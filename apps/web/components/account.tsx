@@ -3,9 +3,26 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import QRCode from 'qrcode';
-import { accountPages, accountPath, accountSection, beachLayoutPath, beachLayoutSegment, can, config, formatMoney, getDictionary, isLocale, locales, type AccountPage, type Locale } from '@ombre/shared';
+import {
+  accountPages,
+  accountPath,
+  accountSection,
+  beachLayoutPath,
+  beachLayoutSegment,
+  can,
+  config,
+  formatMoney,
+  getDictionary,
+  isLocale,
+  locales,
+  manageCabinsPath,
+  manageCabinsSegment,
+  type AccountPage,
+  type Locale,
+} from '@ombre/shared';
 import { api, apiCall, dayPattern, formatDate, formatDay, formatPeriod, slugPattern, uuidPattern } from '@/lib/api';
 import { BeachLayoutView } from './beach-layout';
+import { CabinHolderView, CabinsManageView, CabinsTodayPanel } from './cabins';
 import { privateMetadata } from '@/lib/seo';
 import { signedIn, type Me } from '@/lib/session';
 import { PageHead, PageShell } from './PageShell';
@@ -52,13 +69,22 @@ export async function accountMetadata(locale: Locale, segments: string[]): Promi
   const page = pageFromSegment(locale, segments[0] ?? '');
   const id = segments[1];
   if (segments.length === 1) {
-    const title = page === 'signIn' ? t.account.signInTitle : page === 'overview' ? t.account.overviewTitle : page === 'twoFactor' ? t.account.twoFactorTitle : null;
+    const title =
+      page === 'signIn'
+        ? t.account.signInTitle
+        : page === 'overview'
+          ? t.account.overviewTitle
+          : page === 'twoFactor'
+            ? t.account.twoFactorTitle
+            : page === 'cabins'
+              ? t.cabins.holderTitle
+              : null;
     return privateMetadata(locale, title ?? t.nav.reservedArea);
   }
-  if (segments.length === 3 && page === 'manage' && segments[2] === beachLayoutSegment[locale]) {
+  if (segments.length === 3 && page === 'manage' && (segments[2] === beachLayoutSegment[locale] || segments[2] === manageCabinsSegment[locale])) {
     const beachSession = await signedIn();
     const club = beachSession?.me.memberships.find((entry) => entry.beachSlug === id)?.beachName;
-    return privateMetadata(locale, t.layout.short, { club });
+    return privateMetadata(locale, segments[2] === beachLayoutSegment[locale] ? t.layout.short : t.cabins.short, { club });
   }
   const session = segments.length === 2 ? await signedIn() : null;
   if (session && (page === 'manage' || page === 'site')) {
@@ -77,6 +103,19 @@ export function Notice({ locale, query }: { locale: Locale; query: Query }) {
   const t = getDictionary(locale, config.brandName).account;
   const error = first(query.err);
   const done = first(query.ok);
+  if (error) {
+    const known = t.errors as Record<string, string>;
+    return <p className="alert" role="alert">{known[error] ?? known.invalid_request}</p>;
+  }
+  if (done) return <p className="alert alert--info" role="status">{done === '1' ? t.saved : done}</p>;
+  return null;
+}
+
+/** Outcome of an action shown inside its own section, so that the anchor lands next to it. */
+export function SectionNotice({ locale, query, okKey, errKey }: { locale: Locale; query: Query; okKey: string; errKey: string }) {
+  const t = getDictionary(locale, config.brandName).account;
+  const error = first(query[errKey]);
+  const done = first(query[okKey]);
   if (error) {
     const known = t.errors as Record<string, string>;
     return <p className="alert" role="alert">{known[error] ?? known.invalid_request}</p>;
@@ -129,8 +168,9 @@ async function SignInView({ locale, query }: { locale: Locale; query: Query }) {
 async function OverviewView({ locale }: { locale: Locale }) {
   const t = getDictionary(locale, config.brandName).account;
   const { me, token } = await requireMe(locale);
-  const contracts = await ownContracts(token);
+  const [contracts, cabins] = await Promise.all([ownContracts(token), apiCall<{ assignments: unknown[] }>('GET', '/v1/my/cabins', { token })]);
   const mine = contracts.ok ? contracts.data.contracts : [];
+  const myCabins = cabins.ok ? cabins.data.assignments.length : 0;
   return (
     <PageShell locale={locale} page="help" highlight={false} alternatePath={accountPath(other(locale), 'overview')} crumbs={[{ label: t.overviewTitle }]} signedInAs={me.user.name}>
       <PageHead title={t.overviewTitle} lead={t.hello(me.user.name)} />
@@ -145,7 +185,8 @@ async function OverviewView({ locale }: { locale: Locale }) {
                   <li className="card" key={membership.beachSlug}>
                     <h3>{membership.beachName}</h3>
                     <p>{t.roles[membership.role]}</p>
-                    <Link className="card__link" href={accountPath(locale, 'manage', membership.beachSlug)}>
+                    {/* A cabin holder has no management page: their own cabins page is the way in. */}
+                    <Link className="card__link" href={membership.role === 'cabin_holder' ? accountPath(locale, 'cabins') : accountPath(locale, 'manage', membership.beachSlug)}>
                       {t.open}
                       <span className="visually-hidden">{` ${membership.beachName}`}</span>
                     </Link>
@@ -169,6 +210,18 @@ async function OverviewView({ locale }: { locale: Locale }) {
                   </li>
                 ))}
               </ul>
+            </div>
+          ) : null}
+          {myCabins > 0 ? (
+            <div className="panel">
+              <h2>{t.myCabinsTitle}</h2>
+              <p className="prose">{t.myCabinsText}</p>
+              <p>
+                <Link className="button button--secondary" href={accountPath(locale, 'cabins')}>
+                  {t.open}
+                  <span className="visually-hidden">{` ${t.myCabinsTitle}`}</span>
+                </Link>
+              </p>
             </div>
           ) : null}
           <div className="panel">
@@ -316,6 +369,11 @@ async function ManageView({ locale, beachSlug, query }: { locale: Locale; beachS
                 {t.openLayout}
               </Link>
             ) : null}
+            {can(role, 'cabins.manage') ? (
+              <Link className="button button--secondary" href={manageCabinsPath(locale, beachSlug)}>
+                {t.openCabins}
+              </Link>
+            ) : null}
           </p>
           {can(role, 'layout.edit') && position ? (
             <div className="panel" id="posizione">
@@ -367,6 +425,9 @@ async function ManageView({ locale, beachSlug, query }: { locale: Locale; beachS
             </div>
             <button className="button button--secondary" type="submit">{t.show}</button>
           </form>
+
+          {/* Who uses each cabin today: the front desk reads it here, nothing to decide. */}
+          {can(role, 'bookings.read') ? <CabinsTodayPanel locale={locale} beachSlug={beachSlug} token={token} /> : null}
 
           {bookings?.ok ? (
             <div className="panel">
@@ -731,9 +792,12 @@ export async function AccountRoute({ locale, segments, query }: { locale: Locale
   if (segments.length === 1 && page === 'signIn') return <SignInView locale={locale} query={query} />;
   if (segments.length === 1 && page === 'overview') return <OverviewView locale={locale} />;
   if (segments.length === 1 && page === 'twoFactor') return <TwoFactorView locale={locale} query={query} />;
+  if (segments.length === 1 && page === 'cabins') return <CabinHolderView locale={locale} query={query} />;
   if (segments.length === 2 && page === 'manage') return <ManageView locale={locale} beachSlug={segments[1]!} query={query} />;
   if (segments.length === 3 && page === 'manage' && segments[2] === beachLayoutSegment[locale])
     return <BeachLayoutView locale={locale} beachSlug={segments[1]!} query={query} />;
+  if (segments.length === 3 && page === 'manage' && segments[2] === manageCabinsSegment[locale])
+    return <CabinsManageView locale={locale} beachSlug={segments[1]!} query={query} />;
   if (segments.length === 2 && page === 'season') return <SeasonView locale={locale} contractId={segments[1]!} query={query} />;
   if (segments.length === 2 && page === 'site') return <SiteEditorView locale={locale} beachSlug={segments[1]!} query={query} />;
   notFound();

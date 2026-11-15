@@ -73,6 +73,8 @@ export const accountPages = {
   season: { it: 'stagionale', en: 'season' },
   site: { it: 'sito', en: 'site' },
   twoFactor: { it: 'verifica', en: 'two-step' },
+  /** The cabin holder's own page: their cabins, periods and sublet proposals. */
+  cabins: { it: 'cabine', en: 'cabins' },
 } as const satisfies Record<string, Record<Locale, string>>;
 export type AccountPage = keyof typeof accountPages;
 
@@ -90,10 +92,18 @@ export function beachLayoutPath(locale: Locale, beachSlug: string): string {
   return `${accountPath(locale, 'manage', beachSlug)}/${beachLayoutSegment[locale]}`;
 }
 
+/** Last segment of the manager's cabins page, under the management page of a beach club. */
+export const manageCabinsSegment: Record<Locale, string> = { it: 'cabine', en: 'cabins' };
+
+/** Address of the cabins page of a beach club, inside the reserved area. */
+export function manageCabinsPath(locale: Locale, beachSlug: string): string {
+  return `${accountPath(locale, 'manage', beachSlug)}/${manageCabinsSegment[locale]}`;
+}
+
 /** Internal address of the page shown for unknown addresses. It is never linked. */
 export const notFoundSegment = 'pagina-non-trovata';
 
-const accountDepth: Record<AccountPage, number> = { signIn: 2, overview: 2, twoFactor: 2, manage: 3, season: 3, site: 3 };
+const accountDepth: Record<AccountPage, number> = { signIn: 2, overview: 2, twoFactor: 2, manage: 3, season: 3, site: 3, cabins: 2 };
 
 /**
  * Reads the language of an address and tells whether it has the shape of a page of the site.
@@ -118,8 +128,8 @@ export function readAddress(pathname: string): { locale: Locale; known: boolean 
   if (first === accountSection[locale]) {
     const page = (Object.keys(accountPages) as AccountPage[]).find((id) => accountPages[id][locale] === second);
     if (page === undefined) return { locale, known: false };
-    // The beach layout page lives one level under the management page of a beach club.
-    if (page === 'manage' && rest.length === 4) return { locale, known: rest[3] === beachLayoutSegment[locale] };
+    // The beach layout and cabins pages live one level under the management page of a beach club.
+    if (page === 'manage' && rest.length === 4) return { locale, known: rest[3] === beachLayoutSegment[locale] || rest[3] === manageCabinsSegment[locale] };
     return { locale, known: accountDepth[page] === rest.length };
   }
   return { locale, known: false };

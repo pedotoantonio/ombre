@@ -17,11 +17,13 @@ import {
   pathFor,
   spotZones,
   type Locale,
+  type SeaSide,
   type SiteContent,
   type SiteTemplate,
+  type SpotMark as SpotMarkKind,
   type SpotZone,
 } from '@ombre/shared';
-import { api, dayPattern, formatDay, formatTime, isDay, slugPattern, uuidPattern, type ApiBeach, type ApiMapSpot, type ApiSpot, type ApiZoneGaps } from '@/lib/api';
+import { api, dayPattern, formatDay, formatTime, isDay, slugPattern, uuidPattern, type ApiBeach, type ApiLayoutElement, type ApiMapSpot, type ApiSpot, type ApiZoneGaps } from '@/lib/api';
 import { JsonLd, privateMetadata } from '@/lib/seo';
 import { PageHead, PageShell, type Crumb } from './PageShell';
 import { BeachSite, localBusinessData } from './site-view';
@@ -103,6 +105,7 @@ function SpotCard({ locale, beach, spot, day, selected }: { locale: Locale; beac
   return (
     <li className={selected ? 'spot plan-chosen' : 'spot'} aria-current={selected ? 'true' : undefined}>
       <span className="spot__code">{spot.code}</span>
+      <p>{spot.typeName}</p>
       <p>{t.equipment(spot.umbrellas, spot.sunbeds)}</p>
       <p>{t.guests(spot.maxGuests)}</p>
       {spot.shared || selected ? (
@@ -186,21 +189,95 @@ function SunbedMark({ status, selected = false }: { status: ApiMapSpot['status']
   );
 }
 
-/** The mark of a spot: an umbrella, or a sunbed when the spot has no umbrella at all. */
-export function SpotMark({ umbrellas, status, selected = false }: { umbrellas: number; status: ApiMapSpot['status']; selected?: boolean }) {
-  return umbrellas === 0 ? <SunbedMark status={status} selected={selected} /> : <UmbrellaMark status={status} selected={selected} />;
+/** A gazebo seen from above: a square roof with its ridges, a shape of its own next to the round umbrella. */
+function GazeboMark({ status, selected = false }: { status: ApiMapSpot['status']; selected?: boolean }) {
+  return (
+    <svg className={`plan-mark plan-mark--${status}`} viewBox="0 0 48 48" aria-hidden="true" focusable="false">
+      <rect className="plan-mark__canopy" x="8" y="8" width="32" height="32" rx="4" />
+      {status === 'shared' ? (
+        <>
+          <path className="plan-mark__stripes" d="M24 24L8 8h32ZM24 24L8 40h32Z" />
+          <rect className="plan-mark__outline" x="8" y="8" width="32" height="32" rx="4" />
+        </>
+      ) : null}
+      {status === 'unavailable' ? (
+        <path className="plan-mark__cross" d="M16 16l16 16M32 16L16 32" />
+      ) : (
+        <>
+          <path className="plan-mark__ribs" d="M9.5 9.5l29 29M38.5 9.5l-29 29" />
+          <circle className="plan-mark__top" cx="24" cy="24" r="3" />
+        </>
+      )}
+      {selected ? <SelectedBadge /> : null}
+    </svg>
+  );
+}
+
+/** A tent seen from the front: a triangle with its door, nothing like the other marks. */
+function TentMark({ status, selected = false }: { status: ApiMapSpot['status']; selected?: boolean }) {
+  return (
+    <svg className={`plan-mark plan-mark--${status}`} viewBox="0 0 48 48" aria-hidden="true" focusable="false">
+      <path className="plan-mark__canopy" d="M24 6L44 41H4Z" />
+      {status === 'shared' ? (
+        <>
+          <path className="plan-mark__bands" d="M17 30h14M13 36h22" />
+          <path className="plan-mark__outline" d="M24 6L44 41H4Z" />
+        </>
+      ) : null}
+      {status === 'unavailable' ? <path className="plan-mark__cross" d="M18 23l12 12M30 23L18 35" /> : <path className="plan-mark__stripes" d="M20 41l4-11 4 11Z" />}
+      {selected ? <SelectedBadge /> : null}
+    </svg>
+  );
+}
+
+/** A daybed seen from above: a wide bed, clearly broader than the single sunbed. */
+function DaybedMark({ status, selected = false }: { status: ApiMapSpot['status']; selected?: boolean }) {
+  return (
+    <svg className={`plan-mark plan-mark--${status}`} viewBox="0 0 48 48" aria-hidden="true" focusable="false">
+      <rect className="plan-mark__canopy" x="6" y="14" width="36" height="20" rx="5" />
+      {status === 'shared' ? <path className="plan-mark__bands" d="M20 16v16M28 16v16" /> : null}
+      {status === 'unavailable' ? <path className="plan-mark__cross" d="M18 18l12 12M30 18L18 30" /> : <path className="plan-mark__pillow" d="M12 20v8" />}
+      {selected ? <SelectedBadge /> : null}
+    </svg>
+  );
+}
+
+const markComponents: Record<SpotMarkKind, (props: { status: ApiMapSpot['status']; selected?: boolean }) => ReactNode> = {
+  umbrella: UmbrellaMark,
+  sunbed: SunbedMark,
+  gazebo: GazeboMark,
+  tent: TentMark,
+  daybed: DaybedMark,
+};
+
+/**
+ * The mark a spot is drawn with. The manager's pages know the mark of the type; the
+ * public availability carries the type name only, so the three builtin names map to
+ * their fixed marks and any custom type falls back to the equipment shape.
+ */
+export function markFor(typeName: string, umbrellas: number): SpotMarkKind {
+  if (typeName === 'Ombrellone') return 'umbrella';
+  if (typeName === 'Lettino singolo') return 'sunbed';
+  if (typeName === 'Gazebo') return 'gazebo';
+  return umbrellas === 0 ? 'sunbed' : 'umbrella';
+}
+
+/** The mark of a spot, from the fixed repertoire. Without a mark, the equipment decides. */
+export function SpotMark({ mark, umbrellas = 1, status, selected = false }: { mark?: SpotMarkKind; umbrellas?: number; status: ApiMapSpot['status']; selected?: boolean }) {
+  const Mark = markComponents[mark ?? (umbrellas === 0 ? 'sunbed' : 'umbrella')];
+  return <Mark status={status} selected={selected} />;
 }
 
 function MapSpot({ locale, beach, spot, day, selected }: { locale: Locale; beach: ApiBeach; spot: ApiMapSpot; day: string; selected: boolean }) {
   const t = getDictionary(locale, config.brandName).booking;
   const content = (
     <>
-      <SpotMark umbrellas={spot.umbrellas} status={spot.status} selected={selected} />
+      <SpotMark mark={markFor(spot.typeName, spot.umbrellas)} status={spot.status} selected={selected} />
       <span className="plan-spot__code" aria-hidden="true">
         {spot.code}
       </span>
       <span className="visually-hidden">
-        {t.mapSpot(spot.code, t.status[spot.status], spot.priceCents === null ? undefined : formatMoney(spot.priceCents, locale))}
+        {t.mapSpot(spot.typeName, spot.code, t.status[spot.status], spot.priceCents === null ? undefined : formatMoney(spot.priceCents, locale))}
         {`. ${t.equipment(spot.umbrellas, spot.sunbeds)}`}
         {selected ? `. ${t.status.selected}` : ''}
       </span>
@@ -234,6 +311,8 @@ export interface PlanPlace {
   code: string;
   zone: SpotZone;
   rowNumber: number;
+  /** Column inside the row: the only source of the drawing. Holes are drawn as sand. */
+  col: number;
 }
 
 export interface PlanZoneRows<T extends PlanPlace> {
@@ -252,38 +331,148 @@ export function zoneRows<T extends PlanPlace>(spots: T[]): PlanZoneRows<T>[] {
     .filter((zone) => zone.rows.length > 0);
 }
 
-/** How many spots the longest row holds: the width the drawing reserves. */
-export function widestRow(spots: PlanPlace[]): number {
-  const counts = new Map<string, number>();
-  for (const spot of spots) {
-    const key = `${spot.zone}/${spot.rowNumber}`;
-    counts.set(key, (counts.get(key) ?? 0) + 1);
+/** Cells and lanes in rem: a spot cell, the gap between cells, a vertical walkway lane. */
+export const planCellRem = 4.25;
+export const planGapRem = 0.5;
+export const planLaneRem = 1.25;
+
+/** Width the drawing reserves: the widest column in play and the vertical lanes next to it. */
+export function planSize(spots: PlanPlace[], elements: ApiLayoutElement[]): { cols: number; lanes: number } {
+  const cols = Math.max(
+    1,
+    ...spots.map((spot) => spot.col),
+    ...elements.map((element) => element.colEnd ?? (element.colStart === null ? 1 : element.colStart + 1)),
+  );
+  return { cols, lanes: elements.filter((element) => element.kind === 'walkway' && element.orientation === 'vertical').length };
+}
+
+/** Vertical walkways, in column order: they add their own lane after a column. */
+function verticalLanes(elements: ApiLayoutElement[]): ApiLayoutElement[] {
+  return elements.filter((element) => element.kind === 'walkway' && element.orientation === 'vertical').sort((a, b) => (a.colStart ?? 0) - (b.colStart ?? 0));
+}
+
+/** Distance in rem from the first cell to the start of a column, vertical lanes included. */
+function colOffsetRem(col: number, lanes: ApiLayoutElement[]): number {
+  const before = lanes.filter((lane) => (lane.colStart ?? 0) < col).length;
+  return (col - 1) * (planCellRem + planGapRem) + before * (planLaneRem + planGapRem);
+}
+
+/** Width in rem of a span of columns, with the vertical lanes that run inside it. */
+function spanWidthRem(from: number, to: number, lanes: ApiLayoutElement[]): number {
+  const inside = lanes.filter((lane) => (lane.colStart ?? 0) >= from && (lane.colStart ?? 0) < to).length;
+  return (to - from + 1) * planCellRem + (to - from) * planGapRem + inside * (planLaneRem + planGapRem);
+}
+
+/** The narrow lane of a vertical walkway, announced in the reading of every row it crosses. */
+function VerticalLane({ locale, lane, zone }: { locale: Locale; lane: ApiLayoutElement; zone: SpotZone }) {
+  const t = getDictionary(locale, config.brandName).booking;
+  // A lane outside its zone still takes its width, so the columns stay aligned across the zones.
+  if (lane.zone !== null && lane.zone !== zone) return <li className="plan-vlane plan-vlane--spacer" aria-hidden="true" />;
+  return (
+    <li className="plan-vlane">
+      <span className="plan-vlane__label">{t.walkway}{lane.label ? ` · ${lane.label}` : ''}</span>
+    </li>
+  );
+}
+
+/** A structure or a cabin block: a labelled box over a rectangle of free cells. */
+function PlanBox({ locale, element, lanes }: { locale: Locale; element: ApiLayoutElement; lanes: ApiLayoutElement[] }) {
+  const t = getDictionary(locale, config.brandName).booking;
+  const cabins = element.kind === 'cabin_block';
+  const width = spanWidthRem(element.colStart ?? 1, element.colEnd ?? element.colStart ?? 1, lanes);
+  return (
+    <li className={cabins ? 'plan-box plan-box--cabins' : 'plan-box'} style={{ width: `${width}rem` }}>
+      <span className="visually-hidden">{cabins ? t.cabinBlockKind : t.structureKind}: </span>
+      <span className="plan-box__label">{element.label ?? (cabins ? t.cabinsBox : t.structureKind)}</span>
+    </li>
+  );
+}
+
+/** One drawing row: spots on their columns, boxes over their rectangles, sand in the holes, lanes in between. */
+function PlanRowCells<T extends PlanPlace>({
+  locale,
+  zone,
+  spots,
+  rects,
+  lanes,
+  renderSpot,
+}: {
+  locale: Locale;
+  zone: SpotZone;
+  spots: T[];
+  rects: ApiLayoutElement[];
+  lanes: ApiLayoutElement[];
+  renderSpot: (spot: T) => ReactNode;
+}) {
+  const bySpotCol = new Map(spots.map((spot) => [spot.col, spot]));
+  const byRectStart = new Map(rects.map((rect) => [rect.colStart ?? 1, rect]));
+  const rowMax = Math.max(1, ...spots.map((spot) => spot.col), ...rects.map((rect) => rect.colEnd ?? rect.colStart ?? 1));
+  const cells: ReactNode[] = [];
+  let col = 1;
+  while (col <= rowMax) {
+    const rect = byRectStart.get(col);
+    const spot = bySpotCol.get(col);
+    const last = rect ? (rect.colEnd ?? col) : col;
+    if (rect) cells.push(<PlanBox key={`box-${col}`} locale={locale} element={rect} lanes={lanes} />);
+    else if (spot) cells.push(<Fragment key={`spot-${col}`}>{renderSpot(spot)}</Fragment>);
+    else cells.push(<li key={`hole-${col}`} className="plan-hole" aria-hidden="true" />);
+    // A lane right after this cell; lanes crossed by a box are already inside its width.
+    for (const lane of lanes.filter((candidate) => (candidate.colStart ?? 0) === last)) {
+      cells.push(<VerticalLane key={`lane-${last}-${lane.elementId}`} locale={locale} lane={lane} zone={zone} />);
+    }
+    col = last + 1;
   }
-  return Math.max(1, ...counts.values());
+  return <>{cells}</>;
+}
+
+/** The lane of a horizontal walkway: its own drawing row, placed along its columns. */
+function HorizontalLane({ locale, element, lanes }: { locale: Locale; element: ApiLayoutElement; lanes: ApiLayoutElement[] }) {
+  const t = getDictionary(locale, config.brandName).booking;
+  const from = element.colStart ?? 1;
+  const to = element.colEnd ?? from;
+  return (
+    <div className="plan-row plan-row--lane">
+      <p className="plan-row__label" aria-hidden="true" />
+      <div className="plan-lane" style={{ marginInlineStart: `${colOffsetRem(from, lanes)}rem`, width: `${spanWidthRem(from, to, lanes)}rem` }}>
+        <span className="plan-lane__label">
+          {t.walkway}
+          {element.label ? ` · ${element.label}` : ''}
+        </span>
+      </div>
+    </div>
+  );
 }
 
 /**
  * The drawing shared by the public map and the manager's preview: the sea band, then the
  * shore, umbrella and land zones with their text labels, separated by corridors proportional
- * to the configured empty rows. With no umbrella zone the distances have no effect and the
- * zones are drawn adjacent. Row 1 of every zone is the closest to the sea.
+ * to the configured empty rows, with the walkways, structures and cabin blocks the manager
+ * drew. With the sea at the bottom only the visual order flips: the document order and the
+ * equivalent list never change. Row 1 of every zone is the closest to the sea.
  */
 export function PlanCanvas<T extends PlanPlace>({
   locale,
   gaps,
+  seaSide = 'top',
+  elements = [],
   spots,
   idPrefix,
   renderSpot,
 }: {
   locale: Locale;
   gaps: ApiZoneGaps;
+  seaSide?: SeaSide;
+  elements?: ApiLayoutElement[];
   spots: T[];
   idPrefix: string;
   renderSpot: (spot: T) => ReactNode;
 }) {
   const t = getDictionary(locale, config.brandName).booking;
-  const zones = zoneRows(spots);
-  const hasUmbrellas = zones.some((zone) => zone.zone === 'ombrelloni');
+  const lanes = verticalLanes(elements);
+  const flip = seaSide === 'bottom' ? ' plan__rows--flip' : '';
+  // Zones in drawing order: the ones with spots and the ones that only hold drawn elements.
+  const zones = spotZones.filter((zone) => spots.some((spot) => spot.zone === zone) || elements.some((element) => element.zone === zone && element.orientation !== 'vertical'));
+  const hasUmbrellas = zones.includes('ombrelloni');
   return (
     <div className="plan__map">
       <p className="plan__hint" aria-hidden="true">
@@ -294,7 +483,7 @@ export function PlanCanvas<T extends PlanPlace>({
       </p>
       {/* Every row stays on one line: the map scrolls sideways inside this region, the page never does. */}
       <div className="plan__scroll" role="region" aria-label={t.planRegion} tabIndex={0}>
-        <div className="plan__rows">
+        <div className={`plan__rows${flip}`}>
           <p className="plan__sea">
             <span className="plan__sea-label">
               <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -304,7 +493,14 @@ export function PlanCanvas<T extends PlanPlace>({
               <span className="visually-hidden">, {t.planSeaNote}</span>
             </span>
           </p>
-          {zones.map(({ zone, rows }, index) => {
+          {zones.map((zone, index) => {
+            const inZone = spots.filter((spot) => spot.zone === zone);
+            const rects = elements.filter((element) => element.zone === zone && (element.kind === 'structure' || element.kind === 'cabin_block'));
+            const walkways = elements
+              .filter((element) => element.zone === zone && element.kind === 'walkway' && element.orientation === 'horizontal')
+              .sort((a, b) => (a.rowAfter ?? 0) - (b.rowAfter ?? 0));
+            const rows = [...new Set([...inZone.map((spot) => spot.rowNumber), ...rects.map((rect) => rect.rowNumber ?? 1)])].sort((a, b) => a - b);
+            const lastRow = rows[rows.length - 1] ?? 0;
             // Corridor above this zone, only between two drawn zones with umbrellas in play.
             const gap = index === 0 || !hasUmbrellas ? 0 : zone === 'ombrelloni' ? gaps.shoreGapRows : zone === 'monte' ? gaps.landGapRows : 0;
             const note = !hasUmbrellas || zone === 'ombrelloni' ? 0 : zone === 'riva' ? gaps.shoreGapRows : gaps.landGapRows;
@@ -316,18 +512,37 @@ export function PlanCanvas<T extends PlanPlace>({
                     <strong>{t.zones[zone]}</strong>
                     {note > 0 ? <span className="plan-zone__gap">, {t.zoneGap(note)}</span> : null}
                   </p>
-                  {rows.map(({ row, spots: inRow }) => (
-                    <div className="plan-row" key={row}>
-                      <p className="plan-row__label" id={`${idPrefix}-${zone}-fila-${row}`}>
-                        {t.row(row)}
-                      </p>
-                      <ol className="plan-row__spots" aria-labelledby={`${idPrefix}-${zone}-fila-${row}`}>
-                        {inRow.map((spot) => (
-                          <Fragment key={spot.code}>{renderSpot(spot)}</Fragment>
-                        ))}
-                      </ol>
-                    </div>
-                  ))}
+                  <div className={`plan-zone__rows${flip ? ' plan-zone__rows--flip' : ''}`}>
+                    {walkways
+                      .filter((lane) => (lane.rowAfter ?? 0) === 0)
+                      .map((lane) => (
+                        <HorizontalLane key={lane.elementId} locale={locale} element={lane} lanes={lanes} />
+                      ))}
+                    {rows.map((row) => (
+                      <Fragment key={row}>
+                        <div className="plan-row">
+                          <p className="plan-row__label" id={`${idPrefix}-${zone}-fila-${row}`}>
+                            {t.row(row)}
+                          </p>
+                          <ol className="plan-row__spots" aria-labelledby={`${idPrefix}-${zone}-fila-${row}`}>
+                            <PlanRowCells
+                              locale={locale}
+                              zone={zone}
+                              spots={inZone.filter((spot) => spot.rowNumber === row)}
+                              rects={rects.filter((rect) => rect.rowNumber === row)}
+                              lanes={lanes}
+                              renderSpot={renderSpot}
+                            />
+                          </ol>
+                        </div>
+                        {walkways
+                          .filter((lane) => (lane.rowAfter ?? 0) === row || (row === lastRow && (lane.rowAfter ?? 0) > lastRow))
+                          .map((lane) => (
+                            <HorizontalLane key={lane.elementId} locale={locale} element={lane} lanes={lanes} />
+                          ))}
+                      </Fragment>
+                    ))}
+                  </div>
                 </section>
               </Fragment>
             );
@@ -338,11 +553,30 @@ export function PlanCanvas<T extends PlanPlace>({
   );
 }
 
+/** Legend names of the marks that are not the umbrella. Only the marks in play are listed. */
+export function MarkLegendItems({ locale, marks }: { locale: Locale; marks: SpotMarkKind[] }) {
+  const t = getDictionary(locale, config.brandName).booking;
+  const names: Record<Exclude<SpotMarkKind, 'umbrella'>, string> = { sunbed: t.sunbedMark, gazebo: t.gazeboMark, tent: t.tentMark, daybed: t.daybedMark };
+  const present = ([...new Set(marks)] as SpotMarkKind[]).filter((mark): mark is Exclude<SpotMarkKind, 'umbrella'> => mark !== 'umbrella');
+  return (
+    <>
+      {present.map((mark) => (
+        <li key={mark}>
+          <SpotMark mark={mark} status="free" />
+          {names[mark]}
+        </li>
+      ))}
+    </>
+  );
+}
+
 function BeachMap({
   locale,
   beach,
   layout,
   gaps,
+  seaSide,
+  elements,
   day,
   selected,
 }: {
@@ -350,15 +584,23 @@ function BeachMap({
   beach: ApiBeach;
   layout: ApiMapSpot[];
   gaps: ApiZoneGaps;
+  seaSide: SeaSide;
+  elements: ApiLayoutElement[];
   day: string;
   selected: ApiMapSpot | undefined;
 }) {
   const t = getDictionary(locale, config.brandName).booking;
   const free = layout.filter((spot) => spot.status !== 'unavailable').length;
-  const hasSunbeds = layout.some((spot) => spot.umbrellas === 0);
+  const size = planSize(layout, elements);
   // The longest row sets the width the map needs: the hint about scrolling shows only when it does not fit.
   return (
-    <div className="plan" id="planimetria" role="group" aria-labelledby="planimetria-titolo" style={{ '--plan-cols': widestRow(layout) } as CSSProperties}>
+    <div
+      className="plan"
+      id="planimetria"
+      role="group"
+      aria-labelledby="planimetria-titolo"
+      style={{ '--plan-cols': size.cols, '--plan-lanes': size.lanes } as CSSProperties}
+    >
       <div className="plan__head">
         <h3 id="planimetria-titolo">{t.planTitle}</h3>
         <p>{t.planLead}</p>
@@ -389,16 +631,13 @@ function BeachMap({
           <UmbrellaMark status="free" selected />
           {t.status.selected}
         </li>
-        {hasSunbeds ? (
-          <li>
-            <SunbedMark status="free" />
-            {t.sunbedMark}
-          </li>
-        ) : null}
+        <MarkLegendItems locale={locale} marks={layout.map((spot) => markFor(spot.typeName, spot.umbrellas))} />
       </ul>
       <PlanCanvas
         locale={locale}
         gaps={gaps}
+        seaSide={seaSide}
+        elements={elements}
         spots={layout}
         idPrefix="planimetria"
         renderSpot={(spot) => <MapSpot locale={locale} beach={beach} spot={spot} day={day} selected={spot.spotId === selected?.spotId} />}
@@ -438,6 +677,8 @@ export async function BeachView({ lang, section, slug, query }: { lang: string; 
   const spots = availability?.ok ? availability.data.spots : [];
   const layout = availability?.ok ? availability.data.layout : [];
   const gaps = availability?.ok ? availability.data.gaps : { shoreGapRows: 1, landGapRows: 1 };
+  const seaSide: SeaSide = availability?.ok ? availability.data.seaSide : 'top';
+  const elements = availability?.ok ? availability.data.elements : [];
   const spotZonesRows = zoneRows(spots);
   const manyZones = spotZonesRows.length > 1;
   const taken = layout.filter((spot) => spot.status === 'unavailable').map((spot) => spot.code);
@@ -495,7 +736,9 @@ export async function BeachView({ lang, section, slug, query }: { lang: string; 
                 </div>
               ) : (
                 <>
-                  {layout.length > 0 ? <BeachMap locale={locale} beach={beach} layout={layout} gaps={gaps} day={day} selected={selected} /> : null}
+                  {layout.length > 0 ? (
+                    <BeachMap locale={locale} beach={beach} layout={layout} gaps={gaps} seaSide={seaSide} elements={elements} day={day} selected={selected} />
+                  ) : null}
                   {spots.length === 0 ? (
                     <div className="empty">
                       <h3>{t.noSpotsTitle}</h3>

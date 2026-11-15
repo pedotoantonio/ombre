@@ -1,4 +1,4 @@
-import { accountPath, beachLayoutPath, beachPath, bookingPath, bookPath, holdPath, isLocale, parseEuro, type Locale } from '@ombre/shared';
+import { accountPath, beachLayoutPath, beachPath, bookingPath, bookPath, holdPath, isLocale, manageCabinsPath, parseEuro, type Locale } from '@ombre/shared';
 import { api, apiCall, dayPattern, sandboxNotify, slugPattern, uuidPattern } from '@/lib/api';
 import { clearSessionCookieHeader, sessionCookie, sessionCookieHeader } from '@/lib/session';
 
@@ -72,6 +72,45 @@ function annotation(text: string): string | null {
   const value = text.trim();
   return value === '' ? null : value;
 }
+
+/** Runs a spot type call and returns to the "Tipi di postazione" section with the result next to it. */
+async function typesAct(request: Request, form: Form, lang: Locale, path: string, method: string, body: unknown, errorMap: Record<string, string> = {}): Promise<Outcome> {
+  const beach = form('beach');
+  if (!slugPattern.test(beach)) return bad();
+  const result = await apiCall<unknown>(method, `/v1/manage/beaches/${beach}/types${path}`, { body, token: cookieToken(request) });
+  const back = beachLayoutPath(lang, beach);
+  if (result.ok) return { to: `${withQuery(back, { tok: '1' })}#tipi` };
+  if (result.status === 401) return { to: accountPath(lang, 'signIn') };
+  const code = result.status === 0 ? 'unavailable' : result.code;
+  return { to: `${withQuery(back, { terr: errorMap[code] ?? code })}#tipi` };
+}
+
+/** Runs a cabins call and returns to the cabins page of the club with the result. */
+async function cabinsAct(
+  request: Request,
+  form: Form,
+  lang: Locale,
+  path: string,
+  method: string,
+  body: unknown,
+  errorMap: Record<string, string> = {},
+  okMessage?: (data: unknown) => string,
+): Promise<Outcome> {
+  const beach = form('beach');
+  if (!slugPattern.test(beach)) return bad();
+  const result = await apiCall<unknown>(method, `/v1/manage/beaches/${beach}${path}`, { body, token: cookieToken(request) });
+  const back = manageCabinsPath(lang, beach);
+  if (result.ok) return { to: back, ok: okMessage ? okMessage(result.data) : '1' };
+  if (result.status === 401) return { to: accountPath(lang, 'signIn') };
+  const code = result.status === 0 ? 'unavailable' : result.code;
+  return { to: back, err: errorMap[code] ?? code };
+}
+
+/** The tools of the drawing grid, as the query string spells them. */
+const drawTools = ['passerella-orizzontale', 'passerella-verticale', 'struttura', 'blocco-cabine', 'gomma'] as const;
+
+/** A cell or interstice token of the drawing grid: zone/row/column. */
+const drawCellPattern = /^(riva|ombrelloni|monte)\/(\d{1,3})\/(\d{1,3})$/;
 
 /** Runs a website call and returns to the editor with the result. */
 async function site(request: Request, form: Form, lang: Locale, path: string, method: string, body: unknown): Promise<Outcome> {
@@ -222,6 +261,7 @@ const actions: Record<string, (request: Request, form: Form, lang: Locale) => Pr
       zone: form('zone'),
       prefix: form('prefix').trim().toUpperCase(),
       count: wholeNumber(form('count')),
+      ...(uuidPattern.test(form('type')) ? { typeId: form('type') } : {}),
       ...(optionalNumber(form('umbrellas')) === undefined ? {} : { umbrellas: optionalNumber(form('umbrellas')) }),
       ...(optionalNumber(form('sunbeds')) === undefined ? {} : { sunbeds: optionalNumber(form('sunbeds')) }),
       ...(optionalNumber(form('guests')) === undefined ? {} : { maxGuests: optionalNumber(form('guests')) }),
@@ -230,6 +270,7 @@ const actions: Record<string, (request: Request, form: Form, lang: Locale) => Pr
     layoutAct(request, form, lang, '/spots', 'POST', {
       zone: form('zone'),
       code: form('code').trim().toUpperCase(),
+      ...(uuidPattern.test(form('type')) ? { typeId: form('type') } : {}),
       ...(optionalNumber(form('row')) === undefined ? {} : { rowNumber: optionalNumber(form('row')) }),
       ...(optionalNumber(form('umbrellas')) === undefined ? {} : { umbrellas: optionalNumber(form('umbrellas')) }),
       ...(optionalNumber(form('sunbeds')) === undefined ? {} : { sunbeds: optionalNumber(form('sunbeds')) }),
@@ -237,6 +278,254 @@ const actions: Record<string, (request: Request, form: Form, lang: Locale) => Pr
       rentalType: annotation(form('rentalType')),
       rentalNotes: annotation(form('rentalNotes')),
     }),
+  // An explicit change of spot type: the equipment of the spot stays exactly as it is.
+  'spiaggia-tipo': (request, form, lang) => {
+    const spotId = form('spot');
+    if (!uuidPattern.test(spotId) || !uuidPattern.test(form('type'))) return Promise.resolve(bad());
+    return layoutAct(request, form, lang, `/spots/${encodeURIComponent(spotId)}/type`, 'PUT', { typeId: form('type') });
+  },
+
+  // The drawing: side of the sea, grid tools, coordinates form and element removal.
+  async 'spiaggia-lato'(request, form, lang) {
+    const beach = form('beach');
+    const side = form('side');
+    if (!slugPattern.test(beach) || (side !== 'top' && side !== 'bottom')) return bad();
+    const result = await apiCall('PUT', `/v1/manage/beaches/${beach}/layout/sea-side`, { body: { seaSide: side }, token: cookieToken(request) });
+    const back = beachLayoutPath(lang, beach);
+    if (result.ok) return { to: `${withQuery(back, { dok: '1' })}#disegno` };
+    if (result.status === 401) return { to: accountPath(lang, 'signIn') };
+    return { to: `${withQuery(back, { derr: result.status === 0 ? 'unavailable' : result.code })}#disegno` };
+  },
+
+  // The grid itself: one form, the tool in the query string, two explicit steps for the
+  // extended elements. The first step never calls the API: it only carries the start back.
+  async 'spiaggia-disegno'(request, form, lang) {
+    const beach = form('beach');
+    const tool = form('strumento');
+    if (!slugPattern.test(beach) || !(drawTools as readonly string[]).includes(tool)) return bad();
+    const back = beachLayoutPath(lang, beach);
+    const token = cookieToken(request);
+    const go = (params: Record<string, string | undefined>): Outcome => ({ to: `${withQuery(back, { strumento: tool, ...params })}#disegno` });
+    const done = (result: Awaited<ReturnType<typeof apiCall>>): Outcome => {
+      if (result.ok) return go({ dok: '1' });
+      if (result.status === 401) return { to: accountPath(lang, 'signIn') };
+      const code = result.status === 0 ? 'unavailable' : result.code === 'invalid_state' ? 'element_overlap' : result.code;
+      return go({ derr: code });
+    };
+    const draw = (body: unknown) => apiCall<unknown>('POST', `/v1/manage/beaches/${beach}/layout/elements`, { body, token });
+
+    if (tool === 'gomma') {
+      const element = form('elemento');
+      if (!uuidPattern.test(element)) return bad();
+      const removed = await apiCall<{ detachedCabins: number }>('DELETE', `/v1/manage/beaches/${beach}/layout/elements/${encodeURIComponent(element)}`, { token });
+      if (removed.ok) {
+        const { getDictionary, config } = await import('@ombre/shared');
+        return go({ dok: getDictionary(lang, config.brandName).layout.elementRemoved(removed.data.detachedCabins) });
+      }
+      if (removed.status === 401) return { to: accountPath(lang, 'signIn') };
+      return go({ derr: removed.status === 0 ? 'unavailable' : removed.code });
+    }
+    if (tool === 'passerella-verticale') {
+      // From the grid the vertical walkway crosses every zone; one zone only via the form.
+      return done(await draw({ kind: 'walkway', orientation: 'vertical', colStart: wholeNumber(form('colonna')) }));
+    }
+    const horizontal = tool === 'passerella-orizzontale';
+    const target = drawCellPattern.exec(form(horizontal ? 'interstizio' : 'cella'));
+    if (!target) return bad();
+    const label = form('etichetta').trim().slice(0, 40);
+    const start = drawCellPattern.exec(form('passo'));
+    if (!start) return go({ passo: target[0], ...(label ? { etichetta: label } : {}) });
+    if (start[1] !== target[1] || start[2] !== target[2]) return go({ derr: 'step_mismatch' });
+    const colStart = Math.min(Number(start[3]), Number(target[3]));
+    const colEnd = Math.max(Number(start[3]), Number(target[3]));
+    if (horizontal) {
+      return done(await draw({ kind: 'walkway', orientation: 'horizontal', zone: target[1], rowAfter: Number(target[2]), colStart, colEnd, ...(label ? { label } : {}) }));
+    }
+    if (tool === 'struttura' && !label) return go({ passo: start[0], derr: 'label_required' });
+    return done(await draw({ kind: tool === 'struttura' ? 'structure' : 'cabin_block', zone: target[1], rowNumber: Number(target[2]), colStart, colEnd, ...(label ? { label } : {}) }));
+  },
+
+  // The coordinates form: the full-power equivalent of the grid, always available below it.
+  async 'spiaggia-disegno-modulo'(request, form, lang) {
+    const beach = form('beach');
+    if (!slugPattern.test(beach)) return bad();
+    const back = beachLayoutPath(lang, beach);
+    const kind = form('kind');
+    const zone = form('zone');
+    const row = wholeNumber(form('row'));
+    const from = wholeNumber(form('from'));
+    const to = form('to').trim() === '' ? from : wholeNumber(form('to'));
+    const label = form('label').trim().slice(0, 40);
+    let body: Record<string, unknown>;
+    if (kind === 'passerella-verticale') {
+      body = { kind: 'walkway', orientation: 'vertical', colStart: from, ...(zone !== 'tutte' ? { zone } : {}), ...(label ? { label } : {}) };
+    } else if (kind === 'passerella-orizzontale') {
+      body = { kind: 'walkway', orientation: 'horizontal', zone, rowAfter: row, colStart: Math.min(from, to), colEnd: Math.max(from, to), ...(label ? { label } : {}) };
+    } else if (kind === 'struttura' || kind === 'blocco-cabine') {
+      if (kind === 'struttura' && !label) return { to: `${withQuery(back, { derr: 'label_required' })}#disegno` };
+      body = { kind: kind === 'struttura' ? 'structure' : 'cabin_block', zone, rowNumber: row, colStart: Math.min(from, to), colEnd: Math.max(from, to), ...(label ? { label } : {}) };
+    } else {
+      return bad();
+    }
+    const result = await apiCall('POST', `/v1/manage/beaches/${beach}/layout/elements`, { body, token: cookieToken(request) });
+    if (result.ok) return { to: `${withQuery(back, { dok: '1' })}#disegno` };
+    if (result.status === 401) return { to: accountPath(lang, 'signIn') };
+    const code = result.status === 0 ? 'unavailable' : result.code === 'invalid_state' ? 'element_overlap' : result.code;
+    return { to: `${withQuery(back, { derr: code })}#disegno` };
+  },
+
+  // "Rimuovi" from the element list: same removal as the eraser, from a plain button.
+  async 'spiaggia-elemento-rimuovi'(request, form, lang) {
+    const beach = form('beach');
+    const element = form('elemento');
+    if (!slugPattern.test(beach) || !uuidPattern.test(element)) return bad();
+    const tool = (drawTools as readonly string[]).includes(form('strumento')) ? form('strumento') : undefined;
+    const back = beachLayoutPath(lang, beach);
+    const removed = await apiCall<{ detachedCabins: number }>('DELETE', `/v1/manage/beaches/${beach}/layout/elements/${encodeURIComponent(element)}`, {
+      token: cookieToken(request),
+    });
+    if (removed.ok) {
+      const { getDictionary, config } = await import('@ombre/shared');
+      return { to: `${withQuery(back, { strumento: tool, dok: getDictionary(lang, config.brandName).layout.elementRemoved(removed.data.detachedCabins) })}#disegno` };
+    }
+    if (removed.status === 401) return { to: accountPath(lang, 'signIn') };
+    return { to: `${withQuery(back, { strumento: tool, derr: removed.status === 0 ? 'unavailable' : removed.code })}#disegno` };
+  },
+
+  // Spot types: create, edit, delete. The refusals come back next to the list.
+  'tipo-crea': (request, form, lang) => {
+    const price = form('price').trim();
+    return typesAct(request, form, lang, '', 'POST', {
+      name: form('name').trim(),
+      mark: form('mark'),
+      umbrellas: wholeNumber(form('umbrellas')),
+      sunbeds: wholeNumber(form('sunbeds')),
+      maxGuests: wholeNumber(form('guests')),
+      defaultPriceCents: price === '' ? null : (parseEuro(price) ?? -1),
+    }, { invalid_state: 'type_conflict' });
+  },
+  'tipo-modifica': (request, form, lang) => {
+    const typeId = form('type');
+    if (!uuidPattern.test(typeId)) return Promise.resolve(bad());
+    const price = form('price').trim();
+    const name = form('name').trim();
+    const mark = form('mark');
+    // The builtin types post no name and no mark: they keep theirs.
+    return typesAct(request, form, lang, `/${encodeURIComponent(typeId)}`, 'PUT', {
+      ...(name ? { name } : {}),
+      ...(mark ? { mark } : {}),
+      umbrellas: wholeNumber(form('umbrellas')),
+      sunbeds: wholeNumber(form('sunbeds')),
+      maxGuests: wholeNumber(form('guests')),
+      defaultPriceCents: price === '' ? null : (parseEuro(price) ?? -1),
+    }, { invalid_state: 'type_conflict' });
+  },
+  'tipo-elimina': (request, form, lang) => {
+    const typeId = form('type');
+    if (!uuidPattern.test(typeId)) return Promise.resolve(bad());
+    return typesAct(request, form, lang, `/${encodeURIComponent(typeId)}`, 'DELETE', undefined, { invalid_state: 'type_in_use' });
+  },
+
+  // Sea cabins: register, assignments, decisions. Managed from the cabins page of the club.
+  'cabina-crea': (request, form, lang) => {
+    const element = form('element');
+    return cabinsAct(
+      request,
+      form,
+      lang,
+      '/cabins',
+      'POST',
+      {
+        code: form('code').trim().toUpperCase(),
+        ...(uuidPattern.test(element) ? { elementId: element } : {}),
+        ...(annotation(form('notes')) ? { notes: annotation(form('notes')) } : {}),
+      },
+      { invalid_state: 'cabin_conflict' },
+    );
+  },
+  'cabina-modifica': (request, form, lang) => {
+    const cabin = form('cabin');
+    if (!uuidPattern.test(cabin)) return Promise.resolve(bad());
+    const element = form('element');
+    return cabinsAct(
+      request,
+      form,
+      lang,
+      `/cabins/${encodeURIComponent(cabin)}`,
+      'PUT',
+      {
+        code: form('code').trim().toUpperCase(),
+        elementId: uuidPattern.test(element) ? element : null,
+        notes: annotation(form('notes')),
+      },
+      { invalid_state: 'cabin_conflict' },
+    );
+  },
+  'cabina-elimina': (request, form, lang) => {
+    const cabin = form('cabin');
+    if (!uuidPattern.test(cabin)) return Promise.resolve(bad());
+    return cabinsAct(request, form, lang, `/cabins/${encodeURIComponent(cabin)}`, 'DELETE', undefined, { invalid_state: 'cabin_used' });
+  },
+  'cabina-affida': (request, form, lang) => {
+    const cabin = form('cabin');
+    if (!uuidPattern.test(cabin)) return Promise.resolve(bad());
+    const email = form('email').trim();
+    const name = form('name').trim();
+    const contact = form('contact').trim();
+    return cabinsAct(
+      request,
+      form,
+      lang,
+      `/cabins/${encodeURIComponent(cabin)}/assignments`,
+      'POST',
+      {
+        ...(email ? { holderEmail: email } : {}),
+        ...(name ? { holderName: name } : {}),
+        ...(contact ? { holderContact: contact } : {}),
+        validFrom: form('from'),
+        validTo: form('to'),
+      },
+      { invalid_state: 'assignment_invalid' },
+    );
+  },
+  'cabina-chiudi': async (request, form, lang) => {
+    const assignment = form('assignment');
+    if (!uuidPattern.test(assignment)) return bad();
+    const { getDictionary, config } = await import('@ombre/shared');
+    return cabinsAct(
+      request,
+      form,
+      lang,
+      `/cabin-assignments/${encodeURIComponent(assignment)}/end`,
+      'POST',
+      { endOn: form('endOn') },
+      {},
+      (data) => {
+        const ended = data as { truncatedSublets: number; closedSublets: number };
+        return getDictionary(lang, config.brandName).cabins.endDone(ended.truncatedSublets, ended.closedSublets);
+      },
+    );
+  },
+  'cabina-decisione': (request, form, lang) => {
+    const sublet = form('sublet');
+    if (!uuidPattern.test(sublet)) return Promise.resolve(bad());
+    return cabinsAct(request, form, lang, `/cabin-sublets/${encodeURIComponent(sublet)}/decision`, 'POST', { approve: form('approve') === 'yes' }, { invalid_state: 'sublet_invalid' });
+  },
+  // The holder's own proposal, from their essential page.
+  async 'cabina-proponi'(request, form, lang) {
+    const assignment = form('assignment');
+    if (!uuidPattern.test(assignment)) return bad();
+    const contact = form('contact').trim();
+    const result = await apiCall('POST', `/v1/my/assignments/${encodeURIComponent(assignment)}/sublets`, {
+      body: { fromDay: form('from'), toDay: form('to'), occupantName: form('name').trim(), ...(contact ? { occupantContact: contact } : {}) },
+      token: cookieToken(request),
+    });
+    const back = accountPath(lang, 'cabins');
+    if (result.ok) return { to: back, ok: '1' };
+    if (result.status === 401) return { to: accountPath(lang, 'signIn') };
+    const code = result.status === 0 ? 'unavailable' : result.code === 'invalid_state' ? 'sublet_invalid' : result.code;
+    return { to: back, err: code };
+  },
   'spiaggia-modifica': (request, form, lang) => {
     const spotId = form('spot');
     if (!uuidPattern.test(spotId)) return Promise.resolve(bad());

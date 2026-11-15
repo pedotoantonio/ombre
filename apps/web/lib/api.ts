@@ -1,4 +1,4 @@
-import { config, getDictionary, type DayParts, type SiteContent, type SiteTemplate, type SpotZone } from '@ombre/shared';
+import { config, getDictionary, type DayParts, type LayoutElementKind, type SeaSide, type SiteContent, type SiteTemplate, type SpotZone, type WalkwayOrientation } from '@ombre/shared';
 
 // Server-side client of the Ombrè API. The address is read at request time.
 
@@ -35,6 +35,10 @@ export interface ApiMapSpot {
   code: string;
   zone: SpotZone;
   rowNumber: number;
+  /** Column inside the row: the drawing may leave holes, drawn as plain sand. */
+  col: number;
+  /** Name of the spot type, part of the public label. */
+  typeName: string;
   umbrellas: number;
   sunbeds: number;
   maxGuests: number;
@@ -47,6 +51,8 @@ export interface ApiSpot {
   code: string;
   zone: SpotZone;
   rowNumber: number;
+  col: number;
+  typeName: string;
   umbrellas: number;
   sunbeds: number;
   maxGuests: number;
@@ -58,6 +64,19 @@ export interface ApiSpot {
 export interface ApiZoneGaps {
   shoreGapRows: number;
   landGapRows: number;
+}
+
+/** A walkway, a labelled structure or a cabin block, exactly as the manager drew it. */
+export interface ApiLayoutElement {
+  elementId: string;
+  kind: LayoutElementKind;
+  label: string | null;
+  orientation: WalkwayOrientation | null;
+  zone: SpotZone | null;
+  rowAfter: number | null;
+  rowNumber: number | null;
+  colStart: number | null;
+  colEnd: number | null;
 }
 
 export interface ApiQuote {
@@ -143,7 +162,9 @@ export const api = {
   beach: (slug: string) =>
     call<{ beach: ApiBeach; nextAvailableDay: string | null; site: { template: SiteTemplate; content: SiteContent } | null }>(`/v1/beaches/${encodeURIComponent(slug)}`),
   availability: (slug: string, day: string) =>
-    call<{ spots: ApiSpot[]; layout: ApiMapSpot[]; gaps: ApiZoneGaps }>(`/v1/beaches/${encodeURIComponent(slug)}/availability?day=${encodeURIComponent(day)}`),
+    call<{ spots: ApiSpot[]; layout: ApiMapSpot[]; gaps: ApiZoneGaps; seaSide: SeaSide; elements: ApiLayoutElement[] }>(
+      `/v1/beaches/${encodeURIComponent(slug)}/availability?day=${encodeURIComponent(day)}`,
+    ),
   quote: (request: DayRequest) => post<ApiQuote>('/v1/quotes', request),
   hold: (request: DayRequest, idempotencyKey: string) =>
     post<{ holdId: string }>('/v1/holds', request, { 'Idempotency-Key': idempotencyKey }),

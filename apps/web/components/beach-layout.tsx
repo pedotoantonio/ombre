@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react';
+import { Fragment, type CSSProperties, type ReactNode } from 'react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import {
@@ -6,27 +6,39 @@ import {
   beachLayoutPath,
   can,
   config,
+  elementLabelMaxLength,
+  formatMoney,
   getDictionary,
   locales,
+  maxColumns,
   maxGapRows,
   rentalNotesMaxLength,
   rentalTypeMaxLength,
   rentalTypeSuggestions,
+  spotMarks,
+  spotTypeNameMaxLength,
   spotZones,
   type Locale,
+  type SeaSide,
+  type SpotMark as SpotMarkKind,
   type SpotZone,
 } from '@ombre/shared';
-import { apiCall, formatPeriod, slugPattern } from '@/lib/api';
-import { Hidden, Notice, requireMe } from './account';
-import { PlanCanvas, SpotMark, widestRow, zoneRows } from './beach';
+import { apiCall, formatPeriod, slugPattern, type ApiLayoutElement } from '@/lib/api';
+import { Hidden, Notice, requireMe, SectionNotice } from './account';
+import { MarkLegendItems, PlanCanvas, planSize, SpotMark, zoneRows } from './beach';
 import { PageHead, PageShell } from './PageShell';
 
 // The "Spiaggia" page of the reserved area: the preview of the beach map with its zones on
-// top, the configuration forms below. Everything works without JavaScript, like the rest of
-// the area. The reception sees and uses the zone distances only; the structure, the rental
-// annotations, the retirement and the deletions belong to the manager.
+// top, then the drawing editor (sea side, walkways, structures, cabin blocks), the zone
+// distances, the spot types and the configuration forms. Everything works without JavaScript,
+// like the rest of the area: the chosen tool lives in the query string and every grid cell is
+// a submit button with its coordinates. The reception sees and uses the zone distances only.
 
 type Query = Record<string, string | string[] | undefined>;
+
+function first(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value;
+}
 
 interface ApiActiveContract {
   contractId: string;
@@ -40,6 +52,11 @@ interface ApiLayoutSpot {
   code: string;
   zone: SpotZone;
   rowNumber: number;
+  /** Column inside the row: the only source of the drawing. Holes are allowed. */
+  col: number;
+  typeId: string;
+  typeName: string;
+  typeMark: SpotMarkKind;
   umbrellas: number;
   sunbeds: number;
   maxGuests: number;
@@ -51,9 +68,23 @@ interface ApiLayoutSpot {
 }
 
 interface ApiLayout {
+  seaSide: SeaSide;
   shoreGapRows: number;
   landGapRows: number;
   spots: ApiLayoutSpot[];
+  elements: ApiLayoutElement[];
+}
+
+interface ApiSpotType {
+  typeId: string;
+  name: string;
+  mark: SpotMarkKind;
+  umbrellas: number;
+  sunbeds: number;
+  maxGuests: number;
+  defaultPriceCents: number | null;
+  builtin: boolean;
+  spots: number;
 }
 
 /** The label "Stagionale" is an annotation: here it is read without regard for case. */
@@ -63,12 +94,336 @@ function labelledSeasonal(rentalType: string | null): boolean {
 
 const rentalListId = 'tipi-affitto';
 
-function ZoneSelect({ locale, id }: { locale: Locale; id: string }) {
+// ---- The drawing editor ----
+
+/** The tools of the drawing, as they travel in the query string. */
+const toolIds = ['passerella-orizzontale', 'passerella-verticale', 'struttura', 'blocco-cabine', 'gomma'] as const;
+type Tool = (typeof toolIds)[number];
+
+function readTool(value: string | undefined): Tool | null {
+  return (toolIds as readonly string[]).includes(value ?? '') ? (value as Tool) : null;
+}
+
+interface StepStart {
+  zone: SpotZone;
+  row: number;
+  col: number;
+  token: string;
+}
+
+/** The first step of a two-step element, as the query string carries it: zone/row/column. */
+function readStep(value: string | undefined): StepStart | null {
+  const match = /^(riva|ombrelloni|monte)\/(\d{1,3})\/(\d{1,3})$/.exec(value ?? '');
+  if (!match) return null;
+  return { zone: match[1] as SpotZone, row: Number(match[2]), col: Number(match[3]), token: match[0] };
+}
+
+/** Geometry of the editor grid, in rem: wider lanes than the public map, so every target reaches 44 px. */
+const drawCell = 4.25;
+const drawGap = 0.5;
+const drawLane = 2.75;
+
+function drawOffset(col: number, lanes: ApiLayoutElement[]): number {
+  const before = lanes.filter((lane) => (lane.colStart ?? 0) < col).length;
+  return (col - 1) * (drawCell + drawGap) + before * (drawLane + drawGap);
+}
+
+function drawSpan(from: number, to: number, lanes: ApiLayoutElement[]): number {
+  const inside = lanes.filter((lane) => (lane.colStart ?? 0) >= from && (lane.colStart ?? 0) < to).length;
+  return (to - from + 1) * drawCell + (to - from) * drawGap + inside * (drawLane + drawGap);
+}
+
+/** Where an element sits, in words: used by the grid, the element list and the eraser. */
+function placeOf(locale: Locale, element: ApiLayoutElement): string {
+  const t = getDictionary(locale, config.brandName);
+  const l = t.layout;
+  const zone = element.zone ? t.booking.zones[element.zone] : null;
+  if (element.kind === 'walkway' && element.orientation === 'vertical') {
+    return `${l.afterColumn(element.colStart ?? 1)}, ${zone ?? l.allZones}`;
+  }
+  if (element.kind === 'walkway') {
+    const where = (element.rowAfter ?? 0) === 0 ? l.beforeRow1 : l.afterRow(element.rowAfter ?? 0);
+    return `${zone}, ${where}, ${l.columnsRange(element.colStart ?? 1, element.colEnd ?? element.colStart ?? 1)}`;
+  }
+  return `${zone}, ${t.booking.row(element.rowNumber ?? 1).toLowerCase()}, ${l.columnsRange(element.colStart ?? 1, element.colEnd ?? element.colStart ?? 1)}`;
+}
+
+/** A drawn element inside the grid: a plain box normally, a remove button under the eraser. */
+function DrawElement({ locale, element, eraser, className, style, children }: { locale: Locale; element: ApiLayoutElement; eraser: boolean; className: string; style?: CSSProperties; children: ReactNode }) {
+  const l = getDictionary(locale, config.brandName).layout;
+  if (!eraser) {
+    return (
+      <span className={className} style={style}>
+        {children}
+      </span>
+    );
+  }
+  return (
+    <button type="submit" name="elemento" value={element.elementId} className={`${className} draw-erase`} style={style}>
+      {children}
+      <span className="visually-hidden">
+        : {l.removeElement}, {placeOf(locale, element)}
+      </span>
+    </button>
+  );
+}
+
+/** A row of interstice buttons for the horizontal walkway tool: one target per column. */
+function InterticeRow({ locale, zone, rowAfter, cols, active, lanes }: { locale: Locale; zone: SpotZone; rowAfter: number; cols: number; active: boolean; lanes: ApiLayoutElement[] }) {
+  const t = getDictionary(locale, config.brandName);
+  const l = t.layout;
+  return (
+    <div className="draw-row draw-row--lane">
+      <p className="draw-row__label" aria-hidden="true" />
+      <ol className="draw-row__cells">
+        {Array.from({ length: cols }, (_, index) => {
+          const col = index + 1;
+          const cell = active ? (
+            <button type="submit" name="interstizio" value={`${zone}/${rowAfter}/${col}`} className="draw-cell draw-cell--lane">
+              <span className="visually-hidden">{l.laneCell(t.booking.zones[zone], rowAfter, col)}</span>
+            </button>
+          ) : (
+            <span className="draw-cell draw-cell--lane draw-cell--idle" aria-hidden="true" />
+          );
+          return (
+            <li key={col}>
+              {cell}
+              {lanes.filter((lane) => (lane.colStart ?? 0) === col).map((lane) => (
+                <span key={lane.elementId} className="draw-vlane draw-vlane--spacer" aria-hidden="true" />
+              ))}
+            </li>
+          );
+        })}
+      </ol>
+    </div>
+  );
+}
+
+/**
+ * The editor grid: every free cell and every pertinent interstice is a submit button
+ * carrying its coordinates; spots keep their cell (retired included), drawn elements show
+ * up in place and become remove buttons under the eraser. One form, no scripts.
+ */
+function DrawGrid({
+  locale,
+  spots,
+  elements,
+  seaSide,
+  tool,
+  step,
+  label,
+  common,
+}: {
+  locale: Locale;
+  spots: ApiLayoutSpot[];
+  elements: ApiLayoutElement[];
+  seaSide: SeaSide;
+  tool: Tool | null;
+  step: StepStart | null;
+  label: string;
+  common: Record<string, string>;
+}) {
+  const t = getDictionary(locale, config.brandName);
+  const l = t.layout;
+  const lanes = elements.filter((element) => element.kind === 'walkway' && element.orientation === 'vertical').sort((a, b) => (a.colStart ?? 0) - (b.colStart ?? 0));
+  const size = planSize(spots, elements);
+  // One growth column, so a new element can land right past the current drawing.
+  const cols = Math.min(size.cols + 1, maxColumns);
+  const rectTool = tool === 'struttura' || tool === 'blocco-cabine';
+  const eraser = tool === 'gomma';
+  const flip = seaSide === 'bottom' ? ' draw-rows--flip' : '';
+  const zones = spotZones.filter((zone) => spots.some((spot) => spot.zone === zone) || elements.some((element) => element.zone === zone && element.orientation !== 'vertical'));
+
+  const stepText =
+    tool === null
+      ? l.toolNone
+      : tool === 'gomma'
+        ? l.stepEraser
+        : tool === 'passerella-verticale'
+          ? `${l.stepSingle} ${l.verticalAllZones}`
+          : step
+            ? l.stepEnd(`${t.booking.zones[step.zone]}, ${step.row}, ${step.col}`)
+            : l.stepStart;
+
+  return (
+    <form method="post" action="/azioni/spiaggia-disegno" className="draw">
+      <Hidden values={{ ...common, strumento: tool ?? '', ...(step ? { passo: step.token } : {}) }} />
+      <p className="draw__step" role="status">
+        {stepText}
+        {step && tool ? (
+          <>
+            {' '}
+            <Link href={`?strumento=${tool}#disegno`}>{l.cancelStep}</Link>
+          </>
+        ) : null}
+      </p>
+      {rectTool ? (
+        <div className="field draw__label-field">
+          <label htmlFor="disegno-etichetta">{l.labelField}</label>
+          <input id="disegno-etichetta" name="etichetta" maxLength={elementLabelMaxLength} autoComplete="off" defaultValue={label} aria-describedby="disegno-etichetta-aiuto" />
+          <p className="field__hint" id="disegno-etichetta-aiuto">
+            {l.labelHint}
+          </p>
+        </div>
+      ) : null}
+      {tool === 'passerella-verticale' ? (
+        <div className="draw-strip" role="group" aria-label={l.verticalStrip}>
+          <p className="draw-strip__label">{l.verticalStrip}</p>
+          <ol className="draw-strip__cells">
+            {Array.from({ length: cols }, (_, index) => (
+              <li key={index + 1}>
+                <button type="submit" name="colonna" value={index + 1} className="draw-cell draw-cell--vertical">
+                  <span aria-hidden="true">{index + 1}·{index + 2}</span>
+                  <span className="visually-hidden">{l.verticalCell(index + 1)}</span>
+                </button>
+              </li>
+            ))}
+          </ol>
+        </div>
+      ) : null}
+      <div className="draw-scroll" role="region" aria-label={l.gridLabel} tabIndex={0}>
+        <div className={`draw-rows${flip}`}>
+          <p className="plan__sea">
+            <span className="plan__sea-label">{t.booking.planSea}</span>
+          </p>
+          {zones.map((zone) => {
+            const inZone = spots.filter((spot) => spot.zone === zone);
+            const rects = elements.filter((element) => element.zone === zone && (element.kind === 'structure' || element.kind === 'cabin_block'));
+            const walkways = elements.filter((element) => element.zone === zone && element.kind === 'walkway' && element.orientation === 'horizontal');
+            const rows = [...new Set([...inZone.map((spot) => spot.rowNumber), ...rects.map((rect) => rect.rowNumber ?? 1)])].sort((a, b) => a - b);
+            const horizontalActive = (rowAfter: number) =>
+              tool === 'passerella-orizzontale' && (step === null || (step.zone === zone && step.row === rowAfter));
+            return (
+              <section className="draw-zone" key={zone} aria-label={t.booking.zones[zone]}>
+                <p className="plan-zone__label">
+                  <strong>{t.booking.zones[zone]}</strong>
+                </p>
+                <div className={`draw-zone__rows${flip ? ' draw-rows--flip' : ''}`}>
+                  {tool === 'passerella-orizzontale' ? (
+                    <InterticeRow locale={locale} zone={zone} rowAfter={0} cols={cols} active={horizontalActive(0)} lanes={lanes} />
+                  ) : null}
+                  {walkways.filter((lane) => (lane.rowAfter ?? 0) === 0).map((lane) => (
+                    <DrawHorizontalLane key={lane.elementId} locale={locale} element={lane} lanes={lanes} eraser={eraser} />
+                  ))}
+                  {rows.map((row) => {
+                    const bySpotCol = new Map(inZone.filter((spot) => spot.rowNumber === row).map((spot) => [spot.col, spot]));
+                    const byRectStart = new Map(rects.filter((rect) => rect.rowNumber === row).map((rect) => [rect.colStart ?? 1, rect]));
+                    const cellActive = rectTool && (step === null || (step.zone === zone && step.row === row));
+                    const cells: ReactNode[] = [];
+                    let col = 1;
+                    while (col <= cols) {
+                      const rect = byRectStart.get(col);
+                      const spot = bySpotCol.get(col);
+                      const last = rect ? (rect.colEnd ?? col) : col;
+                      if (rect) {
+                        cells.push(
+                          <li key={`box-${col}`}>
+                            <DrawElement
+                              locale={locale}
+                              element={rect}
+                              eraser={eraser}
+                              className={rect.kind === 'cabin_block' ? 'draw-box draw-box--cabins' : 'draw-box'}
+                              style={{ width: `${drawSpan(col, last, lanes)}rem` }}
+                            >
+                              <span className="visually-hidden">{rect.kind === 'cabin_block' ? t.booking.cabinBlockKind : t.booking.structureKind}: </span>
+                              {rect.label ?? (rect.kind === 'cabin_block' ? t.booking.cabinsBox : t.booking.structureKind)}
+                            </DrawElement>
+                          </li>,
+                        );
+                      } else if (spot) {
+                        cells.push(
+                          <li key={`spot-${col}`}>
+                            <span className="draw-cell draw-cell--spot">
+                              <SpotMark mark={spot.typeMark} status={spot.retired ? 'unavailable' : 'free'} />
+                              <span className="draw-cell__code" aria-hidden="true">
+                                {spot.code}
+                              </span>
+                              <span className="visually-hidden">{l.cellTaken(t.booking.zones[zone], row, col, spot.code)}</span>
+                            </span>
+                          </li>,
+                        );
+                      } else {
+                        cells.push(
+                          <li key={`free-${col}`}>
+                            {cellActive ? (
+                              <button type="submit" name="cella" value={`${zone}/${row}/${col}`} className="draw-cell draw-cell--free">
+                                <span className="visually-hidden">{l.cellFree(t.booking.zones[zone], row, col)}</span>
+                              </button>
+                            ) : (
+                              <span className="draw-cell draw-cell--idle" aria-hidden="true" />
+                            )}
+                          </li>,
+                        );
+                      }
+                      for (const lane of lanes.filter((candidate) => (candidate.colStart ?? 0) === last)) {
+                        cells.push(
+                          <li key={`lane-${last}-${lane.elementId}`}>
+                            <DrawElement locale={locale} element={lane} eraser={eraser} className="draw-vlane">
+                              <span className="draw-vlane__label">{t.booking.walkway}</span>
+                            </DrawElement>
+                          </li>,
+                        );
+                      }
+                      col = last + 1;
+                    }
+                    return (
+                      <Fragment key={row}>
+                        <div className="draw-row">
+                          <p className="draw-row__label">{t.booking.row(row)}</p>
+                          <ol className="draw-row__cells">{cells}</ol>
+                        </div>
+                        {tool === 'passerella-orizzontale' ? (
+                          <InterticeRow locale={locale} zone={zone} rowAfter={row} cols={cols} active={horizontalActive(row)} lanes={lanes} />
+                        ) : null}
+                        {walkways.filter((lane) => (lane.rowAfter ?? 0) === row).map((lane) => (
+                          <DrawHorizontalLane key={lane.elementId} locale={locale} element={lane} lanes={lanes} eraser={eraser} />
+                        ))}
+                      </Fragment>
+                    );
+                  })}
+                </div>
+              </section>
+            );
+          })}
+        </div>
+      </div>
+    </form>
+  );
+}
+
+/** An existing horizontal walkway in the editor grid, aligned to its columns. */
+function DrawHorizontalLane({ locale, element, lanes, eraser }: { locale: Locale; element: ApiLayoutElement; lanes: ApiLayoutElement[]; eraser: boolean }) {
+  const t = getDictionary(locale, config.brandName).booking;
+  const from = element.colStart ?? 1;
+  const to = element.colEnd ?? from;
+  return (
+    <div className="draw-row draw-row--lane">
+      <p className="draw-row__label" aria-hidden="true" />
+      <div className="draw-row__cells draw-row__cells--open">
+        <DrawElement
+          locale={locale}
+          element={element}
+          eraser={eraser}
+          className="draw-hlane"
+          style={{ marginInlineStart: `${drawOffset(from, lanes)}rem`, width: `${drawSpan(from, to, lanes)}rem` }}
+        >
+          <span className="plan-lane__label">
+            {t.walkway}
+            {element.label ? ` · ${element.label}` : ''}
+          </span>
+        </DrawElement>
+      </div>
+    </div>
+  );
+}
+
+function ZoneSelect({ locale, id, allZones = false }: { locale: Locale; id: string; allZones?: boolean }) {
   const t = getDictionary(locale, config.brandName);
   return (
     <div className="field">
       <label htmlFor={id}>{t.layout.zone}</label>
       <select id={id} name="zone" required>
+        {allZones ? <option value="tutte">{t.layout.allZonesOption}</option> : null}
         {spotZones.map((zone) => (
           <option key={zone} value={zone}>
             {t.booking.zones[zone]}
@@ -134,7 +489,38 @@ function RentalFields({ locale, prefix, rentalType, rentalNotes }: { locale: Loc
   );
 }
 
-function SpotEditor({ locale, spot, common }: { locale: Locale; spot: ApiLayoutSpot; common: Record<string, string> }) {
+/** The spot type picker of "Add a row" and "Add a spot": the defaults of each type are written next to it. */
+function TypeSelect({ locale, id, types }: { locale: Locale; id: string; types: ApiSpotType[] }) {
+  const t = getDictionary(locale, config.brandName);
+  const l = t.layout;
+  return (
+    <>
+      <div className="field">
+        <label htmlFor={id}>{l.spotType}</label>
+        <select id={id} name="type" aria-describedby={`${id}-predefiniti`}>
+          {types.map((type) => (
+            <option key={type.typeId} value={type.typeId}>
+              {type.name}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="field__hint" id={`${id}-predefiniti`}>
+        <p>{l.typeDefaultsTitle}:</p>
+        <ul className="type-defaults">
+          {types.map((type) => (
+            <li key={type.typeId}>
+              {type.name}: {t.booking.equipment(type.umbrellas, type.sunbeds).toLowerCase()}, {t.booking.guests(type.maxGuests).toLowerCase()},{' '}
+              {type.defaultPriceCents === null ? l.noDefaultPrice : `${l.defaultPriceShort.toLowerCase()} ${formatMoney(type.defaultPriceCents, locale)}`}
+            </li>
+          ))}
+        </ul>
+      </div>
+    </>
+  );
+}
+
+function SpotEditor({ locale, spot, types, common }: { locale: Locale; spot: ApiLayoutSpot; types: ApiSpotType[]; common: Record<string, string> }) {
   const t = getDictionary(locale, config.brandName);
   const l = t.layout;
   const seasonal = labelledSeasonal(spot.rentalType);
@@ -143,6 +529,7 @@ function SpotEditor({ locale, spot, common }: { locale: Locale; spot: ApiLayoutS
     <li className="layout-spot" id={htmlId} aria-labelledby={`${htmlId}-titolo`}>
       <p className="layout-spot__head" id={`${htmlId}-titolo`}>
         <strong>{t.booking.spot(spot.code)}</strong>
+        <span className="badge">{spot.typeName}</span>
         {spot.retired ? <span className="badge">{l.retiredBadge}</span> : null}
       </p>
       <p className="layout-spot__contract">
@@ -157,6 +544,25 @@ function SpotEditor({ locale, spot, common }: { locale: Locale; spot: ApiLayoutS
         <RentalFields locale={locale} prefix={htmlId} rentalType={spot.rentalType} rentalNotes={spot.rentalNotes} />
         <button className="button button--secondary button--small" type="submit">
           {l.saveSpot} <span className="visually-hidden">{spot.code}</span>
+        </button>
+      </form>
+      <form method="post" action="/azioni/spiaggia-tipo" className="form-row layout-spot__type">
+        <Hidden values={{ ...common, spot: spot.spotId }} />
+        <div className="field">
+          <label htmlFor={`${htmlId}-tipo-postazione`}>{l.spotType}</label>
+          <select id={`${htmlId}-tipo-postazione`} name="type" defaultValue={spot.typeId} aria-describedby={`${htmlId}-tipo-nota`}>
+            {types.map((type) => (
+              <option key={type.typeId} value={type.typeId}>
+                {type.name}
+              </option>
+            ))}
+          </select>
+          <p className="field__hint" id={`${htmlId}-tipo-nota`}>
+            {l.changeTypeNote}
+          </p>
+        </div>
+        <button className="button button--secondary button--small" type="submit">
+          {l.changeType} <span className="visually-hidden">{spot.code}</span>
         </button>
       </form>
       <div className="layout-spot__actions">
@@ -178,6 +584,82 @@ function SpotEditor({ locale, spot, common }: { locale: Locale; spot: ApiLayoutS
   );
 }
 
+/** One spot type of the club: its mark, its defaults and the forms to change or delete it. */
+function TypeEditor({ locale, type, common }: { locale: Locale; type: ApiSpotType; common: Record<string, string> }) {
+  const t = getDictionary(locale, config.brandName);
+  const l = t.layout;
+  const htmlId = `tipo-${type.typeId}`;
+  const euro = type.defaultPriceCents === null ? '' : (type.defaultPriceCents / 100).toFixed(2).replace('.', locale === 'it' ? ',' : '.');
+  return (
+    <li className="layout-spot" aria-labelledby={`${htmlId}-titolo`}>
+      <p className="layout-spot__head" id={`${htmlId}-titolo`}>
+        <SpotMark mark={type.mark} status="free" />
+        <strong>{type.name}</strong>
+        {type.builtin ? <span className="badge">{l.builtinBadge}</span> : null}
+      </p>
+      <p className="layout-spot__contract">
+        {t.booking.equipment(type.umbrellas, type.sunbeds)}. {t.booking.guests(type.maxGuests)}.{' '}
+        {type.defaultPriceCents === null ? `${l.defaultPriceShort}: ${l.noDefaultPrice}.` : `${l.defaultPriceShort}: ${formatMoney(type.defaultPriceCents, locale)}.`}{' '}
+        {l.typeSpots(type.spots)}.
+      </p>
+      <form method="post" action="/azioni/tipo-modifica" className="form-row">
+        <Hidden values={{ ...common, type: type.typeId }} />
+        {type.builtin ? null : (
+          <>
+            <div className="field">
+              <label htmlFor={`${htmlId}-nome`}>{l.typeName}</label>
+              <input id={`${htmlId}-nome`} name="name" maxLength={spotTypeNameMaxLength} defaultValue={type.name} autoComplete="off" required />
+            </div>
+            <div className="field">
+              <label htmlFor={`${htmlId}-segno`}>{l.typeMark}</label>
+              <select id={`${htmlId}-segno`} name="mark" defaultValue={type.mark}>
+                {spotMarks.map((mark) => (
+                  <option key={mark} value={mark}>
+                    {l.markNames[mark]}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </>
+        )}
+        <div className="field">
+          <label htmlFor={`${htmlId}-umbrellas`}>{l.umbrellas}</label>
+          <input id={`${htmlId}-umbrellas`} name="umbrellas" type="number" inputMode="numeric" min={0} max={10} defaultValue={type.umbrellas} required />
+        </div>
+        <div className="field">
+          <label htmlFor={`${htmlId}-sunbeds`}>{l.sunbeds}</label>
+          <input id={`${htmlId}-sunbeds`} name="sunbeds" type="number" inputMode="numeric" min={0} max={10} defaultValue={type.sunbeds} required />
+        </div>
+        <div className="field">
+          <label htmlFor={`${htmlId}-guests`}>{l.maxGuests}</label>
+          <input id={`${htmlId}-guests`} name="guests" type="number" inputMode="numeric" min={1} max={20} defaultValue={type.maxGuests} required />
+        </div>
+        <div className="field">
+          <label htmlFor={`${htmlId}-prezzo`}>{l.defaultPrice}</label>
+          <input id={`${htmlId}-prezzo`} name="price" inputMode="decimal" autoComplete="off" defaultValue={euro} />
+        </div>
+        <button className="button button--secondary button--small" type="submit">
+          {l.saveType} <span className="visually-hidden">{type.name}</span>
+        </button>
+      </form>
+      {type.builtin ? (
+        <p className="layout-spot__note">{l.builtinNote}</p>
+      ) : type.spots > 0 ? (
+        <p className="layout-spot__note">{l.deleteTypeNote}</p>
+      ) : (
+        <div className="layout-spot__actions">
+          <form method="post" action="/azioni/tipo-elimina" className="inline-form">
+            <Hidden values={{ ...common, type: type.typeId }} />
+            <button className="button button--secondary button--small" type="submit">
+              {l.deleteType} <span className="visually-hidden">{type.name}</span>
+            </button>
+          </form>
+        </div>
+      )}
+    </li>
+  );
+}
+
 export async function BeachLayoutView({ locale, beachSlug, query }: { locale: Locale; beachSlug: string; query: Query }) {
   if (!slugPattern.test(beachSlug)) notFound();
   const t = getDictionary(locale, config.brandName);
@@ -188,14 +670,24 @@ export async function BeachLayoutView({ locale, beachSlug, query }: { locale: Lo
   const editor = can(membership.role, 'layout.edit');
   const other = locales.find((candidate) => candidate !== locale) ?? locale;
 
-  const layout = await apiCall<ApiLayout>('GET', `/v1/manage/beaches/${beachSlug}/layout`, { token });
+  const [layout, typesResult] = await Promise.all([
+    apiCall<ApiLayout>('GET', `/v1/manage/beaches/${beachSlug}/layout`, { token }),
+    editor ? apiCall<{ types: ApiSpotType[] }>('GET', `/v1/manage/beaches/${beachSlug}/types`, { token }) : null,
+  ]);
   const spots = layout.ok ? layout.data.spots : [];
+  const elements = layout.ok ? layout.data.elements : [];
+  const seaSide: SeaSide = layout.ok ? layout.data.seaSide : 'top';
   const gaps = layout.ok ? { shoreGapRows: layout.data.shoreGapRows, landGapRows: layout.data.landGapRows } : { shoreGapRows: 1, landGapRows: 1 };
+  const types = typesResult?.ok ? typesResult.data.types : [];
   const common = { lang: locale, beach: beachSlug };
   // Quick choices first, then every label already used in this club: the manager stays free to type anything.
   const rentalOptions = [...new Set<string>([...rentalTypeSuggestions, ...spots.flatMap((spot) => (spot.rentalType ? [spot.rentalType] : []))])];
-  const hasSunbeds = spots.some((spot) => spot.umbrellas === 0);
   const hasRetired = spots.some((spot) => spot.retired);
+  const size = planSize(spots, elements);
+
+  const tool = readTool(first(query.strumento));
+  const step = tool === 'passerella-orizzontale' || tool === 'struttura' || tool === 'blocco-cabine' ? readStep(first(query.passo)) : null;
+  const stepLabel = (first(query.etichetta) ?? '').slice(0, elementLabelMaxLength);
 
   return (
     <PageShell
@@ -224,29 +716,24 @@ export async function BeachLayoutView({ locale, beachSlug, query }: { locale: Lo
             </div>
           ) : (
             <>
-              <div className="plan" role="group" aria-labelledby="anteprima-titolo" style={{ '--plan-cols': widestRow(spots) } as CSSProperties}>
+              <div className="plan" role="group" aria-labelledby="anteprima-titolo" style={{ '--plan-cols': size.cols, '--plan-lanes': size.lanes } as CSSProperties}>
                 <div className="plan__head">
                   <h2 id="anteprima-titolo">{l.previewTitle}</h2>
                   <p>{l.previewLead}</p>
                 </div>
-                {spots.length === 0 ? (
+                {spots.length === 0 && elements.length === 0 ? (
                   <div className="empty">
                     <h3>{l.emptyTitle}</h3>
                     <p>{l.emptyText}</p>
                   </div>
                 ) : (
                   <>
-                    {hasSunbeds || hasRetired ? (
+                    {hasRetired || spots.some((spot) => spot.typeMark !== 'umbrella') ? (
                       <ul className="plan-legend" aria-label={t.booking.legendTitle}>
-                        {hasSunbeds ? (
-                          <li>
-                            <SpotMark umbrellas={0} status="free" />
-                            {t.booking.sunbedMark}
-                          </li>
-                        ) : null}
+                        <MarkLegendItems locale={locale} marks={spots.map((spot) => spot.typeMark)} />
                         {hasRetired ? (
                           <li>
-                            <SpotMark umbrellas={1} status="unavailable" />
+                            <SpotMark mark="umbrella" status="unavailable" />
                             {l.retiredBadge}
                           </li>
                         ) : null}
@@ -255,18 +742,20 @@ export async function BeachLayoutView({ locale, beachSlug, query }: { locale: Lo
                     <PlanCanvas
                       locale={locale}
                       gaps={gaps}
+                      seaSide={seaSide}
+                      elements={elements}
                       spots={spots}
                       idPrefix="anteprima"
                       renderSpot={(spot) => (
                         <li>
                           <span className={spot.retired ? 'plan-spot plan-spot--taken' : 'plan-spot'}>
-                            <SpotMark umbrellas={spot.umbrellas} status={spot.retired ? 'unavailable' : 'free'} />
+                            <SpotMark mark={spot.typeMark} status={spot.retired ? 'unavailable' : 'free'} />
                             <span className="plan-spot__code" aria-hidden="true">
                               {spot.code}
                             </span>
                             <span className="visually-hidden">
-                              {t.booking.spot(spot.code)}. {t.booking.equipment(spot.umbrellas, spot.sunbeds)}. {t.booking.guests(spot.maxGuests)}
-                              {spot.retired ? `. ${t.booking.retiredMark}` : ''}
+                              {t.booking.mapSpot(spot.typeName, spot.code, spot.retired ? t.booking.retiredMark : t.booking.status.free)}.{' '}
+                              {t.booking.equipment(spot.umbrellas, spot.sunbeds)}. {t.booking.guests(spot.maxGuests)}
                             </span>
                           </span>
                         </li>
@@ -275,6 +764,108 @@ export async function BeachLayoutView({ locale, beachSlug, query }: { locale: Lo
                   </>
                 )}
               </div>
+
+              {editor ? (
+                <div className="panel" id="disegno">
+                  <h2>{l.drawTitle}</h2>
+                  <p className="prose">{l.drawLead}</p>
+                  <SectionNotice locale={locale} query={query} okKey="dok" errKey="derr" />
+                  <h3>{l.seaSideTitle}</h3>
+                  <p className="prose">{l.seaSideLead}</p>
+                  <form method="post" action="/azioni/spiaggia-lato" className="form-row">
+                    <Hidden values={common} />
+                    <fieldset className="checks">
+                      <legend className="visually-hidden">{l.seaSideTitle}</legend>
+                      <label>
+                        <input type="radio" name="side" value="top" defaultChecked={seaSide === 'top'} /> {l.seaTop}
+                      </label>
+                      <label>
+                        <input type="radio" name="side" value="bottom" defaultChecked={seaSide === 'bottom'} /> {l.seaBottom}
+                      </label>
+                    </fieldset>
+                    <button className="button button--secondary" type="submit">
+                      {l.saveSeaSide}
+                    </button>
+                  </form>
+                  <h3>{l.toolsTitle}</h3>
+                  <ul className="draw-tools">
+                    {toolIds.map((id) => (
+                      <li key={id}>
+                        <Link
+                          className={tool === id ? 'button button--small' : 'button button--secondary button--small'}
+                          href={`?strumento=${id}#disegno`}
+                          aria-current={tool === id ? 'true' : undefined}
+                        >
+                          {l.tools[id]}
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                  <DrawGrid locale={locale} spots={spots} elements={elements} seaSide={seaSide} tool={tool} step={step} label={stepLabel} common={common} />
+                  <h3>{l.coordTitle}</h3>
+                  <p className="prose">{l.coordLead}</p>
+                  <form method="post" action="/azioni/spiaggia-disegno-modulo" className="form-row">
+                    <Hidden values={common} />
+                    <div className="field">
+                      <label htmlFor="modulo-elemento">{l.elementKind}</label>
+                      <select id="modulo-elemento" name="kind" required>
+                        <option value="passerella-orizzontale">{l.tools['passerella-orizzontale']}</option>
+                        <option value="passerella-verticale">{l.tools['passerella-verticale']}</option>
+                        <option value="struttura">{l.tools.struttura}</option>
+                        <option value="blocco-cabine">{l.tools['blocco-cabine']}</option>
+                      </select>
+                    </div>
+                    <ZoneSelect locale={locale} id="modulo-zona" allZones />
+                    <div className="field">
+                      <label htmlFor="modulo-fila">{l.rowAfterField}</label>
+                      <input id="modulo-fila" name="row" type="number" inputMode="numeric" min={0} max={200} required />
+                    </div>
+                    <div className="field">
+                      <label htmlFor="modulo-da">{l.colFrom}</label>
+                      <input id="modulo-da" name="from" type="number" inputMode="numeric" min={1} max={maxColumns} required />
+                    </div>
+                    <div className="field">
+                      <label htmlFor="modulo-a">{l.colTo}</label>
+                      <input id="modulo-a" name="to" type="number" inputMode="numeric" min={1} max={maxColumns} />
+                    </div>
+                    <div className="field">
+                      <label htmlFor="modulo-etichetta">{l.labelField}</label>
+                      <input id="modulo-etichetta" name="label" maxLength={elementLabelMaxLength} autoComplete="off" aria-describedby="modulo-etichetta-aiuto" />
+                      <p className="field__hint" id="modulo-etichetta-aiuto">
+                        {l.labelHint}
+                      </p>
+                    </div>
+                    <button className="button button--secondary" type="submit">
+                      {l.draw}
+                    </button>
+                  </form>
+                  <h3>{l.elementsTitle}</h3>
+                  {elements.length === 0 ? (
+                    <p className="prose">{l.elementsEmpty}</p>
+                  ) : (
+                    <ul className="layout-spots">
+                      {elements.map((element) => (
+                        <li className="layout-spot layout-spot--element" key={element.elementId}>
+                          <p className="layout-spot__head">
+                            <strong>{l.elementKinds[element.kind]}</strong>
+                            {element.label ? <span className="badge">{element.label}</span> : null}
+                          </p>
+                          <p className="layout-spot__contract">{placeOf(locale, element)}</p>
+                          <form method="post" action="/azioni/spiaggia-elemento-rimuovi" className="inline-form">
+                            <Hidden values={{ ...common, elemento: element.elementId, ...(tool ? { strumento: tool } : {}) }} />
+                            <button className="button button--secondary button--small" type="submit">
+                              {l.removeElement}{' '}
+                              <span className="visually-hidden">
+                                {l.elementKinds[element.kind]}, {placeOf(locale, element)}
+                              </span>
+                            </button>
+                          </form>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              ) : null}
 
               <div className="panel" id="distanze">
                 <h2>{l.gapsTitle}</h2>
@@ -304,6 +895,54 @@ export async function BeachLayoutView({ locale, beachSlug, query }: { locale: Lo
                     ))}
                   </datalist>
 
+                  <div className="panel" id="tipi">
+                    <h2>{l.typesTitle}</h2>
+                    <p className="prose">{l.typesLead}</p>
+                    <SectionNotice locale={locale} query={query} okKey="tok" errKey="terr" />
+                    <ul className="layout-spots">
+                      {types.map((type) => (
+                        <TypeEditor key={type.typeId} locale={locale} type={type} common={common} />
+                      ))}
+                    </ul>
+                    <h3>{l.addTypeTitle}</h3>
+                    <form method="post" action="/azioni/tipo-crea" className="form-row">
+                      <Hidden values={common} />
+                      <div className="field">
+                        <label htmlFor="nuovo-tipo-nome">{l.typeName}</label>
+                        <input id="nuovo-tipo-nome" name="name" maxLength={spotTypeNameMaxLength} autoComplete="off" required />
+                      </div>
+                      <div className="field">
+                        <label htmlFor="nuovo-tipo-segno">{l.typeMark}</label>
+                        <select id="nuovo-tipo-segno" name="mark" required>
+                          {spotMarks.map((mark) => (
+                            <option key={mark} value={mark}>
+                              {l.markNames[mark]}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="field">
+                        <label htmlFor="nuovo-tipo-umbrellas">{l.umbrellas}</label>
+                        <input id="nuovo-tipo-umbrellas" name="umbrellas" type="number" inputMode="numeric" min={0} max={10} required />
+                      </div>
+                      <div className="field">
+                        <label htmlFor="nuovo-tipo-sunbeds">{l.sunbeds}</label>
+                        <input id="nuovo-tipo-sunbeds" name="sunbeds" type="number" inputMode="numeric" min={0} max={10} required />
+                      </div>
+                      <div className="field">
+                        <label htmlFor="nuovo-tipo-guests">{l.maxGuests}</label>
+                        <input id="nuovo-tipo-guests" name="guests" type="number" inputMode="numeric" min={1} max={20} required />
+                      </div>
+                      <div className="field">
+                        <label htmlFor="nuovo-tipo-prezzo">{l.defaultPrice}</label>
+                        <input id="nuovo-tipo-prezzo" name="price" inputMode="decimal" autoComplete="off" />
+                      </div>
+                      <button className="button button--secondary" type="submit">
+                        {l.addType}
+                      </button>
+                    </form>
+                  </div>
+
                   <div className="panel" id="aggiungi-fila">
                     <h2>{l.addRowTitle}</h2>
                     <p className="prose">{l.addRowLead}</p>
@@ -318,8 +957,9 @@ export async function BeachLayoutView({ locale, beachSlug, query }: { locale: Lo
                         <label htmlFor="fila-quante">{l.count}</label>
                         <input id="fila-quante" name="count" type="number" inputMode="numeric" min={1} max={50} required />
                       </div>
+                      <TypeSelect locale={locale} id="fila-tipo" types={types} />
                       <EquipmentFields locale={locale} prefix="fila" />
-                      <p className="field__hint">{l.equipmentHint}</p>
+                      <p className="field__hint">{l.typeDefaultsHint}</p>
                       <button className="button button--secondary" type="submit">
                         {l.addRow}
                       </button>
@@ -340,8 +980,9 @@ export async function BeachLayoutView({ locale, beachSlug, query }: { locale: Lo
                         <label htmlFor="postazione-fila">{l.rowNumber}</label>
                         <input id="postazione-fila" name="row" type="number" inputMode="numeric" min={1} max={200} />
                       </div>
+                      <TypeSelect locale={locale} id="postazione-tipo" types={types} />
                       <EquipmentFields locale={locale} prefix="postazione" />
-                      <p className="field__hint">{l.equipmentHint}</p>
+                      <p className="field__hint">{l.typeDefaultsHint}</p>
                       <RentalFields locale={locale} prefix="postazione" />
                       <button className="button button--secondary" type="submit">
                         {l.addSpot}
@@ -374,7 +1015,7 @@ export async function BeachLayoutView({ locale, beachSlug, query }: { locale: Lo
                             </form>
                             <ul className="layout-spots">
                               {inRow.map((spot) => (
-                                <SpotEditor key={spot.spotId} locale={locale} spot={spot} common={common} />
+                                <SpotEditor key={spot.spotId} locale={locale} spot={spot} types={types} common={common} />
                               ))}
                             </ul>
                           </section>

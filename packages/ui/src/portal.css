@@ -259,9 +259,9 @@
   scroll-margin-top: 5rem;
   /* One column that never grows past the panel: the map inside scrolls instead. */
   grid-template-columns: minmax(0, 1fr);
-  /* Width the longest row needs: its spots and the gaps between them. */
+  /* Width the longest row needs: its spots, the gaps between them and the vertical walkways. */
   container-type: inline-size;
-  --plan-need: calc(var(--plan-cols, 8) * 4.75rem - 0.5rem);
+  --plan-need: calc(var(--plan-cols, 8) * 4.75rem + var(--plan-lanes, 0) * 1.75rem - 0.5rem);
 }
 
 .plan__head p {
@@ -353,11 +353,18 @@
   outline-offset: 0;
 }
 
+/* A flex column, so that with the sea at the bottom only the VISUAL order flips:
+   the document order and the reading order never change. */
 .plan__rows {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: var(--spazio-4);
   width: max-content;
   min-width: 100%;
+}
+
+.plan__rows--flip {
+  flex-direction: column-reverse;
 }
 
 /* The sea is on the side of the first row. The label stays in view while the map scrolls. */
@@ -407,7 +414,7 @@
 @media (min-width: 40rem) {
   .plan {
     padding: var(--spazio-6);
-    --plan-need: calc(var(--plan-cols, 8) * 4.75rem + 4.5rem);
+    --plan-need: calc(var(--plan-cols, 8) * 4.75rem + var(--plan-lanes, 0) * 1.75rem + 4.5rem);
   }
 
   .plan-row {
@@ -960,6 +967,17 @@ html:has(.plan-bar) {
   gap: var(--spazio-3);
 }
 
+/* Le file di una zona: anche qui l'inversione del mare è solo visiva. */
+.plan-zone__rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spazio-3);
+}
+
+.plan-zone__rows--flip {
+  flex-direction: column-reverse;
+}
+
 /* L'etichetta della zona è testo, resta in vista mentre la planimetria scorre di lato. */
 .plan-zone__label {
   position: sticky;
@@ -1083,4 +1101,401 @@ html:has(.plan-bar) {
   display: flex;
   flex-wrap: wrap;
   gap: var(--spazio-2);
+}
+
+/* ---- Elementi del disegno: buchi di sabbia, passerelle, strutture e blocchi cabine ----
+   Mai solo colore: ogni elemento ha forma, trama ed etichetta testuale. */
+
+/* Un buco di colonna è sabbia: non selezionabile, fuori legenda, nascosto alla lettura. */
+.plan-hole {
+  width: 4.25rem;
+  min-height: 5rem;
+  border-radius: var(--raggio);
+  background:
+    radial-gradient(circle at 30% 35%, color-mix(in srgb, var(--ambra) 30%, transparent) 0 2px, transparent 2.5px),
+    radial-gradient(circle at 70% 65%, color-mix(in srgb, var(--ambra) 30%, transparent) 0 2px, transparent 2.5px),
+    color-mix(in srgb, var(--ambra) 10%, var(--carta));
+}
+
+/* Passerella verticale: corsia stretta a righe, con l'etichetta scritta in verticale. */
+.plan-vlane {
+  display: grid;
+  place-items: center;
+  width: 1.25rem;
+  min-height: 5rem;
+  overflow: hidden;
+  border-radius: var(--raggio-piccolo);
+  background: repeating-linear-gradient(0deg, color-mix(in srgb, var(--abisso) 14%, var(--carta)) 0 0.375rem, var(--carta) 0.375rem 0.75rem);
+  border: 1px solid var(--bordo);
+}
+
+.plan-vlane--spacer {
+  visibility: hidden;
+}
+
+.plan-vlane__label {
+  writing-mode: vertical-rl;
+  max-height: 100%;
+  overflow: hidden;
+  color: var(--testo-secondario);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+
+/* Passerella orizzontale: una corsia propria tra le file, allineata alle sue colonne. */
+.plan-row--lane {
+  min-height: 2rem;
+}
+
+.plan-lane {
+  display: flex;
+  align-items: center;
+  min-height: 2rem;
+  padding-inline: var(--spazio-2);
+  border: 1px solid var(--bordo);
+  border-radius: var(--raggio-piccolo);
+  background: repeating-linear-gradient(90deg, color-mix(in srgb, var(--abisso) 14%, var(--carta)) 0 0.375rem, var(--carta) 0.375rem 0.75rem);
+}
+
+.plan-lane__label {
+  position: sticky;
+  inset-inline-start: var(--spazio-2);
+  padding-inline: var(--spazio-1);
+  border-radius: var(--raggio-piccolo);
+  background: var(--carta);
+  color: var(--testo-secondario);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* Struttura o blocco cabine: riquadro etichettato su un rettangolo di celle. */
+.plan-box {
+  display: grid;
+  place-content: center;
+  min-height: 5rem;
+  padding: var(--spazio-2);
+  border: 1.5px solid var(--bordo-campo);
+  border-radius: var(--raggio);
+  background: color-mix(in srgb, var(--abisso) 6%, var(--carta));
+  color: var(--abisso);
+  text-align: center;
+}
+
+.plan-box__label {
+  font-size: 0.875rem;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+/* Il blocco cabine si distingue per la trama a scomparti, non per il solo colore. */
+.plan-box--cabins {
+  background:
+    repeating-linear-gradient(90deg, transparent 0 1.25rem, color-mix(in srgb, var(--abisso) 18%, transparent) 1.25rem calc(1.25rem + 1px)),
+    color-mix(in srgb, var(--oceano) 10%, var(--carta));
+}
+
+.plan-box--cabins .plan-box__label {
+  padding-inline: var(--spazio-1);
+  background: var(--carta);
+  border-radius: var(--raggio-piccolo);
+}
+
+/* ---- La griglia dell'editor del disegno: ogni bersaglio misura almeno 44 px ---- */
+.draw {
+  display: grid;
+  gap: var(--spazio-3);
+}
+
+.draw__step {
+  padding: var(--spazio-2) var(--spazio-3);
+  border-inline-start: 4px solid var(--oceano);
+  border-radius: var(--raggio-piccolo);
+  background: var(--spuma);
+  color: var(--abisso);
+  font-weight: 700;
+}
+
+.draw__step a {
+  margin-inline-start: var(--spazio-2);
+}
+
+.draw__label-field {
+  max-width: 24rem;
+}
+
+.draw-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spazio-2);
+  margin: 0 0 var(--spazio-3);
+  padding: 0;
+  list-style: none;
+}
+
+.draw-strip__cells {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spazio-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.draw-strip__label {
+  margin-bottom: var(--spazio-1);
+  color: var(--testo-secondario);
+  font-size: 0.9375rem;
+  font-weight: 700;
+}
+
+.draw-scroll {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+  padding: var(--spazio-1);
+  border: 1px solid var(--bordo);
+  border-radius: var(--raggio);
+}
+
+.draw-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spazio-3);
+  width: max-content;
+  min-width: 100%;
+}
+
+.draw-rows--flip {
+  flex-direction: column-reverse;
+}
+
+.draw-zone {
+  display: grid;
+  gap: var(--spazio-2);
+}
+
+.draw-zone__rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spazio-2);
+}
+
+.draw-row {
+  display: grid;
+  grid-template-columns: 3.5rem minmax(0, 1fr);
+  align-items: center;
+  gap: var(--spazio-2);
+}
+
+.draw-row__label {
+  color: var(--testo-secondario);
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+.draw-row__cells {
+  display: flex;
+  align-items: stretch;
+  gap: var(--spazio-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.draw-row__cells > li {
+  display: flex;
+  gap: var(--spazio-2);
+}
+
+.draw-row__cells--open {
+  display: block;
+}
+
+.draw-cell {
+  display: grid;
+  place-items: center;
+  gap: 0.125rem;
+  width: 4.25rem;
+  min-height: 4.25rem;
+  padding: var(--spazio-1);
+  border: 1.5px dashed transparent;
+  border-radius: var(--raggio);
+  background: none;
+  font: inherit;
+}
+
+/* Cella libera: un vero pulsante, con bordo tratteggiato e un più disegnato a testo. */
+button.draw-cell--free {
+  border-color: var(--bordo-campo);
+  background: var(--carta);
+  color: var(--oceano);
+  cursor: pointer;
+}
+
+button.draw-cell--free::before {
+  content: '+';
+  font-size: 1.25rem;
+  font-weight: 800;
+}
+
+button.draw-cell--free:hover {
+  border-color: var(--oceano);
+}
+
+/* Cella libera senza strumento attivo: sabbia, non selezionabile. */
+.draw-cell--idle {
+  background:
+    radial-gradient(circle at 30% 35%, color-mix(in srgb, var(--ambra) 30%, transparent) 0 2px, transparent 2.5px),
+    radial-gradient(circle at 70% 65%, color-mix(in srgb, var(--ambra) 30%, transparent) 0 2px, transparent 2.5px),
+    color-mix(in srgb, var(--ambra) 10%, var(--carta));
+}
+
+/* Cella occupata da una postazione: il suo segno e il suo codice, mai un bersaglio. */
+.draw-cell--spot {
+  border: 1px solid var(--bordo);
+  background: var(--carta);
+}
+
+.draw-cell--spot .plan-mark {
+  width: 2rem;
+  height: 2rem;
+}
+
+.draw-cell__code {
+  color: var(--abisso);
+  font-size: 0.8125rem;
+  font-weight: 800;
+}
+
+/* Interstizio orizzontale: un bersaglio alto 2.75rem per ogni colonna. */
+button.draw-cell--lane {
+  min-height: 2.75rem;
+  border-color: var(--bordo-campo);
+  background: var(--carta);
+  color: var(--oceano);
+  cursor: pointer;
+}
+
+button.draw-cell--lane::before {
+  content: '+';
+  font-weight: 800;
+}
+
+button.draw-cell--lane:hover {
+  border-color: var(--oceano);
+}
+
+.draw-cell--lane.draw-cell--idle {
+  min-height: 2.75rem;
+  background: none;
+}
+
+/* Interstizio verticale della striscia: numera le due colonne che separa. */
+button.draw-cell--vertical {
+  width: auto;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  border: 1.5px dashed var(--bordo-campo);
+  background: var(--carta);
+  color: var(--abisso);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+button.draw-cell--vertical:hover {
+  border-color: var(--oceano);
+}
+
+/* Elementi già disegnati dentro la griglia dell'editor. */
+.draw-box {
+  display: grid;
+  place-content: center;
+  min-height: 4.25rem;
+  padding: var(--spazio-1) var(--spazio-2);
+  border: 1.5px solid var(--bordo-campo);
+  border-radius: var(--raggio);
+  background: color-mix(in srgb, var(--abisso) 6%, var(--carta));
+  color: var(--abisso);
+  font-size: 0.875rem;
+  font-weight: 800;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.draw-box--cabins {
+  background:
+    repeating-linear-gradient(90deg, transparent 0 1.25rem, color-mix(in srgb, var(--abisso) 18%, transparent) 1.25rem calc(1.25rem + 1px)),
+    color-mix(in srgb, var(--oceano) 10%, var(--carta));
+}
+
+.draw-vlane {
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  min-height: 4.25rem;
+  height: 100%;
+  overflow: hidden;
+  border: 1px solid var(--bordo);
+  border-radius: var(--raggio-piccolo);
+  background: repeating-linear-gradient(0deg, color-mix(in srgb, var(--abisso) 14%, var(--carta)) 0 0.375rem, var(--carta) 0.375rem 0.75rem);
+}
+
+.draw-vlane--spacer {
+  visibility: hidden;
+}
+
+.draw-vlane__label {
+  writing-mode: vertical-rl;
+  max-height: 100%;
+  overflow: hidden;
+  color: var(--testo-secondario);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.draw-hlane {
+  display: flex;
+  align-items: center;
+  min-height: 2.75rem;
+  padding-inline: var(--spazio-2);
+  border: 1px solid var(--bordo);
+  border-radius: var(--raggio-piccolo);
+  background: repeating-linear-gradient(90deg, color-mix(in srgb, var(--abisso) 14%, var(--carta)) 0 0.375rem, var(--carta) 0.375rem 0.75rem);
+}
+
+/* Con la gomma attiva ogni elemento è un pulsante di rimozione: bordo marcato e croce testuale. */
+button.draw-erase {
+  font: inherit;
+  cursor: pointer;
+  border-style: dashed;
+  border-color: var(--occupato);
+}
+
+button.draw-erase:hover {
+  outline: 2px solid var(--occupato);
+  outline-offset: 2px;
+}
+
+/* ---- Tipi di postazione ---- */
+.type-defaults {
+  display: grid;
+  gap: 0.125rem;
+  margin: var(--spazio-1) 0 0;
+  padding-left: 1rem;
+}
+
+.layout-spot__head .plan-mark {
+  width: 2rem;
+  height: 2rem;
+}
+
+.layout-spot__type {
+  padding-top: var(--spazio-2);
+  border-top: 1px dashed var(--bordo);
 }
