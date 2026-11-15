@@ -4,6 +4,8 @@ import { sql } from 'drizzle-orm';
 import { z } from 'zod';
 import {
   acquireHold,
+  addRow,
+  addSpot,
   applyPaymentOutcome,
   authorize,
   beginTwoFactor,
@@ -12,14 +14,17 @@ import {
   confirmTwoFactor,
   createContract,
   decideProposal,
+  deleteSpot,
   deskBooking,
   DomainError,
   findActiveBeach,
   getBooking,
   getHold,
+  getLayout,
   getPublishedSite,
   getSharingSettings,
   getSiteState,
+  getZoneGaps,
   holderStatement,
   listActiveBeaches,
   listDayMap,
@@ -41,11 +46,16 @@ import {
   restoreRevision,
   saveDraft,
   searchBeaches,
+  setBeachPosition,
   setBlocked,
   setContractStatus,
+  setGapRows,
   setPrice,
+  setRetired,
+  setRowRental,
   setSharingSettings,
   startCheckout,
+  updateSpot,
   withdrawDay,
   quoteSpot,
   type Database,
@@ -55,7 +65,7 @@ import {
 } from '@ombre/db';
 import { buildOpenApi, type Operation } from './openapi';
 import { createRateLimiter, type RateLimiter } from './rate-limit';
-import { base32Encode, expandRecurrence, siteTemplates, siteTextLimits, type Action, type DayQuote } from '@ombre/shared';
+import { base32Encode, expandRecurrence, maxGapRows, rentalNotesMaxLength, rentalTypeMaxLength, siteTemplates, siteTextLimits, spotZones, type Action, type DayQuote } from '@ombre/shared';
 
 export interface AppOptions {
   db: Database;
@@ -173,6 +183,35 @@ const siteDraftSchema = z.object({
 const deskSchema = z.object({ spotId: z.uuid(), day: daySchema, guestName: z.string().trim().min(1).max(120) });
 const bookingCodeSchema = z.string().regex(/^OM-\d{6}-\d{3}$/i);
 const idempotencyKeySchema = z.string().min(8).max(200).regex(/^[\x21-\x7e]+$/);
+// A position is complete or absent: a lone coordinate would be meaningless.
+const positionSchema = z
+  .object({ latitude: z.number().min(-90).max(90).nullable(), longitude: z.number().min(-180).max(180).nullable() })
+  .refine((position) => (position.latitude === null) === (position.longitude === null));
+const zoneSchema = z.enum(spotZones);
+const gapRowsSchema = z.number().int().min(0).max(maxGapRows);
+const gapsSchema = z.object({ shoreGapRows: gapRowsSchema, landGapRows: gapRowsSchema });
+const equipmentFields = {
+  umbrellas: z.number().int().min(0).max(10).optional(),
+  sunbeds: z.number().int().min(0).max(10).optional(),
+  maxGuests: z.number().int().min(1).max(20).optional(),
+};
+const rentalTypeSchema = z.string().trim().min(1).max(rentalTypeMaxLength);
+const rentalNotesSchema = z.string().trim().min(1).max(rentalNotesMaxLength);
+const addRowSchema = z.object({ zone: zoneSchema, prefix: z.string().regex(/^[A-Z]{1,4}$/), count: z.number().int().min(1).max(50), ...equipmentFields });
+const addSpotSchema = z.object({
+  zone: zoneSchema,
+  code: z.string().regex(/^[A-Z0-9][A-Z0-9-]{0,9}$/),
+  rowNumber: z.number().int().min(1).max(200).optional(),
+  ...equipmentFields,
+  rentalType: rentalTypeSchema.nullable().optional(),
+  rentalNotes: rentalNotesSchema.nullable().optional(),
+});
+// Absent leaves a field as it is; an explicit null clears an annotation.
+const updateSpotSchema = z
+  .object({ ...equipmentFields, rentalType: rentalTypeSchema.nullable().optional(), rentalNotes: rentalNotesSchema.nullable().optional() })
+  .refine((change) => Object.values(change).some((value) => value !== undefined));
+const rowRentalSchema = z.object({ zone: zoneSchema, rowNumber: z.number().int().min(1).max(200), rentalType: rentalTypeSchema.nullable(), rentalNotes: rentalNotesSchema.nullable() });
+const retiredSchema = z.object({ retired: z.boolean() });
 // Guests and shared days only mean something on a given day.
 const beachSearchSchema = z
   .object({
@@ -200,7 +239,8 @@ function money(quote: DayQuote) {
 }
 
 function publicBeach(beach: PublicBeach) {
-  return { slug: beach.slug, name: beach.name, locality: beach.locality, timezone: beach.timezone, demo: beach.demo };
+  // Coordinates are null until the manager sets them: the club then stays off the map.
+  return { slug: beach.slug, name: beach.name, locality: beach.locality, timezone: beach.timezone, demo: beach.demo, latitude: beach.latitude, longitude: beach.longitude };
 }
 
 // Requests per minute and per client on the routes most exposed to abuse.
@@ -529,6 +569,58 @@ export function createApp(options: AppOptions): Hono {
     return c.json(await restoreRevision(db, actor, revisionId));
   });
 
+  // ---- Beach club: position on the map and layout of the beach ----
+  route({ method: 'put', path: '/v1/manage/beaches/:slug/position', summary: 'Set or clear the coordinates of the beach club', tag: 'Beach club', auth: 'session', request: positionSchema, success: 204, errors: [400, 401, 403] }, async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'layout.edit');
+    await setBeachPosition(db, actor, parse(positionSchema, await body(c.req.raw), 'position'));
+    return c.body(null, 204);
+  });
+
+  route({ method: 'get', path: '/v1/manage/beaches/:slug/layout', summary: 'Zone distances and every spot with its annotations and season contract', tag: 'Beach club', auth: 'session', success: 200, errors: [401, 403] }, async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'inventory.read');
+    return c.json(await getLayout(db, actor));
+  });
+
+  route({ method: 'put', path: '/v1/manage/beaches/:slug/layout/gaps', summary: 'Set the empty rows between the shore, the umbrellas and the land side', tag: 'Beach club', auth: 'session', request: gapsSchema, success: 204, errors: [400, 401, 403] }, async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'layout.gaps');
+    await setGapRows(db, actor, parse(gapsSchema, await body(c.req.raw), 'distances'));
+    return c.body(null, 204);
+  });
+
+  route({ method: 'post', path: '/v1/manage/beaches/:slug/layout/rows', summary: 'Add a row of spots to a zone', tag: 'Beach club', auth: 'session', request: addRowSchema, success: 201, errors: [400, 401, 403, 409] }, async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'layout.edit');
+    return c.json(await addRow(db, actor, parse(addRowSchema, await body(c.req.raw), 'row')), 201);
+  });
+
+  route({ method: 'put', path: '/v1/manage/beaches/:slug/layout/rows/rental', summary: 'Apply one rental label and notes to a whole row', tag: 'Beach club', auth: 'session', request: rowRentalSchema, success: 200, errors: [400, 401, 403, 404] }, async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'layout.edit');
+    return c.json(await setRowRental(db, actor, parse(rowRentalSchema, await body(c.req.raw), 'rental')));
+  });
+
+  route({ method: 'post', path: '/v1/manage/beaches/:slug/layout/spots', summary: 'Add a single spot, such as a shore sunbed', tag: 'Beach club', auth: 'session', request: addSpotSchema, success: 201, errors: [400, 401, 403, 409] }, async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'layout.edit');
+    return c.json(await addSpot(db, actor, parse(addSpotSchema, await body(c.req.raw), 'spot')), 201);
+  });
+
+  route({ method: 'put', path: '/v1/manage/beaches/:slug/layout/spots/:spotId', summary: 'Change equipment, capacity or rental annotations of a spot', tag: 'Beach club', auth: 'session', request: updateSpotSchema, success: 204, errors: [400, 401, 403, 404] }, async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'layout.edit');
+    await updateSpot(db, actor, { spotId: parse(z.uuid(), c.req.param('spotId'), 'spot'), ...parse(updateSpotSchema, await body(c.req.raw), 'change') });
+    return c.body(null, 204);
+  });
+
+  route({ method: 'put', path: '/v1/manage/beaches/:slug/layout/spots/:spotId/retired', summary: 'Retire a spot from sale, or put it back on sale', tag: 'Beach club', auth: 'session', request: retiredSchema, success: 204, errors: [400, 401, 403, 404] }, async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'layout.edit');
+    const { retired } = parse(retiredSchema, await body(c.req.raw), 'request');
+    await setRetired(db, actor, { spotId: parse(z.uuid(), c.req.param('spotId'), 'spot'), retired });
+    return c.body(null, 204);
+  });
+
+  route({ method: 'delete', path: '/v1/manage/beaches/:slug/layout/spots/:spotId', summary: 'Delete a spot that was never used', tag: 'Beach club', auth: 'session', success: 204, errors: [400, 401, 403, 404, 409] }, async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'layout.edit');
+    await deleteSpot(db, actor, { spotId: parse(z.uuid(), c.req.param('spotId'), 'spot') });
+    return c.body(null, 204);
+  });
+
   route({ method: 'get', path: '/v1/health', summary: 'Liveness check', tag: 'System', auth: 'none', success: 200, errors: [] }, async (c) => {
     await db.execute(sql`select 1`);
     return c.json({ status: 'ok' });
@@ -585,7 +677,7 @@ export function createApp(options: AppOptions): Hono {
     });
   });
 
-  route({ method: 'get', path: '/v1/beaches/:slug/availability', summary: 'Free spots of a day with prices, and every spot with its state for the map', tag: 'Public', auth: 'none', query: { day: 'YYYY-MM-DD' }, success: 200, errors: [400, 404] }, async (c) => {
+  route({ method: 'get', path: '/v1/beaches/:slug/availability', summary: 'Free spots of a day with prices, every spot with its state and zone for the map, and the distances between zones', tag: 'Public', auth: 'none', query: { day: 'YYYY-MM-DD' }, success: 200, errors: [400, 404] }, async (c) => {
     const slug = parse(slugSchema, c.req.param('slug'), 'beach club');
     const day = parse(daySchema, c.req.query('day'), 'day');
     const beach = await beachBySlug(slug);
@@ -595,6 +687,8 @@ export function createApp(options: AppOptions): Hono {
       beach: publicBeach(beach),
       day,
       currency: 'EUR',
+      // Empty corridor rows between the zones, for drawing the map to scale.
+      gaps: await getZoneGaps(db, beach.id),
       spots: layout.flatMap(({ status, priceCents, ...spot }) => (priceCents === null ? [] : [{ ...spot, priceCents, shared: status === 'shared' }])),
       layout,
     });

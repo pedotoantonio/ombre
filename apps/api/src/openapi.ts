@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 export interface Operation {
-  method: 'get' | 'post' | 'put';
+  method: 'get' | 'post' | 'put' | 'delete';
   path: string;
   summary: string;
   tag: 'Public' | 'Booking' | 'Sign-in' | 'Season holder' | 'Beach club' | 'System';
