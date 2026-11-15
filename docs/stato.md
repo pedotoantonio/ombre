@@ -28,6 +28,19 @@ indicizzato.
   fila, ritiro dalla vendita, eliminazione solo se mai usata. Specifica e prompt in
   [specifica-mappa-gestore.md](specifica-mappa-gestore.md) e
   [prompt-mappa-gestore.md](prompt-mappa-gestore.md); decisioni D23 e D24.
+- Disegno della spiaggia dal gestore: lato del mare (alto/basso), colonne esplicite
+  con buchi, passerelle, strutture etichettate e blocchi cabine, con un editor a
+  celle-pulsante che funziona senza JavaScript; la planimetria pubblica rispecchia il
+  disegno uno a uno. Tipi di postazione per stabilimento (Ombrellone, Lettino
+  singolo, Gazebo e tipi personalizzati) con segno dal repertorio, dotazione,
+  capienza e prezzo predefinito applicato alle giornate nuove. Cabine del mare:
+  censimento nel disegno, affidamento a un titolare (con o senza accesso, ruolo
+  `cabin_holder`), subaffitti proposti dal titolare e approvati dal gestore,
+  occupante del giorno per la reception, tutto nel registro e mai pubblico, senza
+  denaro nel sistema. Specifica e prompt in
+  [specifica-editor-tipi-cabine.md](specifica-editor-tipi-cabine.md) e
+  [prompt-editor-tipi-cabine.md](prompt-editor-tipi-cabine.md); decisioni D25, D26 e
+  D27, con le idee dei mock-up del committente registrate come fase successiva.
 - Prenotazione dell'ospite: scelta della postazione, riepilogo con codice promozionale,
   riserva, dati, pagamento di prova, pass con codice QR e codice breve.
 - Reception: verifica del pass con ingresso, uscita e rientro, prenotazione al banco,
@@ -76,6 +89,12 @@ Il 15/11/2026, dopo mappa e gestione della spiaggia: `pnpm check` e 108 test con
 database verdi, 471 controlli dei collaudi fumo sull'ambiente in esecuzione, 90
 verifiche sugli otto criteri di accettazione della specifica, tutte superate;
 schermate aggiornate in [schermate](schermate/).
+
+La sera del 15/11/2026, dopo disegno, tipi di postazione e cabine: `pnpm check` e
+129 test con database verdi, 471 controlli fumo, i nove criteri di accettazione
+(0–8) della seconda specifica tutti superati; un difetto trovato e corretto (il
+conteggio d'uso dei tipi usciva a zero dall'elenco del gestore); sette schermate
+nuove in [schermate](schermate/).
 
 Limiti noti del codice: la Content-Security-Policy ammette gli script in linea, perché
 il framework scrive in linea i dati delle pagine; i limiti alle richieste vivono nella
