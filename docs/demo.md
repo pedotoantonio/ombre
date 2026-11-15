@@ -27,6 +27,15 @@ L'accesso è in fondo a ogni pagina, «Area riservata».
 
 - **Postazioni**: file A–E, otto per fila. Prezzi per fila: A €45, B €40, C €35, D €30,
   E €28. Le file D ed E hanno più lettini e accolgono più ospiti.
+- **Lettini singoli**: sei in zona riva (`R01`–`R06`, a una fila dagli ombrelloni) e
+  quattro sul lato monte (`M01`–`M04`, a due file), in vendita come le altre postazioni.
+- **Tipi di affitto d'esempio** (annotazioni del gestore, mai pubbliche): `A07`
+  «Albergo» con nota sulla convenzione, `B03` «Stagionale» (coerente con il contratto di
+  Anna), `E05` «Animazione bimbi» con nota, per mostrare anche un'etichetta
+  personalizzata.
+- **Posizione sulla mappa**: coordinate di fantasia ma plausibili per entrambi i lidi
+  (Lido Aurora 44.2618, 12.3519; Bagno delle Dune 44.7131, 12.2421), dichiarate
+  dimostrative: i segnaposti della pagina iniziale e di «Esplora» vengono da qui.
 - **Calendario**: in vendita da oggi per tre settimane. La postazione A08 è bloccata per
   manutenzione oggi e domani.
 - **Promozioni**: `MARE10` (10%), `ESTATE5` (5%, al massimo 20 utilizzi), `AUTUNNO15`
@@ -58,11 +67,21 @@ L'accesso è in fondo a ogni pagina, «Area riservata».
 3. **Gestore**. Autorizza o rifiuta le proposte in attesa, cambia un prezzo, blocca una
    postazione, annulla una prenotazione e guarda il rimborso nel riepilogo economico.
    Apri «Sito dello stabilimento», modifica un testo, guarda l'anteprima e pubblica.
-4. **Stagionale**. Entra come Anna → postazione B03 → proponi i martedì e i giovedì delle
+4. **Spiaggia** (gestore). Da «Gestione» di Lido Aurora apri «Spiaggia»: l'anteprima
+   mostra riva, ombrelloni e lato monte con i corridoi. Cambia le distanze e guarda la
+   planimetria seguire; aggiungi una fila o un lettino singolo; imposta tipo di affitto
+   e note su una postazione o su una fila intera (prova «Stagionale» su una postazione
+   senza contratto per vedere l'avviso di incoerenza); ritira una postazione e rimettila
+   in vendita; elimina solo quelle mai usate. In «Gestione», sotto «Posizione sulla
+   mappa», imposta o svuota le coordinate e guarda la mappa della pagina iniziale.
+5. **Mappa** (ospite). Dalla pagina iniziale naviga la mappa, apri la scheda di un lido
+   dal segnaposto e prenota un lettino di riva (`R01`–`R06`) come ogni altra
+   postazione, fino al pass.
+6. **Stagionale**. Entra come Anna → postazione B03 → proponi i martedì e i giovedì delle
    prossime due settimane → guarda nel rendiconto la quota maturata sulla B04.
-5. **Ruoli**. Entra come contabilità: vedi solo l'economia. Entra come reception: i
+7. **Ruoli**. Entra come contabilità: vedi solo l'economia. Entra come reception: i
    prezzi non si possono cambiare.
-6. **Due lingue**. Ripeti un percorso dall'indirizzo inglese, con «English» in alto.
+8. **Due lingue**. Ripeti un percorso dall'indirizzo inglese, con «English» in alto.
 
 ## Avvio
 
