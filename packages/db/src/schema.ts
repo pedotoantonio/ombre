@@ -20,6 +20,7 @@ export const beach = pgTable('beach', {
   longitude: doublePrecision('longitude'),
   shoreGapRows: smallint('shore_gap_rows').notNull().default(1),
   landGapRows: smallint('land_gap_rows').notNull().default(1),
+  seaSide: text('sea_side', { enum: ['top', 'bottom'] }).notNull().default('top'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -35,6 +36,68 @@ export const spot = pgTable('spot', {
   rentalType: text('rental_type'),
   rentalNotes: text('rental_notes'),
   retired: boolean('retired').notNull().default(false),
+  // Filled by a trigger when left out: the next free column of the row.
+  col: smallint('col').notNull(),
+  // Filled by a trigger when left out: the builtin type of the zone.
+  typeId: uuid('type_id').notNull(),
+});
+
+export const spotType = pgTable('spot_type', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  beachId: uuid('beach_id').notNull(),
+  name: text('name').notNull(),
+  mark: text('mark', { enum: ['umbrella', 'sunbed', 'gazebo', 'tent', 'daybed'] }).notNull(),
+  umbrellas: smallint('umbrellas').notNull().default(1),
+  sunbeds: smallint('sunbeds').notNull().default(2),
+  maxGuests: smallint('max_guests').notNull().default(2),
+  defaultPriceCents: integer('default_price_cents'),
+  builtin: boolean('builtin').notNull().default(false),
+});
+
+export const layoutElement = pgTable('layout_element', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  beachId: uuid('beach_id').notNull(),
+  kind: text('kind', { enum: ['walkway', 'cabin_block', 'structure'] }).notNull(),
+  label: text('label'),
+  orientation: text('orientation', { enum: ['horizontal', 'vertical'] }),
+  zone: text('zone', { enum: ['riva', 'ombrelloni', 'monte'] }),
+  rowAfter: smallint('row_after'),
+  rowNumber: integer('row_number'),
+  colStart: smallint('col_start'),
+  colEnd: smallint('col_end'),
+});
+
+export const cabin = pgTable('cabin', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  beachId: uuid('beach_id').notNull(),
+  code: text('code').notNull(),
+  elementId: uuid('element_id'),
+  notes: text('notes'),
+});
+
+export const cabinAssignment = pgTable('cabin_assignment', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  beachId: uuid('beach_id').notNull(),
+  cabinId: uuid('cabin_id').notNull(),
+  holderAccountId: uuid('holder_account_id'),
+  holderName: text('holder_name'),
+  holderContact: text('holder_contact'),
+  validFrom: date('valid_from', { mode: 'string' }).notNull(),
+  validTo: date('valid_to', { mode: 'string' }).notNull(),
+  status: text('status', { enum: ['active', 'ended'] }).notNull().default('active'),
+});
+
+export const cabinSublet = pgTable('cabin_sublet', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  beachId: uuid('beach_id').notNull(),
+  assignmentId: uuid('assignment_id').notNull(),
+  fromDay: date('from_day', { mode: 'string' }).notNull(),
+  toDay: date('to_day', { mode: 'string' }).notNull(),
+  occupantName: text('occupant_name').notNull(),
+  occupantContact: text('occupant_contact'),
+  status: text('status', { enum: ['proposed', 'approved', 'rejected', 'ended'] }).notNull().default('proposed'),
+  decidedBy: uuid('decided_by'),
+  decidedAt: timestamp('decided_at', { withTimezone: true }),
 });
 
 export const promotion = pgTable('promotion', {
@@ -76,7 +139,7 @@ export const hold = pgTable('hold', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const membershipRole = pgEnum('membership_role', ['manager', 'reception', 'accounting']);
+export const membershipRole = pgEnum('membership_role', ['manager', 'reception', 'accounting', 'cabin_holder']);
 
 export const membership = pgTable('membership', {
   userId: uuid('user_id').notNull(),

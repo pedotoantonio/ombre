@@ -2,7 +2,7 @@ import path from 'node:path';
 import { runMigrations, setAppPassword } from './migrate';
 import { upsertUser } from './auth';
 import { demoAccounts, demoHolderEmail, seedDemo } from './seed';
-import { seedShowcase, showcaseHolders } from './showcase';
+import { seedShowcase, showcaseCabinHolder, showcaseHolders } from './showcase';
 
 // Applies migrations, then the optional steps asked for through the environment.
 const adminUrl = process.env.OMBRE_DB_ADMIN_URL;
@@ -52,6 +52,8 @@ if (process.env.OMBRE_SEED_DEMO === 'true') {
     const showcase = await seedShowcase(adminUrl, signingSecret);
     if (password) {
       for (const account of showcaseHolders) await upsertUser(adminUrl, { email: account.email, name: account.name, password });
+      // The demonstrative cabin holder signs in with the shared demo password.
+      await upsertUser(adminUrl, { email: showcaseCabinHolder.email, name: showcaseCabinHolder.name, password }, [{ beachId: showcase.beachId, role: 'cabin_holder' }]);
     }
     console.log(showcase.created ? 'Showcase beach club created' : 'Showcase beach club already present');
   }

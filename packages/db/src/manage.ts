@@ -2,7 +2,7 @@ import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { assertCents, can, canTransition, type Action, type MembershipRole } from '@ombre/shared';
 import { withActor, type Database, type Transaction } from './client';
 import { DomainError, zoneOrder, type SpotZone } from './inventory';
-import { auditEvent, beach, hold, inventoryDay, membership, spot } from './schema';
+import { auditEvent, beach, hold, inventoryDay, membership, spot, spotType } from './schema';
 
 export interface Actor {
   userId: string;
@@ -71,14 +71,20 @@ export function listInventory(db: Database, actor: Actor, day: string): Promise<
   });
 }
 
-/** Offers a day for sale. Days already held, occupied or blocked are left as they are. */
+/**
+ * Offers a day for sale. Days already held, occupied or blocked are left as they
+ * are. Each spot starts at its type's default price when the type has one, at the
+ * day's base price otherwise; days already published never change (`setPrice`
+ * stays sovereign).
+ */
 export function publishDay(db: Database, actor: Actor, input: { day: string; priceCents: number; spotIds?: string[] }): Promise<{ published: number }> {
   assertCents(input.priceCents, 'price');
   if (input.priceCents < 0) throw new RangeError('price must not be negative');
   return withActor(db, actor.beachId, actor.userId, async (tx) => {
     const spots = await tx
-      .select({ id: spot.id, retired: spot.retired })
+      .select({ id: spot.id, retired: spot.retired, typePriceCents: spotType.defaultPriceCents })
       .from(spot)
+      .innerJoin(spotType, eq(spotType.id, spot.typeId))
       .where(input.spotIds ? inArray(spot.id, input.spotIds) : undefined)
       .orderBy(asc(spot.id));
     if (input.spotIds && spots.length !== new Set(input.spotIds).size) throw new DomainError('not_found', 'Spot not found');
@@ -88,10 +94,10 @@ export function publishDay(db: Database, actor: Actor, input: { day: string; pri
 
     const written = await tx
       .insert(inventoryDay)
-      .values(sellable.map((entry) => ({ beachId: actor.beachId, spotId: entry.id, day: input.day, state: 'available' as const, priceCents: input.priceCents })))
+      .values(sellable.map((entry) => ({ beachId: actor.beachId, spotId: entry.id, day: input.day, state: 'available' as const, priceCents: entry.typePriceCents ?? input.priceCents })))
       .onConflictDoUpdate({
         target: [inventoryDay.beachId, inventoryDay.spotId, inventoryDay.day],
-        set: { state: 'available', priceCents: input.priceCents, updatedAt: sql`now()` },
+        set: { state: 'available', priceCents: sql`excluded.price_cents`, updatedAt: sql`now()` },
         setWhere: eq(inventoryDay.state, 'unpublishable'),
       })
       .returning({ id: inventoryDay.id });

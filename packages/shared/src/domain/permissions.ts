@@ -1,4 +1,4 @@
-export const membershipRoles = ['manager', 'reception', 'accounting'] as const;
+export const membershipRoles = ['manager', 'reception', 'accounting', 'cabin_holder'] as const;
 export type MembershipRole = (typeof membershipRoles)[number];
 
 export const actions = [
@@ -17,6 +17,7 @@ export const actions = [
   'site.edit',
   'layout.edit',
   'layout.gaps',
+  'cabins.manage',
 ] as const;
 export type Action = (typeof actions)[number];
 
@@ -26,6 +27,8 @@ export const permissions: Record<MembershipRole, readonly Action[]> = {
   // Reception adjusts the zone distances (the owner's "bagnino"), never the structure.
   reception: ['inventory.read', 'inventory.block', 'access.check', 'bookings.read', 'bookings.create', 'bookings.move', 'site.read', 'layout.gaps'],
   accounting: ['reports.read'],
+  // A cabin holder reaches only their own cabins, through dedicated routes: no club-wide action.
+  cabin_holder: [],
 };
 
 export function can(role: MembershipRole, action: Action): boolean {

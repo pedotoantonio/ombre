@@ -1,8 +1,9 @@
 import { createHash } from 'node:crypto';
 import { and, asc, eq, gte, ilike, or, sql } from 'drizzle-orm';
-import { quoteDay, type DayQuote } from '@ombre/shared';
+import { quoteDay, type DayQuote, type SeaSide } from '@ombre/shared';
 import { withBeach, type Database, type Transaction } from './client';
-import { beach, hold, inventoryDay, promotion, spot } from './schema';
+import { listElements, type LayoutElementView } from './layout';
+import { beach, hold, inventoryDay, promotion, spot, spotType } from './schema';
 
 export type DomainErrorCode =
   | 'not_found'
@@ -83,6 +84,8 @@ export interface AvailableSpot {
   code: string;
   zone: SpotZone;
   rowNumber: number;
+  col: number;
+  typeName: string;
   umbrellas: number;
   sunbeds: number;
   maxGuests: number;
@@ -102,6 +105,8 @@ export function listAvailability(db: Database, beachId: string, day: string): Pr
         code: spot.code,
         zone: spot.zone,
         rowNumber: spot.rowNumber,
+        col: spot.col,
+        typeName: spotType.name,
         umbrellas: spot.umbrellas,
         sunbeds: spot.sunbeds,
         maxGuests: spot.maxGuests,
@@ -110,9 +115,10 @@ export function listAvailability(db: Database, beachId: string, day: string): Pr
       })
       .from(inventoryDay)
       .innerJoin(spot, eq(spot.id, inventoryDay.spotId))
+      .innerJoin(spotType, eq(spotType.id, spot.typeId))
       .leftJoin(hold, eq(hold.id, inventoryDay.activeHoldId))
       .where(and(eq(inventoryDay.day, day), eq(spot.retired, false), isFree))
-      .orderBy(zoneOrder, asc(spot.rowNumber), asc(spot.code)),
+      .orderBy(zoneOrder, asc(spot.rowNumber), asc(spot.col)),
   );
 }
 
@@ -121,6 +127,10 @@ export interface DaySpot {
   code: string;
   zone: SpotZone;
   rowNumber: number;
+  /** Column inside the row: the drawing may leave holes, drawn as plain sand. */
+  col: number;
+  /** Name of the spot type, shown on the public label. */
+  typeName: string;
   umbrellas: number;
   sunbeds: number;
   maxGuests: number;
@@ -139,6 +149,8 @@ export function listDayMap(db: Database, beachId: string, day: string): Promise<
         code: spot.code,
         zone: spot.zone,
         rowNumber: spot.rowNumber,
+        col: spot.col,
+        typeName: spotType.name,
         umbrellas: spot.umbrellas,
         sunbeds: spot.sunbeds,
         maxGuests: spot.maxGuests,
@@ -147,10 +159,11 @@ export function listDayMap(db: Database, beachId: string, day: string): Promise<
         shared: inventoryDay.shared,
       })
       .from(spot)
+      .innerJoin(spotType, eq(spotType.id, spot.typeId))
       .leftJoin(inventoryDay, and(eq(inventoryDay.spotId, spot.id), eq(inventoryDay.day, day)))
       .leftJoin(hold, eq(hold.id, inventoryDay.activeHoldId))
       .where(eq(spot.retired, false))
-      .orderBy(zoneOrder, asc(spot.rowNumber), asc(spot.code));
+      .orderBy(zoneOrder, asc(spot.rowNumber), asc(spot.col));
     return rows.map(({ free, priceCents, shared, ...place }) =>
       free && priceCents !== null
         ? { ...place, status: shared ? ('shared' as const) : ('free' as const), priceCents }
@@ -163,6 +176,22 @@ export function listDayMap(db: Database, beachId: string, day: string): Promise<
 export async function getZoneGaps(db: Database, beachId: string): Promise<{ shoreGapRows: number; landGapRows: number }> {
   const [row] = await db.select({ shoreGapRows: beach.shoreGapRows, landGapRows: beach.landGapRows }).from(beach).where(eq(beach.id, beachId));
   return row ?? { shoreGapRows: 1, landGapRows: 1 };
+}
+
+export interface PublicCanvas {
+  seaSide: SeaSide;
+  shoreGapRows: number;
+  landGapRows: number;
+  /** Walkways, structures and cabin blocks, exactly as the manager drew them. */
+  elements: LayoutElementView[];
+}
+
+/** The drawing of the beach as the public map renders it: sea side, distances and elements. */
+export function getPublicCanvas(db: Database, beachId: string): Promise<PublicCanvas> {
+  return withBeach(db, beachId, async (tx) => {
+    const [row] = await tx.select({ seaSide: beach.seaSide, shoreGapRows: beach.shoreGapRows, landGapRows: beach.landGapRows }).from(beach).where(eq(beach.id, beachId));
+    return { ...(row ?? { seaSide: 'top' as const, shoreGapRows: 1, landGapRows: 1 }), elements: await listElements(tx) };
+  });
 }
 
 export interface BeachSearch {

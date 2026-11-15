@@ -1,12 +1,15 @@
 import pg from 'pg';
 import { demoImage, type DemoMediaId, type Locale, type MembershipRole, type SiteContent, type SiteTexts } from '@ombre/shared';
 import { applyPaymentOutcome, cancelByBeachClub, checkAccess, deskBooking, startCheckout } from './bookings';
+import { assignCabin, createCabin, decideSublet, proposeSublet } from './cabins';
 import { connect } from './client';
 import { acquireHold } from './inventory';
+import { addElement, addSpot } from './layout';
 import { closeDay } from './ledger';
-import type { Actor } from './manage';
+import { publishDay, type Actor } from './manage';
 import { demoAccounts, demoHolderEmail } from './seed';
 import { decideProposal, listProposals, proposeDays } from './sharing';
+import { createSpotType, listSpotTypes, updateSpotType } from './spot-types';
 
 /**
  * "Lido Aurora": a larger fictional beach club for demonstrations, with pictures, prices by
@@ -27,6 +30,9 @@ export const showcaseHolders = [
   { email: 'anna@lidoaurora.example', name: 'Anna Riva' },
   { email: 'bruno@lidoaurora.example', name: 'Bruno Sala' },
 ] as const;
+
+/** Demonstrative cabin holder: CAB1 is assigned to this account. */
+export const showcaseCabinHolder = { email: 'cabina@lidoaurora.example', name: 'Titolare di cabina dimostrativo' } as const;
 
 const rows = [
   { letter: 'A', priceCents: 4500, sunbeds: 2, maxGuests: 2 },
@@ -174,6 +180,8 @@ export async function seedShowcase(adminUrl: string, signingSecret: string): Pro
     const anna = await ensureUser(client, showcaseHolders[0].email, showcaseHolders[0].name);
     const bruno = await ensureUser(client, showcaseHolders[1].email, showcaseHolders[1].name);
     const carla = await ensureUser(client, demoHolderEmail, 'Stagionale dimostrativo');
+    const cabinHolderId = await ensureUser(client, showcaseCabinHolder.email, showcaseCabinHolder.name);
+    await client.query("INSERT INTO membership (user_id, beach_id, role) VALUES ($1, $2, 'cabin_holder') ON CONFLICT DO NOTHING", [cabinHolderId, beachId]);
 
     const contracts: Record<string, { id: string; holder: string }> = {};
     for (const [code, holder, mode] of [
@@ -202,6 +210,57 @@ export async function seedShowcase(adminUrl: string, signingSecret: string): Pro
     const db = app.db;
     const manager: Actor = { userId: staff.manager!, beachId, role: 'manager' };
     const reception: Actor = { userId: staff.reception!, beachId, role: 'reception' };
+
+    // The drawing: a central vertical walkway, a horizontal one after row C,
+    // the bar on the land side and a block of four sea cabins.
+    await addElement(db, manager, { kind: 'walkway', orientation: 'vertical', colStart: 4 });
+    await addElement(db, manager, { kind: 'walkway', orientation: 'horizontal', zone: 'ombrelloni', rowAfter: 3, colStart: 1, colEnd: 8 });
+    await addElement(db, manager, { kind: 'structure', label: 'Bar', zone: 'monte', rowNumber: 1, colStart: 6, colEnd: 7 });
+    const block = await addElement(db, manager, { kind: 'cabin_block', label: 'Cabine', zone: 'monte', rowNumber: 2, colStart: 1, colEnd: 4 });
+
+    // Spot types: the builtin Gazebo gains a higher default price, and a custom
+    // type with its mark from the fixed repertoire gets one spot.
+    const types = await listSpotTypes(db, manager);
+    const gazebo = types.find((type) => type.builtin && type.mark === 'gazebo');
+    if (!gazebo) throw new Error('builtin gazebo type missing');
+    await updateSpotType(db, manager, { typeId: gazebo.typeId, defaultPriceCents: 6000 });
+    const tent = await createSpotType(db, manager, { name: 'Tenda araba', mark: 'tent', umbrellas: 0, sunbeds: 2, maxGuests: 3, defaultPriceCents: 5000 });
+    const gazeboRow: string[] = [];
+    for (const code of ['G01', 'G02'] as const) {
+      const created = await addSpot(db, manager, { zone: 'ombrelloni', code, rowNumber: 6, typeId: gazebo.typeId });
+      gazeboRow.push(created.spotId);
+    }
+    const tenda = await addSpot(db, manager, { zone: 'ombrelloni', code: 'T01', rowNumber: 6, typeId: tent.typeId });
+    gazeboRow.push(tenda.spotId);
+    // Published like the rest: each spot starts at its type's default price.
+    for (let offset = 0; offset < publishedDays; offset += 1) {
+      await publishDay(db, manager, { day: day(offset), priceCents: 3000, spotIds: gazeboRow });
+    }
+
+    // Sea cabins: CAB1 assigned to the holder with an account (an approved sublet
+    // under way and a pending proposal), CAB2 to a holder without an account.
+    const cabins: Record<string, string> = {};
+    for (const code of ['CAB1', 'CAB2', 'CAB3', 'CAB4'] as const) {
+      const created = await createCabin(db, manager, { code, elementId: block.elementId });
+      cabins[code] = created.cabinId;
+    }
+    const cab1 = await assignCabin(db, manager, {
+      cabinId: cabins.CAB1!,
+      holderEmail: showcaseCabinHolder.email,
+      holderName: showcaseCabinHolder.name,
+      validFrom: day(-30),
+      validTo: day(120),
+    });
+    const approved = await proposeSublet(db, cabinHolderId, { assignmentId: cab1.assignmentId, fromDay: day(-2), toDay: day(5), occupantName: 'Ospiti Lanzi (dato di esempio)' });
+    await decideSublet(db, manager, approved.subletId, { approve: true });
+    await proposeSublet(db, cabinHolderId, { assignmentId: cab1.assignmentId, fromDay: day(10), toDay: day(14), occupantName: 'Famiglia Esposito (dato di esempio)', occupantContact: '+39 000 000 0001' });
+    await assignCabin(db, manager, {
+      cabinId: cabins.CAB2!,
+      holderName: 'Famiglia Marchetti (senza accesso, dato di esempio)',
+      holderContact: '+39 000 000 0002',
+      validFrom: day(-10),
+      validTo: day(90),
+    });
 
     const propose = (code: string, offsets: number[]) => proposeDays(db, contracts[code]!.holder, contracts[code]!.id, offsets.map(day));
     await propose('B03', [1, 2, 3, 8]);
