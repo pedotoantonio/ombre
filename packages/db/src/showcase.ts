@@ -14,7 +14,14 @@ import { decideProposal, listProposals, proposeDays } from './sharing';
  * Bookings are made through the same functions the product uses, so the money trail and
  * the presences are real results, not rows written by hand.
  */
-export const showcaseBeach = { slug: 'lido-aurora', name: 'Lido Aurora', locality: 'Marina Azzurra' } as const;
+export const showcaseBeach = {
+  slug: 'lido-aurora',
+  name: 'Lido Aurora',
+  locality: 'Marina Azzurra',
+  // Marina Azzurra is a fictional place: plausible coordinates on the Adriatic coast, sample data.
+  latitude: 44.2618,
+  longitude: 12.3519,
+} as const;
 
 export const showcaseHolders = [
   { email: 'anna@lidoaurora.example', name: 'Anna Riva' },
@@ -30,6 +37,17 @@ const rows = [
 ] as const;
 const spotsPerRow = 8;
 const publishedDays = 21;
+// Single sunbeds by the shore and on the land side, published like every other spot.
+const singleSunbeds = [
+  { zone: 'riva', prefix: 'R', count: 6, priceCents: 1500 },
+  { zone: 'monte', prefix: 'M', count: 4, priceCents: 1200 },
+] as const;
+// Sample rental annotations: a label is free text, "Stagionale" and "Albergo" are suggestions.
+const sampleRentals = [
+  { code: 'B03', rentalType: 'Stagionale', rentalNotes: null },
+  { code: 'A07', rentalType: 'Albergo', rentalNotes: 'Convenzione con l\'Hotel Gabbiano (dato di esempio)' },
+  { code: 'E05', rentalType: 'Animazione bimbi', rentalNotes: 'Riservato al mini club nelle mattine di luglio (dato di esempio)' },
+] as const;
 
 function addDays(day: string, amount: number): string {
   const date = new Date(`${day}T00:00:00Z`);
@@ -95,9 +113,9 @@ export async function seedShowcase(adminUrl: string, signingSecret: string): Pro
     // ---- Fixed data: beach club, spots, calendar, promotions, people, website ----
     await client.query('BEGIN');
     const beach = await client.query<{ id: string }>(
-      `INSERT INTO beach (slug, name, locality, status, demo, daily_shared_cap, shared_price_cents)
-       VALUES ($1, $2, $3, 'active', true, 6, 3200) RETURNING id`,
-      [showcaseBeach.slug, showcaseBeach.name, showcaseBeach.locality],
+      `INSERT INTO beach (slug, name, locality, status, demo, daily_shared_cap, shared_price_cents, latitude, longitude, shore_gap_rows, land_gap_rows)
+       VALUES ($1, $2, $3, 'active', true, 6, 3200, $4, $5, 1, 2) RETURNING id`,
+      [showcaseBeach.slug, showcaseBeach.name, showcaseBeach.locality, showcaseBeach.latitude, showcaseBeach.longitude],
     );
     const beachId = beach.rows[0]!.id;
 
@@ -113,6 +131,21 @@ export async function seedShowcase(adminUrl: string, signingSecret: string): Pro
         spots[code] = spot.rows[0]!.id;
         prices[code] = row.priceCents;
       }
+    }
+    // Shore sunbeds R01-R06 one empty row from the umbrellas, land sunbeds M01-M04 two away.
+    for (const group of singleSunbeds) {
+      for (let number = 1; number <= group.count; number += 1) {
+        const code = `${group.prefix}${String(number).padStart(2, '0')}`;
+        const spot = await client.query<{ id: string }>(
+          "INSERT INTO spot (beach_id, code, row_number, umbrellas, sunbeds, max_guests, zone) VALUES ($1, $2, 1, 0, 1, 1, $3) RETURNING id",
+          [beachId, code, group.zone],
+        );
+        spots[code] = spot.rows[0]!.id;
+        prices[code] = group.priceCents;
+      }
+    }
+    for (const rental of sampleRentals) {
+      await client.query('UPDATE spot SET rental_type = $3, rental_notes = $4 WHERE beach_id = $1 AND code = $2', [beachId, rental.code, rental.rentalType, rental.rentalNotes]);
     }
     const publish = (code: string, onDay: string) =>
       client.query(

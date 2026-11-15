@@ -29,13 +29,19 @@ describe.skipIf(!testAdminUrl)('showcase beach club', () => {
     expect(await count('beach WHERE slug = $1', [showcaseBeach.slug])).toBe(1);
   });
 
-  it('has forty spots in five rows, three weeks on sale and a spot under maintenance', async () => {
-    expect(await count('spot WHERE beach_id = $1', [beachId])).toBe(40);
-    expect(await count('inventory_day WHERE beach_id = $1', [beachId])).toBeGreaterThanOrEqual(40 * 21);
+  it('has fifty spots in three zones, three weeks on sale and a spot under maintenance', async () => {
+    expect(await count('spot WHERE beach_id = $1', [beachId])).toBe(50);
+    expect(await count("spot WHERE beach_id = $1 AND zone = 'riva'", [beachId])).toBe(6);
+    expect(await count("spot WHERE beach_id = $1 AND zone = 'monte'", [beachId])).toBe(4);
+    expect(await count('spot WHERE beach_id = $1 AND rental_type IS NOT NULL', [beachId])).toBe(3);
+    expect(await count('inventory_day WHERE beach_id = $1', [beachId])).toBeGreaterThanOrEqual(50 * 21);
     expect(await count("inventory_day WHERE beach_id = $1 AND state = 'blocked'", [beachId])).toBe(2);
     const today = (await database.admin.query<{ day: string }>("SELECT (now() AT TIME ZONE 'Europe/Rome')::date::text AS day")).rows[0]!.day;
     const free = await listAvailability(database.app.db, beachId, today);
-    expect(free.length).toBe(40 - 5 - 1);
+    expect(free.length).toBe(50 - 5 - 1);
+    // The shore sunbeds come first, then the umbrellas, then the land side.
+    expect(free[0]).toMatchObject({ code: 'R01', zone: 'riva', umbrellas: 0, sunbeds: 1, maxGuests: 1, priceCents: 1500 });
+    expect(free.at(-1)).toMatchObject({ code: 'M04', zone: 'monte', priceCents: 1200 });
     expect(free.find((spot) => spot.code === 'A03')?.priceCents).toBe(4500);
     expect(free.find((spot) => spot.code === 'E08')?.priceCents).toBe(2800);
   });

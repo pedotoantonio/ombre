@@ -3,6 +3,7 @@ export * from './auth';
 export * from './bookings';
 export * from './inventory';
 export * from './jobs';
+export * from './layout';
 export * from './ledger';
 export * from './manage';
 export * from './migrate';

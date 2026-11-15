@@ -1,4 +1,4 @@
-import { boolean, date, integer, jsonb, pgEnum, pgTable, smallint, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { boolean, date, doublePrecision, integer, jsonb, pgEnum, pgTable, smallint, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 
 // Typed view of the tables created by the SQL files in ../migrations, which stay the source of truth.
 
@@ -16,6 +16,10 @@ export const beach = pgTable('beach', {
   demo: boolean('demo').notNull().default(false),
   dailySharedCap: integer('daily_shared_cap'),
   sharedPriceCents: integer('shared_price_cents'),
+  latitude: doublePrecision('latitude'),
+  longitude: doublePrecision('longitude'),
+  shoreGapRows: smallint('shore_gap_rows').notNull().default(1),
+  landGapRows: smallint('land_gap_rows').notNull().default(1),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -27,6 +31,10 @@ export const spot = pgTable('spot', {
   umbrellas: smallint('umbrellas').notNull().default(1),
   sunbeds: smallint('sunbeds').notNull().default(2),
   maxGuests: smallint('max_guests').notNull().default(2),
+  zone: text('zone', { enum: ['riva', 'ombrelloni', 'monte'] }).notNull().default('ombrelloni'),
+  rentalType: text('rental_type'),
+  rentalNotes: text('rental_notes'),
+  retired: boolean('retired').notNull().default(false),
 });
 
 export const promotion = pgTable('promotion', {

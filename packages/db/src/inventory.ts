@@ -40,6 +40,9 @@ export interface PublicBeach {
   locality: string;
   timezone: string;
   demo: boolean;
+  /** Null until the manager sets the position: the club then stays off the map. */
+  latitude: number | null;
+  longitude: number | null;
 }
 
 const publicBeachColumns = {
@@ -49,7 +52,14 @@ const publicBeachColumns = {
   locality: beach.locality,
   timezone: beach.timezone,
   demo: beach.demo,
+  latitude: beach.latitude,
+  longitude: beach.longitude,
 };
+
+export type SpotZone = (typeof spot.$inferSelect)['zone'];
+
+/** Zones in drawing and listing order: shore first, then umbrellas, then the land side. */
+export const zoneOrder = sql`case ${spot.zone} when 'riva' then 0 when 'ombrelloni' then 1 else 2 end`;
 
 /** Active beach clubs. `place` keeps those whose locality or name contains the text. */
 export function listActiveBeaches(db: Database, place?: string): Promise<PublicBeach[]> {
@@ -71,6 +81,7 @@ export async function findActiveBeach(db: Database, slug: string): Promise<Publi
 export interface AvailableSpot {
   spotId: string;
   code: string;
+  zone: SpotZone;
   rowNumber: number;
   umbrellas: number;
   sunbeds: number;
@@ -89,6 +100,7 @@ export function listAvailability(db: Database, beachId: string, day: string): Pr
       .select({
         spotId: spot.id,
         code: spot.code,
+        zone: spot.zone,
         rowNumber: spot.rowNumber,
         umbrellas: spot.umbrellas,
         sunbeds: spot.sunbeds,
@@ -99,14 +111,15 @@ export function listAvailability(db: Database, beachId: string, day: string): Pr
       .from(inventoryDay)
       .innerJoin(spot, eq(spot.id, inventoryDay.spotId))
       .leftJoin(hold, eq(hold.id, inventoryDay.activeHoldId))
-      .where(and(eq(inventoryDay.day, day), isFree))
-      .orderBy(asc(spot.rowNumber), asc(spot.code)),
+      .where(and(eq(inventoryDay.day, day), eq(spot.retired, false), isFree))
+      .orderBy(zoneOrder, asc(spot.rowNumber), asc(spot.code)),
   );
 }
 
 export interface DaySpot {
   spotId: string;
   code: string;
+  zone: SpotZone;
   rowNumber: number;
   umbrellas: number;
   sunbeds: number;
@@ -117,13 +130,14 @@ export interface DaySpot {
   priceCents: number | null;
 }
 
-/** Every spot of the beach club on a day, for the map: free ones with their price, the others without details. */
+/** Every spot of the beach club on a day, for the map: free ones with their price, the others without details. Retired spots stay hidden. */
 export function listDayMap(db: Database, beachId: string, day: string): Promise<DaySpot[]> {
   return withBeach(db, beachId, async (tx) => {
     const rows = await tx
       .select({
         spotId: spot.id,
         code: spot.code,
+        zone: spot.zone,
         rowNumber: spot.rowNumber,
         umbrellas: spot.umbrellas,
         sunbeds: spot.sunbeds,
@@ -135,13 +149,20 @@ export function listDayMap(db: Database, beachId: string, day: string): Promise<
       .from(spot)
       .leftJoin(inventoryDay, and(eq(inventoryDay.spotId, spot.id), eq(inventoryDay.day, day)))
       .leftJoin(hold, eq(hold.id, inventoryDay.activeHoldId))
-      .orderBy(asc(spot.rowNumber), asc(spot.code));
+      .where(eq(spot.retired, false))
+      .orderBy(zoneOrder, asc(spot.rowNumber), asc(spot.code));
     return rows.map(({ free, priceCents, shared, ...place }) =>
       free && priceCents !== null
         ? { ...place, status: shared ? ('shared' as const) : ('free' as const), priceCents }
         : { ...place, status: 'unavailable' as const, priceCents: null },
     );
   });
+}
+
+/** Empty corridor rows between the zones, for drawing the public map. */
+export async function getZoneGaps(db: Database, beachId: string): Promise<{ shoreGapRows: number; landGapRows: number }> {
+  const [row] = await db.select({ shoreGapRows: beach.shoreGapRows, landGapRows: beach.landGapRows }).from(beach).where(eq(beach.id, beachId));
+  return row ?? { shoreGapRows: 1, landGapRows: 1 };
 }
 
 export interface BeachSearch {
@@ -170,7 +191,7 @@ export async function searchBeaches(db: Database, search: BeachSearch): Promise<
         .from(inventoryDay)
         .innerJoin(spot, eq(spot.id, inventoryDay.spotId))
         .leftJoin(hold, eq(hold.id, inventoryDay.activeHoldId))
-        .where(and(eq(inventoryDay.day, search.day), isFree, gte(spot.maxGuests, search.guests ?? 1), search.sharedOnly ? eq(inventoryDay.shared, true) : undefined)),
+        .where(and(eq(inventoryDay.day, search.day), eq(spot.retired, false), isFree, gte(spot.maxGuests, search.guests ?? 1), search.sharedOnly ? eq(inventoryDay.shared, true) : undefined)),
     );
     offers.push({ ...target, freeSpots: found?.freeSpots ?? 0, priceFromCents: found?.priceFromCents ?? null });
   }
@@ -183,8 +204,9 @@ export async function nextAvailableDay(db: Database, target: PublicBeach): Promi
     const [row] = await tx
       .select({ day: sql<string | null>`min(${inventoryDay.day})::text` })
       .from(inventoryDay)
+      .innerJoin(spot, eq(spot.id, inventoryDay.spotId))
       .leftJoin(hold, eq(hold.id, inventoryDay.activeHoldId))
-      .where(and(sql`${inventoryDay.day} >= (now() at time zone ${target.timezone})::date`, isFree));
+      .where(and(sql`${inventoryDay.day} >= (now() at time zone ${target.timezone})::date`, eq(spot.retired, false), isFree));
     return row?.day ?? null;
   });
 }
@@ -257,8 +279,9 @@ export function quoteSpot(db: Database, beachId: string, request: DayRequest): P
     const [row] = await tx
       .select({ priceCents: inventoryDay.priceCents })
       .from(inventoryDay)
+      .innerJoin(spot, eq(spot.id, inventoryDay.spotId))
       .leftJoin(hold, eq(hold.id, inventoryDay.activeHoldId))
-      .where(and(eq(inventoryDay.spotId, request.spotId), eq(inventoryDay.day, request.day), isFree));
+      .where(and(eq(inventoryDay.spotId, request.spotId), eq(inventoryDay.day, request.day), eq(spot.retired, false), isFree));
     if (!row) throw new DomainError('inventory_conflict', 'This spot is not available on this day');
 
     const code = normalizePromo(request.promoCode);
@@ -340,6 +363,8 @@ export async function acquireHold(db: Database, beachId: string, request: HoldRe
         return toResult(previous, true);
       }
       if (!row) throw new DomainError('not_found', 'Spot or day not found');
+      const [place] = await tx.select({ retired: spot.retired }).from(spot).where(eq(spot.id, request.spotId));
+      if (place?.retired) throw new DomainError('inventory_conflict', 'This spot has been retired from sale');
       const [clock] = await tx.select({ past: sql<boolean>`${row.day}::date < (now() at time zone ${beach.timezone})::date` }).from(beach).where(eq(beach.id, beachId));
       if (clock?.past) throw new DomainError('inventory_conflict', 'This day has already passed');
 

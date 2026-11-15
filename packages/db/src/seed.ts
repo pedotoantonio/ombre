@@ -4,6 +4,9 @@ export const demoBeach = {
   slug: 'bagno-delle-dune',
   name: 'Bagno delle Dune',
   locality: 'Lido di Pomposa',
+  // Plausible but demonstrative coordinates, declared as sample data in docs/demo.md.
+  latitude: 44.7131,
+  longitude: 12.2421,
   day: '2027-06-17',
   priceCents: 3000,
   promoCode: 'MARE10',
@@ -27,9 +30,9 @@ export async function seedDemo(adminUrl: string): Promise<{ beachId: string }> {
   try {
     await client.query('BEGIN');
     const beach = await client.query<{ id: string }>(
-      `INSERT INTO beach (slug, name, locality, status, demo) VALUES ($1, $2, $3, 'active', true)
-       ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name RETURNING id`,
-      [demoBeach.slug, demoBeach.name, demoBeach.locality],
+      `INSERT INTO beach (slug, name, locality, status, demo, latitude, longitude) VALUES ($1, $2, $3, 'active', true, $4, $5)
+       ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name, latitude = EXCLUDED.latitude, longitude = EXCLUDED.longitude RETURNING id`,
+      [demoBeach.slug, demoBeach.name, demoBeach.locality, demoBeach.latitude, demoBeach.longitude],
     );
     const beachId = beach.rows[0]!.id;
     for (const [rowIndex, letter] of ['A', 'B'].entries()) {

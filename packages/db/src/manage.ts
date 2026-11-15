@@ -1,7 +1,7 @@
 import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { assertCents, can, canTransition, type Action, type MembershipRole } from '@ombre/shared';
 import { withActor, type Database, type Transaction } from './client';
-import { DomainError } from './inventory';
+import { DomainError, zoneOrder, type SpotZone } from './inventory';
 import { auditEvent, beach, hold, inventoryDay, membership, spot } from './schema';
 
 export interface Actor {
@@ -32,6 +32,7 @@ async function audit(tx: Transaction, actor: Actor, action: string, target: stri
 export interface InventoryRow {
   spotId: string;
   code: string;
+  zone: SpotZone;
   rowNumber: number;
   /** `unpublished` when the day has never been offered for this spot. */
   state: 'unpublished' | (typeof inventoryDay.$inferSelect)['state'];
@@ -45,6 +46,7 @@ export function listInventory(db: Database, actor: Actor, day: string): Promise<
       .select({
         spotId: spot.id,
         code: spot.code,
+        zone: spot.zone,
         rowNumber: spot.rowNumber,
         state: inventoryDay.state,
         expired: sql<boolean>`coalesce(${hold.expiresAt} <= now(), false)`,
@@ -54,10 +56,13 @@ export function listInventory(db: Database, actor: Actor, day: string): Promise<
       .from(spot)
       .leftJoin(inventoryDay, and(eq(inventoryDay.spotId, spot.id), eq(inventoryDay.day, day)))
       .leftJoin(hold, eq(hold.id, inventoryDay.activeHoldId))
-      .orderBy(asc(spot.rowNumber), asc(spot.code));
+      // A retired spot cannot be sold: it is managed from the layout page instead.
+      .where(eq(spot.retired, false))
+      .orderBy(zoneOrder, asc(spot.rowNumber), asc(spot.code));
     return rows.map((row) => ({
       spotId: row.spotId,
       code: row.code,
+      zone: row.zone,
       rowNumber: row.rowNumber,
       state: row.state === null ? 'unpublished' : row.state === 'held' && row.expired ? 'available' : row.state,
       priceCents: row.priceCents,
@@ -72,16 +77,18 @@ export function publishDay(db: Database, actor: Actor, input: { day: string; pri
   if (input.priceCents < 0) throw new RangeError('price must not be negative');
   return withActor(db, actor.beachId, actor.userId, async (tx) => {
     const spots = await tx
-      .select({ id: spot.id })
+      .select({ id: spot.id, retired: spot.retired })
       .from(spot)
       .where(input.spotIds ? inArray(spot.id, input.spotIds) : undefined)
       .orderBy(asc(spot.id));
     if (input.spotIds && spots.length !== new Set(input.spotIds).size) throw new DomainError('not_found', 'Spot not found');
-    if (spots.length === 0) return { published: 0 };
+    // A retired spot enters no new published day; its history stays as it is.
+    const sellable = spots.filter((entry) => !entry.retired);
+    if (sellable.length === 0) return { published: 0 };
 
     const written = await tx
       .insert(inventoryDay)
-      .values(spots.map((entry) => ({ beachId: actor.beachId, spotId: entry.id, day: input.day, state: 'available' as const, priceCents: input.priceCents })))
+      .values(sellable.map((entry) => ({ beachId: actor.beachId, spotId: entry.id, day: input.day, state: 'available' as const, priceCents: input.priceCents })))
       .onConflictDoUpdate({
         target: [inventoryDay.beachId, inventoryDay.spotId, inventoryDay.day],
         set: { state: 'available', priceCents: input.priceCents, updatedAt: sql`now()` },
