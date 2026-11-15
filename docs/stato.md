@@ -1,6 +1,6 @@
 # Stato del progetto
 
-Aggiornato all'11/11/2026.
+Aggiornato al 15/11/2026.
 
 ## Dove siamo
 
@@ -18,6 +18,16 @@ indicizzato.
 - Sito pubblico in italiano e inglese: sei pagine per lingua, più «Esplora» e la scheda
   di ogni stabilimento. Ricerca per località, giorno, ospiti e giornate condivise, con
   postazioni libere e prezzo «da» reale; planimetria a colori con barra di riepilogo.
+- Mappa dei lidi come modalità principale dalla pagina iniziale (Leaflet servito dal
+  sito, tasselli OpenStreetMap, caricamento pigro, tre stati, lista sempre
+  equivalente); in «Esplora» mappa e lista sulla stessa selezione; coordinate
+  impostate dal gestore. Gestione della spiaggia dal gestore: pagina «Spiaggia» con
+  zone riva/ombrelloni/monte, lettini singoli a distanza configurabile (riva e lato
+  monte, anche dalla reception), file e postazioni create dal gestore, tipo di
+  affitto («Stagionale», «Albergo» o personalizzato) con note per postazione e per
+  fila, ritiro dalla vendita, eliminazione solo se mai usata. Specifica e prompt in
+  [specifica-mappa-gestore.md](specifica-mappa-gestore.md) e
+  [prompt-mappa-gestore.md](prompt-mappa-gestore.md); decisioni D23 e D24.
 - Prenotazione dell'ospite: scelta della postazione, riepilogo con codice promozionale,
   riserva, dati, pagamento di prova, pass con codice QR e codice breve.
 - Reception: verifica del pass con ingresso, uscita e rientro, prenotazione al banco,
@@ -46,7 +56,8 @@ indicizzato.
 - Annullamento da parte dell'ospite: aspetta le condizioni di cancellazione.
 - Chiusura di un'intera giornata con annullamento di tutte le prenotazioni.
 - Caricamento di foto proprie e dominio personalizzato nel sito dello stabilimento.
-- Pagine di località, «Chi siamo», mappa interattiva, recensioni, distanza dalla spiaggia.
+- Pagine di località, «Chi siamo», recensioni, distanza dalla spiaggia; sulla mappa:
+  ricerca per area visibile, «vicino a me», raggruppamento dei segnaposti.
 - Console della reception a griglia («Ombrè Skipper»), banner «Dritta Ombrè», elenco
   degli stabilimenti in pagina iniziale: vedi i limiti in
   [progetto-grafico.md](progetto-grafico.md).
@@ -60,6 +71,11 @@ ripristinato. Una revisione indipendente di grafica e accessibilità ha trovato 
 rilievi, nessuno bloccante: quindici corretti, gli altri registrati tra i limiti. Dei 15 scenari di
 accettazione del progetto, 12 sono superati e 3 lo sono in parte (rimborsi eseguiti,
 chiusura di un'intera giornata, prove di accessibilità con persone).
+
+Il 15/11/2026, dopo mappa e gestione della spiaggia: `pnpm check` e 108 test con
+database verdi, 471 controlli dei collaudi fumo sull'ambiente in esecuzione, 90
+verifiche sugli otto criteri di accettazione della specifica, tutte superate;
+schermate aggiornate in [schermate](schermate/).
 
 Limiti noti del codice: la Content-Security-Policy ammette gli script in linea, perché
 il framework scrive in linea i dati delle pagine; i limiti alle richieste vivono nella
