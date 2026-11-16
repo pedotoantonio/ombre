@@ -41,6 +41,8 @@ export function createHandler({ db, brand, siteUrl, signingSecret, mail }: Handl
       recipient: data.guestEmail,
       status: mail?.delivers ? 'sent' : 'skipped',
       provider: mail?.name ?? 'none',
+      // The «Comunicazioni» page shows the text to copy by hand (spec §4.3).
+      body: message.text,
     });
   };
 }

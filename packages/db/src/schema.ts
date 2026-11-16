@@ -226,6 +226,7 @@ export const booking = pgTable('booking', {
   presence: presenceStatus('presence').notNull().default('expected'),
   guestName: text('guest_name').notNull(),
   guestEmail: text('guest_email'),
+  guestPhone: text('guest_phone'),
   source: text('source').notNull().default('online'),
   listPriceCents: integer('list_price_cents').notNull(),
   discountCents: integer('discount_cents').notNull(),
@@ -246,7 +247,29 @@ export const payment = pgTable('payment', {
   providerRef: text('provider_ref').notNull(),
   status: paymentStatus('status').notNull().default('not_started'),
   amountCents: integer('amount_cents').notNull(),
+  /** Routes the provider outcome (D31): a `request` payment never confirms or cancels. */
+  purpose: text('purpose', { enum: ['checkout', 'desk', 'request'] }).notNull(),
+  /** Set exactly when purpose is `request`: the payment request it settles. */
+  requestId: uuid('request_id'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
+ * A payment request (deposit or balance, spec §4.3). The public token is never
+ * stored: it is derived from the identifier with the signing secret, like passes.
+ */
+export const paymentRequest = pgTable('payment_request', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  beachId: uuid('beach_id').notNull(),
+  bookingId: uuid('booking_id').notNull(),
+  amountCents: integer('amount_cents').notNull(),
+  status: text('status', { enum: ['pending', 'paid', 'expired', 'cancelled'] }).notNull().default('pending'),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  note: text('note'),
+  createdBy: uuid('created_by').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  closedAt: timestamp('closed_at', { withTimezone: true }),
 });
 
 export const refund = pgTable('refund', {
@@ -349,8 +372,12 @@ export const notification = pgTable('notification', {
   template: text('template').notNull(),
   locale: text('locale').notNull(),
   recipient: text('recipient').notNull(),
-  status: text('status').notNull(),
+  /** `queued` is a composed message waiting for a real provider (spec §4.3). */
+  status: text('status', { enum: ['queued', 'sent', 'skipped'] }).notNull(),
   provider: text('provider').notNull(),
+  /** Full text of the message, to copy by hand until a provider exists. */
+  body: text('body'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const siteTemplate = pgEnum('site_template', ['riviera', 'boutique', 'essential']);

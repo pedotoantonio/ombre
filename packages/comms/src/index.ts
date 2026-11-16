@@ -43,6 +43,65 @@ export function formatLongDay(day: string, locale: Locale): string {
   );
 }
 
+export interface PaymentRequestMessage {
+  brand: string;
+  locale: Locale;
+  guestName: string;
+  beachName: string;
+  /** Already written for the reader, for example "giovedì 17 giugno 2027". */
+  day: string;
+  spotCode: string;
+  bookingCode: string;
+  amountCents: number;
+  /** Public page /paga/{token} where the guest pays with the test provider. */
+  payUrl: string;
+  /** Deadline already written for the reader, in the beach club's time zone. */
+  deadline: string;
+}
+
+/**
+ * The full text of a payment request (deposit or balance, spec §4.3). It is
+ * queued in `notification` when the booking has an email, and in any case it
+ * stays readable from the request detail and the «Comunicazioni» page, to be
+ * copied by hand into WhatsApp or an email until a real provider exists.
+ */
+export function paymentRequestMessage(data: PaymentRequestMessage): { subject: string; text: string } {
+  const amount = formatMoney(data.amountCents, data.locale);
+  if (data.locale === 'en') {
+    return {
+      subject: `${data.brand}: payment request for booking ${data.bookingCode}`,
+      text: [
+        `Hello ${data.guestName},`,
+        '',
+        `${data.beachName} asks you for a payment of ${amount} for your booking ${data.bookingCode} (${data.day}, spot ${data.spotCode}).`,
+        '',
+        'You can pay securely on this page:',
+        data.payUrl,
+        '',
+        `The link is valid until ${data.deadline}.`,
+      ].join('\n'),
+    };
+  }
+  return {
+    subject: `${data.brand}: richiesta di pagamento per la prenotazione ${data.bookingCode}`,
+    text: [
+      `Ciao ${data.guestName},`,
+      '',
+      `${data.beachName} ti chiede un pagamento di ${amount} per la tua prenotazione ${data.bookingCode} (${data.day}, postazione ${data.spotCode}).`,
+      '',
+      'Puoi pagare in modo sicuro da questa pagina:',
+      data.payUrl,
+      '',
+      `Il collegamento vale fino al ${data.deadline}.`,
+    ].join('\n'),
+  };
+}
+
+/** Deadline for the reader: date and time in the beach club's time zone. */
+export function formatDeadline(instant: Date, locale: Locale, timezone: string): string {
+  return new Intl.DateTimeFormat(dateLocale[locale], { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: timezone }).format(instant);
+}
+
 export function bookingConfirmedMail(to: string, data: BookingMail): Mail {
   const total = formatMoney(data.totalCents, data.locale);
   if (data.locale === 'en') {

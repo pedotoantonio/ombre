@@ -132,8 +132,26 @@ export function manageExtrasPath(locale: Locale, beachSlug: string): string {
   return `${accountPath(locale, 'manage', beachSlug)}/${manageExtrasSegment[locale]}`;
 }
 
+/** Last segment of the «Comunicazioni» page, under the management page of a beach club. */
+export const manageCommsSegment: Record<Locale, string> = { it: 'comunicazioni', en: 'communications' };
+
+/** Address of the communications page of a beach club, inside the reserved area. */
+export function manageCommsPath(locale: Locale, beachSlug: string): string {
+  return `${accountPath(locale, 'manage', beachSlug)}/${manageCommsSegment[locale]}`;
+}
+
 /** The pages one level under the management page of a beach club: the depth whitelist. */
-const manageSubPages: Record<Locale, string>[] = [beachLayoutSegment, manageCabinsSegment, manageTodaySegment, manageStatsSegment, manageDealsSegment, manageExtrasSegment];
+const manageSubPages: Record<Locale, string>[] = [beachLayoutSegment, manageCabinsSegment, manageTodaySegment, manageStatsSegment, manageDealsSegment, manageExtrasSegment, manageCommsSegment];
+
+/**
+ * The temporary public payment page /paga/{token} (spec §4.3): a new first-level
+ * section of the addresses. It is `noindex` and excluded in robots.txt.
+ */
+export const paySection: Record<Locale, string> = { it: 'paga', en: 'pay' };
+
+export function payPath(locale: Locale, token: string): string {
+  return `${localePrefix(locale)}/${paySection[locale]}/${token}`;
+}
 
 /** Internal address of the page shown for unknown addresses. It is never linked. */
 export const notFoundSegment = 'pagina-non-trovata';
@@ -153,6 +171,8 @@ export function readAddress(pathname: string): { locale: Locale; known: boolean 
 
   if (first === undefined) return { locale, known: true };
   if (rest.length === 1) return { locale, known: pageFromSlug(locale, first) !== null };
+  // The public payment page: /paga/{token}, nothing deeper.
+  if (first === paySection[locale]) return { locale, known: rest.length === 2 };
   if (first === beachSection[locale]) {
     const known =
       rest.length === 2 ||

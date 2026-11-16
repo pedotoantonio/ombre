@@ -1,5 +1,6 @@
 import { serve } from '@hono/node-server';
 import { connect } from '@ombre/db';
+import { config } from '@ombre/shared';
 import { createApp } from './app';
 
 const url = process.env.OMBRE_DB_URL;
@@ -26,6 +27,8 @@ const app = createApp({
   holdSeconds: Math.round(holdMinutes * 60),
   signingSecret,
   sandboxWebhookSecret: process.env.OMBRE_SANDBOX_WEBHOOK_SECRET || undefined,
+  // The /paga/{token} links in the payment request messages point at the website.
+  siteUrl: config.siteUrl,
   requireTwoFactor: process.env.OMBRE_REQUIRE_2FA === 'true',
   brand: process.env.OMBRE_BRAND_NAME || undefined,
 });

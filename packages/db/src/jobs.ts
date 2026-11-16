@@ -106,7 +106,11 @@ export function bookingMailData(db: Database, beachId: string, bookingId: string
   });
 }
 
-export function recordNotification(db: Database, beachId: string, entry: { bookingId: string; template: string; locale: string; recipient: string; status: 'sent' | 'skipped'; provider: string }): Promise<void> {
+export function recordNotification(
+  db: Database,
+  beachId: string,
+  entry: { bookingId: string; template: string; locale: string; recipient: string; status: 'queued' | 'sent' | 'skipped'; provider: string; body?: string | null },
+): Promise<void> {
   return withBeach(db, beachId, async (tx) => {
     await tx.insert(notification).values({ beachId, ...entry });
   });

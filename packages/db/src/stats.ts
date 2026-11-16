@@ -3,7 +3,7 @@ import type { SpotMark } from '@ombre/shared';
 import { withActor, type Database } from './client';
 import { zoneOrder, type SpotZone } from './inventory';
 import type { Actor } from './manage';
-import { beach, booking, hotelConvention, inventoryDay, payment, spot, spotType } from './schema';
+import { beach, booking, hotelConvention, inventoryDay, spot, spotType } from './schema';
 
 /** Figures only, never a guest: the statistics page shows numbers, not people. */
 export interface SpotFigures {
@@ -37,6 +37,12 @@ export interface StatisticsReport {
   byChannel: { source: string; bookings: number; grossCents: number }[];
   /** The convention is a dimension, never a channel: `source` stays online/desk (D30). */
   byConvention: { conventionId: string; partnerName: string; bookings: number; grossCents: number }[];
+  /**
+   * Since B3 (D31) the statuses are derived from the residual of the sold
+   * bookings: `paid`, `partial`, `to_collect`. The shape is unchanged — the same
+   * { status, bookings } rows as before — but the values are these three instead
+   * of the raw payment enum, because one booking now carries many payments.
+   */
   byPaymentStatus: { status: string; bookings: number }[];
   /** Arrivals come from the access events, never from the presence, which ends every evening. */
   arrivals: { arrived: number; notArrived: number };
@@ -96,14 +102,16 @@ export function statisticsReport(db: Database, actor: Actor, from: string, to: s
       .where(sold)
       .groupBy(hotelConvention.id, hotelConvention.partnerName)
       .orderBy(asc(hotelConvention.partnerName));
+    // Derived from the residual (D31): total minus the succeeded payments of the booking.
+    const paidOfBooking = sql<number>`coalesce((select sum(p.amount_cents) from payment p where p.booking_id = ${booking.id} and p.status = 'succeeded'), 0)`;
+    const derivedState = sql<string>`case when ${paidOfBooking} >= ${booking.totalCents} then 'paid' when ${paidOfBooking} > 0 then 'partial' else 'to_collect' end`;
     const byPaymentStatus = await tx
-      .select({ status: sql<string>`${payment.status}::text`, bookings: sql<number>`count(distinct ${booking.id})::int` })
+      .select({ status: derivedState, bookings: sql<number>`count(*)::int` })
       .from(booking)
       .innerJoin(inventoryDay, eq(inventoryDay.id, booking.inventoryDayId))
-      .innerJoin(payment, eq(payment.bookingId, booking.id))
       .where(sold)
-      .groupBy(payment.status)
-      .orderBy(asc(sql`${payment.status}::text`));
+      .groupBy(derivedState)
+      .orderBy(asc(derivedState));
     // A booking has arrived when at least one entry was registered at the desk.
     const [arrived] = await tx
       .select({ bookings: sql<number>`count(*)::int` })

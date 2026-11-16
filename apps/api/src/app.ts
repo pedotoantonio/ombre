@@ -2,12 +2,17 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 import { Hono, type Context } from 'hono';
 import { sql } from 'drizzle-orm';
 import { z } from 'zod';
+import { formatDeadline, formatLongDay, paymentRequestMessage } from '@ombre/comms';
 import {
   acquireHold,
   addElement,
+  addExtrasToBooking,
   addRow,
   addSpot,
   applyPaymentOutcome,
+  cancelPaymentRequest,
+  collectAtDesk,
+  createPaymentRequest,
   assignCabin,
   authorize,
   beginTwoFactor,
@@ -54,6 +59,8 @@ import {
   listInventory,
   listMyCabins,
   listMyContracts,
+  listNotifications,
+  listPaymentRequests,
   listPendingSublets,
   listProposals,
   listMemberships,
@@ -66,6 +73,7 @@ import {
   proposeSublet,
   publishDraft,
   publishDay,
+  readPayRequest,
   removeElement,
   reportSummary,
   resolveSession,
@@ -86,6 +94,7 @@ import {
   setSharingSettings,
   setSpotType,
   startCheckout,
+  startPayRequestPayment,
   statisticsReport,
   updateCabin,
   updateConvention,
@@ -97,6 +106,8 @@ import {
   maxExtraQuantity,
   type Database,
   type DomainErrorCode,
+  type PayRequestMessageData,
+  type PaymentRequestRow,
   type PublicBeach,
   type PurchaseQuote,
   type SessionUser,
@@ -114,6 +125,7 @@ import {
   maxColumns,
   maxGapRows,
   occupantNameMaxLength,
+  payPath,
   rentalNotesMaxLength,
   rentalTypeMaxLength,
   seaSides,
@@ -137,6 +149,8 @@ export interface AppOptions {
   signingSecret: string;
   /** Shared with the test payment provider. Without it the test provider is switched off. */
   sandboxWebhookSecret?: string;
+  /** Public address of the website, for the /paga/{token} links in the messages. */
+  siteUrl?: string;
   /** Shared counter of requests. A new one is created when not given. */
   rateLimiter?: RateLimiter;
   /** When true, managers must switch two-step verification on before managing a beach club. */
@@ -178,6 +192,9 @@ const domainStatus: Record<DomainErrorCode, 401 | 403 | 404 | 409 | 422 | 429> =
   totp_required: 401,
   totp_invalid: 422,
   totp_setup_required: 403,
+  // The one neutral refusal of /paga/{token}: it never says why (spec §4.3).
+  request_unavailable: 404,
+  request_not_payable: 409,
 };
 
 const slugSchema = z.string().regex(/^[a-z0-9]+(-[a-z0-9]+)*$/).max(80);
@@ -253,8 +270,38 @@ const siteDraftSchema = z.object({
   content: z.object({ it: siteTextsSchema.refine((texts) => texts.description.length > 0), en: siteTextsSchema.nullable() }),
 });
 // The desk picks a convention from a list, by identifier, never by typing the code.
-// Extras follow the same internal hold as an online purchase (spec §4.2).
-const deskSchema = z.object({ spotId: z.uuid(), day: daySchema, guestName: z.string().trim().min(1).max(120), conventionId: z.uuid().nullable().optional(), extras: extrasRequestSchema });
+// Extras follow the same internal hold as an online purchase (spec §4.2). Email and
+// phone are optional (spec §4.3); `collect: later` confirms «da incassare» (D31).
+const guestPhoneSchema = z.string().trim().min(3).max(40).regex(/^[+0-9 ()./-]+$/);
+const deskSchema = z.object({
+  spotId: z.uuid(),
+  day: daySchema,
+  guestName: z.string().trim().min(1).max(120),
+  guestEmail: z.email().max(200).nullable().optional(),
+  guestPhone: guestPhoneSchema.nullable().optional(),
+  conventionId: z.uuid().nullable().optional(),
+  extras: extrasRequestSchema,
+  collect: z.enum(['now', 'later']).default('now'),
+});
+// ---- B3 (spec §4.3): collections, payment requests and communications ----
+const collectSchema = z.object({ amountCents: z.number().int().min(1).max(1_000_000) });
+const addExtrasSchema = z.object({
+  extras: z
+    .array(z.object({ serviceId: z.uuid(), quantity: z.number().int().min(1).max(maxExtraQuantity) }))
+    .min(1)
+    .max(20)
+    .refine((extras) => new Set(extras.map((entry) => entry.serviceId)).size === extras.length),
+  collect: z.enum(['desk', 'later']),
+});
+const paymentRequestSchema = z.object({
+  amountCents: z.number().int().min(1).max(1_000_000),
+  note: z.string().trim().min(1).max(200).nullable().default(null),
+  // 72 hours when left out; always truncated to the end of the booked day.
+  expiresInHours: z.number().int().min(1).max(240).optional(),
+});
+// The token is validated by the signature check, in constant time: a malformed
+// token must answer the SAME neutral refusal as an expired one, never a 400.
+const payTokenSchema = z.string().min(1).max(200);
 // ---- Extra services (spec §4.2): Italian name required, English optional with fallback ----
 const extraServiceSchema = z.object({
   nameIt: z.string().trim().min(1).max(80),
@@ -415,12 +462,32 @@ const limits: Record<string, number> = {
   'post /v1/holds': 30,
   'post /v1/checkouts': 20,
   'post /v1/quotes': 120,
+  // The public payment page, limited like the purchase routes (spec §4.3).
+  'get /v1/pay-requests/:token': 60,
+  'post /v1/pay-requests/:token/payments': 20,
 };
 
 export function createApp(options: AppOptions): Hono {
   const { db, holdSeconds, sessionSeconds = 12 * 60 * 60, signingSecret, sandboxWebhookSecret, log = console.error } = options;
   if (signingSecret.length < 32) throw new RangeError('signingSecret must be at least 32 characters long');
+  const siteUrl = (options.siteUrl ?? 'http://localhost:3210').replace(/\/+$/, '');
   const app = new Hono();
+
+  /** The full text of a payment request, with the /paga/{token} link of the website. */
+  function composeRequestMessage(data: PayRequestMessageData): string {
+    return paymentRequestMessage({
+      brand: options.brand ?? 'Ombrè',
+      locale: data.locale,
+      guestName: data.guestName,
+      beachName: data.beachName,
+      day: formatLongDay(data.day, data.locale),
+      spotCode: data.spotCode,
+      bookingCode: data.bookingCode,
+      amountCents: data.amountCents,
+      payUrl: `${siteUrl}${payPath(data.locale, data.token)}`,
+      deadline: formatDeadline(data.expiresAt, data.locale, data.timezone),
+    }).text;
+  }
 
   const operations: Operation[] = [];
   const limiter = options.rateLimiter ?? createRateLimiter();
@@ -629,6 +696,92 @@ export function createApp(options: AppOptions): Hono {
     const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'bookings.read');
     const day = parse(daySchema, c.req.query('day'), 'day');
     return c.json({ day, currency: 'EUR', bookings: await listBookings(db, actor, day) });
+  });
+
+  // ---- B3 (spec §4.3, D31): deferred collection, payment requests, communications ----
+  // Creating, collecting and cancelling are desk work: bookings.create, like the desk
+  // booking itself. Reading lists is bookings.read, like the day list — the desk also
+  // copies the texts by hand, so the communications page needs no manager-only right.
+  route({ method: 'post', path: '/v1/manage/beaches/:slug/bookings/:code/collect', summary: 'Collect all or part of the outstanding balance at the front desk', tag: 'Beach club', auth: 'session', request: collectSchema, success: 200, errors: [400, 401, 403, 404, 409] }, async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'bookings.create');
+    const { amountCents } = parse(collectSchema, await body(c.req.raw), 'request');
+    return c.json({ currency: 'EUR', ...(await collectAtDesk(db, actor, { code: parse(bookingCodeSchema, c.req.param('code'), 'booking code'), amountCents })) });
+  });
+
+  route({ method: 'post', path: '/v1/manage/beaches/:slug/bookings/:code/extras', summary: 'Add extra services to a sale already made; collected at the desk or left in the balance', tag: 'Beach club', auth: 'session', request: addExtrasSchema, success: 200, errors: [400, 401, 403, 404, 409, 422] }, async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'bookings.create');
+    const request = parse(addExtrasSchema, await body(c.req.raw), 'request');
+    return c.json({ currency: 'EUR', ...(await addExtrasToBooking(db, actor, { code: parse(bookingCodeSchema, c.req.param('code'), 'booking code'), ...request })) });
+  });
+
+  route({ method: 'post', path: '/v1/manage/beaches/:slug/bookings/:code/payment-requests', summary: 'Ask the guest for a deposit or the balance, with a temporary public payment link', tag: 'Beach club', auth: 'session', request: paymentRequestSchema, success: 201, errors: [400, 401, 403, 404, 409] }, async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'bookings.create');
+    const request = parse(paymentRequestSchema, await body(c.req.raw), 'request');
+    const created = await createPaymentRequest(db, actor, { code: parse(bookingCodeSchema, c.req.param('code'), 'booking code'), ...request }, signingSecret, composeRequestMessage);
+    return c.json(
+      {
+        currency: 'EUR',
+        request: { requestId: created.requestId, amountCents: created.amountCents, status: created.status, expiresAt: created.expiresAt.toISOString(), note: created.note },
+        payUrl: `${siteUrl}${payPath(created.locale, created.token)}`,
+        message: created.message,
+        notified: created.notified,
+      },
+      201,
+    );
+  });
+
+  route({ method: 'get', path: '/v1/manage/beaches/:slug/bookings/:code/payment-requests', summary: 'Payment requests of one booking, with the balance and the texts to copy', tag: 'Beach club', auth: 'session', success: 200, errors: [400, 401, 403, 404] }, async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'bookings.read');
+    const detail = await listPaymentRequests(db, actor, parse(bookingCodeSchema, c.req.param('code'), 'booking code'), signingSecret);
+    const describe = (entry: PaymentRequestRow) => ({
+      requestId: entry.requestId,
+      amountCents: entry.amountCents,
+      status: entry.status,
+      expiresAt: entry.expiresAt.toISOString(),
+      note: entry.note,
+      createdAt: entry.createdAt.toISOString(),
+      closedAt: entry.closedAt?.toISOString() ?? null,
+      payUrl: `${siteUrl}${payPath(detail.locale, entry.token)}`,
+      // The text stays readable here even without an email on the booking (spec §4.3).
+      message: composeRequestMessage({
+        locale: detail.locale,
+        guestName: detail.guestName,
+        beachName: detail.beachName,
+        day: detail.day,
+        timezone: detail.timezone,
+        spotCode: detail.spotCode,
+        bookingCode: detail.bookingCode,
+        amountCents: entry.amountCents,
+        token: entry.token,
+        expiresAt: entry.expiresAt,
+      }),
+    });
+    const { requests, ...booking } = detail;
+    return c.json({ currency: 'EUR', booking: { ...booking }, requests: requests.map(describe) });
+  });
+
+  route({ method: 'post', path: '/v1/manage/beaches/:slug/payment-requests/:requestId/cancel', summary: 'Cancel a pending payment request; its link stops answering', tag: 'Beach club', auth: 'session', success: 204, errors: [400, 401, 403, 404, 409] }, async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'bookings.create');
+    await cancelPaymentRequest(db, actor, parse(z.uuid(), c.req.param('requestId'), 'payment request'));
+    return c.body(null, 204);
+  });
+
+  route({ method: 'get', path: '/v1/manage/beaches/:slug/notifications', summary: 'Every notification with its text: the «Comunicazioni» page', tag: 'Beach club', auth: 'session', success: 200, errors: [401, 403] }, async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'bookings.read');
+    const rows = await listNotifications(db, actor);
+    return c.json({ notifications: rows.map((row) => ({ ...row, createdAt: row.createdAt.toISOString() })) });
+  });
+
+  // The public payment page. Any unusable token — malformed, unknown, expired,
+  // cancelled or already paid — answers the SAME polite refusal (spec §4.3).
+  route({ method: 'get', path: '/v1/pay-requests/:token', summary: 'The essential summary behind a /paga/{token} link', tag: 'Booking', auth: 'none', success: 200, errors: [404, 429] }, async (c) => {
+    const summary = await readPayRequest(db, parse(payTokenSchema, c.req.param('token'), 'token'), signingSecret);
+    return c.json({ currency: 'EUR', ...summary, expiresAt: summary.expiresAt.toISOString() });
+  });
+
+  route({ method: 'post', path: '/v1/pay-requests/:token/payments', summary: 'Open the payment of a request with the test provider', tag: 'Booking', auth: 'none', success: 201, errors: [404, 409, 429] }, async (c) => {
+    const payment = await startPayRequestPayment(db, parse(payTokenSchema, c.req.param('token'), 'token'), signingSecret);
+    return c.json({ payment: { ...payment, currency: 'EUR' } }, 201);
   });
 
   // ---- Season holders: their own passes, proposals and statement ----

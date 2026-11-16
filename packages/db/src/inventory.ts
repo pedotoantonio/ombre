@@ -23,7 +23,13 @@ export type DomainErrorCode =
   | 'version_conflict'
   | 'totp_required'
   | 'totp_invalid'
-  | 'totp_setup_required';
+  | 'totp_setup_required'
+  // One neutral refusal for the public /paga page: invalid, expired, cancelled
+  // and already paid tokens all answer the same, revealing nothing (spec §4.3).
+  | 'request_unavailable'
+  // The request is genuine but other collections reduced the residual below its
+  // amount: refused with a clear message (spec §4.3).
+  | 'request_not_payable';
 
 /** A refusal the caller can explain to the user. Anything else is an internal fault. */
 export class DomainError extends Error {
@@ -338,7 +344,7 @@ const lineOrder = (left: ExtraLine, right: ExtraLine) => left.name.it.localeComp
  * retired or unknown service is refused with a clear domain error; quantities
  * are bounded. Returns the lines in the manager's display order.
  */
-async function priceExtras(tx: Transaction, requested: ExtraRequest[]): Promise<{ lines: ExtraLine[]; extrasCents: number }> {
+export async function priceExtras(tx: Transaction, requested: ExtraRequest[]): Promise<{ lines: ExtraLine[]; extrasCents: number }> {
   if (requested.length === 0) return { lines: [], extrasCents: 0 };
   const ids = requested.map((entry) => entry.serviceId);
   if (new Set(ids).size !== ids.length) throw new DomainError('invalid_state', 'Each extra service may appear at most once');

@@ -302,7 +302,8 @@ describe.skipIf(!testAdminUrl)('statistics of a period', () => {
       { source: 'desk', bookings: 2, grossCents: 7000 },
       { source: 'online', bookings: 1, grossCents: 3000 },
     ]);
-    expect(report.byPaymentStatus).toEqual([{ status: 'succeeded', bookings: 3 }]);
+    // Since B3 the statuses are derived from the residual (D31): same shape, new values.
+    expect(report.byPaymentStatus).toEqual([{ status: 'paid', bookings: 3 }]);
     // Arrivals come from the access events: one entry registered, two no-shows so far.
     expect(report.arrivals).toEqual({ arrived: 1, notArrived: 2 });
     expect(report.byType).toEqual([expect.objectContaining({ name: 'Ombrellone', mark: 'umbrella', soldDays: 3, grossCents: 10_000 })]);

@@ -12,6 +12,7 @@ export * from './ledger';
 export * from './manage';
 export * from './migrate';
 export * from './operations';
+export * from './payment-requests';
 export * from './stats';
 export * from './seed';
 export * from './sharing';
