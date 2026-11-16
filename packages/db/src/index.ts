@@ -9,6 +9,8 @@ export * from './layout';
 export * from './ledger';
 export * from './manage';
 export * from './migrate';
+export * from './operations';
+export * from './stats';
 export * from './seed';
 export * from './sharing';
 export * from './showcase';

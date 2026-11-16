@@ -41,6 +41,7 @@ import {
   listDayMap,
   listBookings,
   listContracts,
+  listDayOperations,
   listInventory,
   listMyCabins,
   listMyContracts,
@@ -64,6 +65,7 @@ import {
   searchBeaches,
   setBeachPosition,
   setBlocked,
+  setBlockedBulk,
   setContractStatus,
   setGapRows,
   setPrice,
@@ -73,6 +75,7 @@ import {
   setSharingSettings,
   setSpotType,
   startCheckout,
+  statisticsReport,
   updateCabin,
   updateSpot,
   updateSpotType,
@@ -104,6 +107,7 @@ import {
   spotMarks,
   spotTypeNameMaxLength,
   spotZones,
+  suggestSpot,
   type Action,
   type DayQuote,
 } from '@ombre/shared';
@@ -172,6 +176,8 @@ const loginSchema = z.object({ email: z.email().max(200), password: z.string().m
 const priceSchema = z.number().int().min(0).max(1_000_000);
 const publishSchema = z.object({ day: daySchema, priceCents: priceSchema, spotIds: z.array(z.uuid()).min(1).max(500).optional() });
 const blockSchema = z.object({ spotId: z.uuid(), day: daySchema, blocked: z.boolean(), reason: z.string().trim().max(200).optional() });
+const bulkBlockSchema = z.object({ day: daySchema, spotIds: z.array(z.uuid()).min(1).max(500), blocked: z.boolean(), reason: z.string().trim().max(200).optional() });
+const guestsQuerySchema = z.string().regex(/^\d{1,2}$/).transform(Number).pipe(z.number().int().min(1).max(20)).optional();
 const spotPriceSchema = z.object({ spotId: z.uuid(), day: daySchema, priceCents: priceSchema });
 const checkoutSchema = z.object({
   beachSlug: slugSchema,
@@ -473,6 +479,20 @@ export function createApp(options: AppOptions): Hono {
     return c.body(null, 204);
   });
 
+  route({ method: 'post', path: '/v1/manage/beaches/:slug/inventory/bulk-block', summary: 'Block or unblock many spots of one day, with an aggregated outcome', tag: 'Beach club', auth: 'session', request: bulkBlockSchema, success: 200, errors: [400, 401, 403] }, async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'inventory.block');
+    const request = parse(bulkBlockSchema, await body(c.req.raw), 'request');
+    return c.json({ day: request.day, blocked: request.blocked, ...(await setBlockedBulk(db, actor, request)) });
+  });
+
+  route({ method: 'get', path: '/v1/manage/beaches/:slug/operations', summary: 'Operational state of every spot of a day, with the day summary', tag: 'Beach club', auth: 'session', query: { day: 'YYYY-MM-DD' }, success: 200, errors: [400, 401, 403] }, async (c) => {
+    // Seeing the console needs inventory.read; guest surnames and the takings are
+    // nulled inside unless the role also has bookings.read and reports.read.
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'inventory.read');
+    const day = parse(daySchema, c.req.query('day'), 'day');
+    return c.json({ currency: 'EUR', ...(await listDayOperations(db, actor, day)) });
+  });
+
   route({ method: 'put', path: '/v1/manage/beaches/:slug/inventory/price', summary: 'Change the price of a spot on a day', tag: 'Beach club', auth: 'session', request: spotPriceSchema, success: 204, errors: [400, 401, 403, 404] }, async (c) => {
     const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'inventory.price');
     await setPrice(db, actor, parse(spotPriceSchema, await body(c.req.raw), 'request'));
@@ -645,6 +665,30 @@ export function createApp(options: AppOptions): Hono {
     const to = parse(daySchema, c.req.query('to'), 'end day');
     return c.json({ currency: 'EUR', ...(await reportSummary(db, actor, from, to)) });
   });
+
+  route(
+    {
+      method: 'get',
+      path: '/v1/manage/beaches/:slug/reports/statistics',
+      summary: 'Aggregated statistics of a period: sales, occupancy, channels, arrivals, per type and per spot',
+      tag: 'Beach club',
+      auth: 'session',
+      query: { from: 'YYYY-MM-DD', to: 'YYYY-MM-DD, at most 366 days after from' },
+      success: 200,
+      errors: [400, 401, 403],
+    },
+    async (c) => {
+      const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'reports.read');
+      const from = parse(daySchema, c.req.query('from'), 'start day');
+      const to = parse(daySchema, c.req.query('to'), 'end day');
+      // The period is a closed range of calendar days; its boundaries are meant in the
+      // beach club's time zone, which the answer carries back for the caller.
+      const spanDays = (Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000 + 1;
+      if (spanDays < 1) throw new HttpError(400, 'invalid_request', 'The end day must not come before the start day');
+      if (spanDays > 366) throw new HttpError(400, 'invalid_request', 'The period must not exceed 366 days');
+      return c.json({ currency: 'EUR', ...(await statisticsReport(db, actor, from, to)) });
+    },
+  );
 
   // ---- Beach club website: draft, publish, restore ----
   route({ method: 'get', path: '/v1/manage/beaches/:slug/site', summary: 'Draft, published revision and history of the website', tag: 'Beach club', auth: 'session', success: 200, errors: [401, 403] }, async (c) => {
@@ -894,25 +938,43 @@ export function createApp(options: AppOptions): Hono {
     });
   });
 
-  route({ method: 'get', path: '/v1/beaches/:slug/availability', summary: 'Free spots of a day with prices, every spot with its cell and type for the map, and the drawing of the beach', tag: 'Public', auth: 'none', query: { day: 'YYYY-MM-DD' }, success: 200, errors: [400, 404] }, async (c) => {
-    const slug = parse(slugSchema, c.req.param('slug'), 'beach club');
-    const day = parse(daySchema, c.req.query('day'), 'day');
-    const beach = await beachBySlug(slug);
-    // One reading for both lists, so that they can never disagree.
-    const layout = await listDayMap(db, beach.id, day);
-    const { seaSide, elements, ...gaps } = await getPublicCanvas(db, beach.id);
-    return c.json({
-      beach: publicBeach(beach),
-      day,
-      currency: 'EUR',
-      // The drawing: side of the sea, corridor rows between the zones, walkways and other elements.
-      seaSide,
-      gaps,
-      elements,
-      spots: layout.flatMap(({ status, priceCents, ...spot }) => (priceCents === null ? [] : [{ ...spot, priceCents, shared: status === 'shared' }])),
-      layout,
-    });
-  });
+  route(
+    {
+      method: 'get',
+      path: '/v1/beaches/:slug/availability',
+      summary: 'Free spots of a day with prices, every spot with its cell and type for the map, and the drawing of the beach',
+      tag: 'Public',
+      auth: 'none',
+      query: { day: 'YYYY-MM-DD' },
+      optionalQuery: { guests: 'People who must fit under one spot, 1 to 20. Adds suggestedSpotId to the answer' },
+      success: 200,
+      errors: [400, 404],
+    },
+    async (c) => {
+      const slug = parse(slugSchema, c.req.param('slug'), 'beach club');
+      const day = parse(daySchema, c.req.query('day'), 'day');
+      const guests = parse(guestsQuerySchema, c.req.query('guests'), 'guests');
+      const beach = await beachBySlug(slug);
+      // One reading for both lists, so that they can never disagree.
+      const layout = await listDayMap(db, beach.id, day);
+      const { seaSide, elements, ...gaps } = await getPublicCanvas(db, beach.id);
+      // The suggestion (spec §3.3) only exists when the party size is known, and it is
+      // the sole management-flavoured addition the public ever receives: an identifier.
+      const sellable = layout.flatMap(({ priceCents, ...place }) => (priceCents === null ? [] : [{ ...place, priceCents }]));
+      return c.json({
+        beach: publicBeach(beach),
+        day,
+        currency: 'EUR',
+        // The drawing: side of the sea, corridor rows between the zones, walkways and other elements.
+        seaSide,
+        gaps,
+        elements,
+        spots: sellable.map(({ status, ...spot }) => ({ ...spot, shared: status === 'shared' })),
+        layout,
+        ...(guests === undefined ? {} : { guests, suggestedSpotId: suggestSpot(sellable, guests)?.spotId ?? null }),
+      });
+    },
+  );
 
   route({ method: 'post', path: '/v1/quotes', summary: 'Price of a day as the server computes it', tag: 'Booking', auth: 'none', request: dayRequestSchema, success: 200, errors: [400, 404, 409, 422, 429] }, async (c) => {
     const request = parse(dayRequestSchema, await body(c.req.raw), 'request');

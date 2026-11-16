@@ -34,6 +34,10 @@ export interface InventoryRow {
   code: string;
   zone: SpotZone;
   rowNumber: number;
+  /** Column inside the row, so the desk can rank free spots like the public map does. */
+  col: number;
+  /** People who fit under the spot: the desk suggestion needs it (spec §3.3). */
+  maxGuests: number;
   /** `unpublished` when the day has never been offered for this spot. */
   state: 'unpublished' | (typeof inventoryDay.$inferSelect)['state'];
   priceCents: number | null;
@@ -48,6 +52,8 @@ export function listInventory(db: Database, actor: Actor, day: string): Promise<
         code: spot.code,
         zone: spot.zone,
         rowNumber: spot.rowNumber,
+        col: spot.col,
+        maxGuests: spot.maxGuests,
         state: inventoryDay.state,
         expired: sql<boolean>`coalesce(${hold.expiresAt} <= now(), false)`,
         priceCents: inventoryDay.priceCents,
@@ -64,6 +70,8 @@ export function listInventory(db: Database, actor: Actor, day: string): Promise<
       code: row.code,
       zone: row.zone,
       rowNumber: row.rowNumber,
+      col: row.col,
+      maxGuests: row.maxGuests,
       state: row.state === null ? 'unpublished' : row.state === 'held' && row.expired ? 'available' : row.state,
       priceCents: row.priceCents,
       shared: row.shared ?? false,
