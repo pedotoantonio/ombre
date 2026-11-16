@@ -17,6 +17,10 @@ import {
   locales,
   manageCabinsPath,
   manageCabinsSegment,
+  manageCollectPath,
+  manageCollectSegment,
+  manageCommsPath,
+  manageCommsSegment,
   manageDealsPath,
   manageDealsSegment,
   manageExtrasPath,
@@ -34,6 +38,8 @@ import { api, apiCall, dayPattern, formatDate, formatDay, formatPeriod, localNam
 import { ExtraQuantityFields } from './beach';
 import { BeachLayoutView } from './beach-layout';
 import { CabinHolderView, CabinsManageView, CabinsTodayPanel } from './cabins';
+import { CollectView } from './collect';
+import { CommsView } from './comms';
 import { ConventionsView, dealPriceText } from './conventions';
 import { ExtrasView } from './extras';
 import { OperationsView } from './operations';
@@ -110,7 +116,11 @@ export async function accountMetadata(locale: Locale, segments: string[]): Promi
                 ? t.deals.short
                 : segments[2] === manageExtrasSegment[locale]
                   ? t.extras.short
-                  : null;
+                  : segments[2] === manageCommsSegment[locale]
+                    ? t.comms.short
+                    : segments[2] === manageCollectSegment[locale]
+                      ? t.collect.short
+                      : null;
     if (subTitle !== null) {
       const beachSession = await signedIn();
       const club = beachSession?.me.memberships.find((entry) => entry.beachSlug === id)?.beachName;
@@ -335,6 +345,10 @@ interface BookingRow {
   guestName: string;
   spotCode: string;
   totalCents: number;
+  /** The payment aggregate: the shown state derives from the balance (spec §4.3, D31). */
+  paidCents: number;
+  remainingCents: number;
+  paymentState: 'paid' | 'partial' | 'to_collect';
   /** The extra services to hand over with the spot (spec §4.2). */
   extras: { name: ApiLocalName; quantity: number }[];
 }
@@ -454,6 +468,11 @@ async function ManageView({ locale, beachSlug, query }: { locale: Locale; beachS
                 {t.openExtras}
               </Link>
             ) : null}
+            {can(role, 'bookings.read') ? (
+              <Link className="button button--secondary" href={manageCommsPath(locale, beachSlug)}>
+                {t.openComms}
+              </Link>
+            ) : null}
           </p>
           {can(role, 'layout.edit') && position ? (
             <div className="panel" id="posizione">
@@ -550,6 +569,16 @@ async function ManageView({ locale, beachSlug, query }: { locale: Locale; beachS
                         <label htmlFor="banco-ospite">{t.deskGuest}</label>
                         <input id="banco-ospite" name="name" maxLength={120} required />
                       </div>
+                      {/* Optional contacts: with one, a payment request also queues its notification (spec §4.3). */}
+                      <div className="field">
+                        <label htmlFor="banco-email">{t.deskEmail}</label>
+                        <input id="banco-email" name="email" type="email" maxLength={200} autoComplete="off" aria-describedby="banco-recapiti-nota" />
+                        <p className="field__hint" id="banco-recapiti-nota">{t.deskContactsHint}</p>
+                      </div>
+                      <div className="field">
+                        <label htmlFor="banco-telefono">{t.deskPhone}</label>
+                        <input id="banco-telefono" name="phone" type="tel" maxLength={40} autoComplete="off" />
+                      </div>
                       {deskConventions.length > 0 ? (
                         <div className="field">
                           <label htmlFor="banco-convenzione">{t.deskConvention}</label>
@@ -572,6 +601,16 @@ async function ManageView({ locale, beachSlug, query }: { locale: Locale; beachS
                           <ExtraQuantityFields locale={locale} idPrefix="banco-extra" catalogue={deskCatalogue} chosen={[]} />
                         </fieldset>
                       ) : null}
+                      {/* Collect now, or confirm «da incassare»: the balance stays open (spec §4.3, D31). */}
+                      <fieldset className="checks">
+                        <legend>{t.deskCollect}</legend>
+                        <label>
+                          <input type="radio" name="collect" value="now" defaultChecked /> {t.collectNow}
+                        </label>
+                        <label>
+                          <input type="radio" name="collect" value="later" /> {t.collectLater}
+                        </label>
+                      </fieldset>
                       <button className="button button--secondary" type="submit">{t.deskBook}</button>
                     </form>
                   )}
@@ -581,7 +620,7 @@ async function ManageView({ locale, beachSlug, query }: { locale: Locale; beachS
               {bookings.data.bookings.length === 0 ? (
                 <p className="prose">{t.noBookings}</p>
               ) : (
-                <DataTable label={t.bookingsTitle} columns={[t.code, t.spot, t.guest, t.colExtras, t.booking, t.presence, t.actions].map((label) => ({ label }))}>
+                <DataTable label={t.bookingsTitle} columns={[t.code, t.spot, t.guest, t.colExtras, t.booking, t.colPayment, t.presence, t.actions].map((label) => ({ label }))}>
                   {bookings.data.bookings.map((row) => (
                     <Row key={row.code}>
                       <Cell label={t.code}>{row.code}</Cell>
@@ -592,6 +631,11 @@ async function ManageView({ locale, beachSlug, query }: { locale: Locale; beachS
                         {row.extras.length === 0 ? null : row.extras.map((line) => extraLine(localName(line.name, locale), line.quantity)).join(', ')}
                       </Cell>
                       <Cell label={t.booking}>{t.bookingStates[row.status]}</Cell>
+                      {/* The payment state in words, never colour alone, with the open balance (spec §4.3). */}
+                      <Cell label={t.colPayment}>
+                        {t.paymentStates[row.paymentState]}
+                        {row.remainingCents > 0 ? ` · ${t.residual(formatMoney(row.remainingCents, locale))}` : ''}
+                      </Cell>
                       <Cell label={t.presence}>{t.presences[row.presence]}</Cell>
                       <Cell label={t.actions}>
                         {row.status === 'confirmed' && can(role, 'bookings.move') && freeSpots.length > 0 ? (
@@ -614,6 +658,12 @@ async function ManageView({ locale, beachSlug, query }: { locale: Locale; beachS
                               {t.cancelBooking} <span className="visually-hidden">{row.code}</span>
                             </button>
                           </form>
+                        ) : null}
+                        {/* Collections, payment requests and late extras of this booking (spec §4.3). */}
+                        {row.remainingCents > 0 || row.paidCents > 0 ? (
+                          <Link className="button button--secondary button--small" href={`${manageCollectPath(locale, beachSlug)}?code=${row.code}`}>
+                            {t.openCollect} <span className="visually-hidden">{row.code}</span>
+                          </Link>
                         ) : null}
                       </Cell>
                     </Row>
@@ -920,6 +970,10 @@ export async function AccountRoute({ locale, segments, query }: { locale: Locale
     return <ConventionsView locale={locale} beachSlug={segments[1]!} query={query} />;
   if (segments.length === 3 && page === 'manage' && segments[2] === manageExtrasSegment[locale])
     return <ExtrasView locale={locale} beachSlug={segments[1]!} query={query} />;
+  if (segments.length === 3 && page === 'manage' && segments[2] === manageCommsSegment[locale])
+    return <CommsView locale={locale} beachSlug={segments[1]!} query={query} />;
+  if (segments.length === 3 && page === 'manage' && segments[2] === manageCollectSegment[locale])
+    return <CollectView locale={locale} beachSlug={segments[1]!} query={query} />;
   if (segments.length === 2 && page === 'season') return <SeasonView locale={locale} contractId={segments[1]!} query={query} />;
   if (segments.length === 2 && page === 'site') return <SiteEditorView locale={locale} beachSlug={segments[1]!} query={query} />;
   notFound();

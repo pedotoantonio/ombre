@@ -214,6 +214,9 @@ Gli indirizzi senza riferimento nel progetto v3.0 sono **proposte**.
 | Statistiche dello stabilimento | `/area/gestione/{slug}/statistiche` · `/en/account/manage/{slug}/statistics` | No, con accesso | Statistiche · {Bagno} | Statistiche di {Bagno} | — |
 | Convenzioni hotel dello stabilimento | `/area/gestione/{slug}/convenzioni` · `/en/account/manage/{slug}/partner-deals` | No, con accesso | Convenzioni · {Bagno} | Convenzioni di {Bagno} | — |
 | Servizi extra dello stabilimento | `/area/gestione/{slug}/extra` · `/en/account/manage/{slug}/extras` | No, con accesso | Servizi extra · {Bagno} | Servizi extra di {Bagno} | — |
+| Pagina pubblica di pagamento (temporanea) | `/paga/{token}` · `/en/pay/{token}` | No (`noindex`, esclusa in robots.txt; token inutilizzabile → 404 con messaggio neutro) | Richiesta di pagamento \| Ombrè | Richiesta di pagamento | — |
+| Comunicazioni dello stabilimento | `/area/gestione/{slug}/comunicazioni` · `/en/account/manage/{slug}/communications` | No, con accesso | Comunicazioni · {Bagno} | Comunicazioni di {Bagno} | — |
+| Incassi e richieste di una prenotazione | `/area/gestione/{slug}/incassi?code={codice}` · `/en/account/manage/{slug}/payments?code={codice}` | No, con accesso | Incassi e richieste · {Bagno} | Incassi della prenotazione {codice} | — |
 
 Ogni pagina ha title sotto i 60 caratteri circa, una descrizione propria di 140–160
 caratteri che dice cosa si può fare lì, e un H1 diverso da quello delle altre pagine. Sul

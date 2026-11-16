@@ -295,3 +295,10 @@ export function formatPeriod(from: string, to: string, locale: 'it' | 'en'): str
 export function formatTime(instant: string, locale: 'it' | 'en', timeZone: string): string {
   return new Intl.DateTimeFormat(dateLocale[locale], { hour: '2-digit', minute: '2-digit', timeZone }).format(new Date(instant));
 }
+
+/** Date and time of an instant in the given time zone: deadlines and notification times. */
+export function formatInstant(instant: string, locale: 'it' | 'en', timeZone: string): string {
+  return new Intl.DateTimeFormat(dateLocale[locale], { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone }).format(
+    new Date(instant),
+  );
+}

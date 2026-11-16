@@ -2002,3 +2002,37 @@ a.ops-tile:active {
     display: block !important;
   }
 }
+
+/* ---- Incassi e comunicazioni (B3): collegamento e testo da copiare, senza script ---- */
+
+/* Il blocco si apre con <details>: funziona senza JavaScript e il bersaglio resta ≥ 44 px. */
+.copy-block summary {
+  display: flex;
+  align-items: center;
+  gap: var(--spazio-2);
+  min-height: var(--tocco);
+  cursor: pointer;
+}
+
+.copy-block summary:focus-visible {
+  outline: 3px solid var(--fuoco);
+  outline-offset: 2px;
+  border-radius: var(--raggio-piccolo);
+}
+
+/* Il testo del messaggio: a capo morbido, selezionabile e leggibile anche su schermi stretti. */
+.copy-block pre {
+  margin: 0 0 var(--spazio-2);
+  padding: var(--spazio-3);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background: var(--spuma);
+  border: 1px solid var(--bordo-campo);
+  border-radius: var(--raggio);
+  font-size: 0.9375rem;
+}
+
+/* Il collegamento lungo non sfonda mai la cella: va a capo dove serve. */
+.copy-block a {
+  overflow-wrap: anywhere;
+}

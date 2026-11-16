@@ -1,4 +1,4 @@
-import { accountPath, beachLayoutPath, beachPath, bookingPath, bookPath, holdPath, isLocale, manageCabinsPath, manageDealsPath, manageExtrasPath, manageTodayPath, parseEuro, type Locale } from '@ombre/shared';
+import { accountPath, beachLayoutPath, beachPath, bookingPath, bookPath, holdPath, isLocale, manageCabinsPath, manageCollectPath, manageDealsPath, manageExtrasPath, manageTodayPath, parseEuro, payPath, type Locale } from '@ombre/shared';
 import { api, apiCall, dayPattern, sandboxNotify, slugPattern, uuidPattern } from '@/lib/api';
 import { clearSessionCookieHeader, sessionCookie, sessionCookieHeader } from '@/lib/session';
 
@@ -130,6 +130,31 @@ async function extrasAct(request: Request, form: Form, lang: Locale, path: strin
   return { to: back, err: errorMap[code] ?? code };
 }
 
+/** A booking code as the pass writes it: the key of the collections view (spec §4.3). */
+const bookingCodePattern = /^OM-\d{6}-\d{3}$/i;
+
+/** Runs a collections call and returns to the «Incassi e richieste» view of that booking. */
+async function collectAct(
+  request: Request,
+  form: Form,
+  lang: Locale,
+  path: (code: string) => string,
+  method: string,
+  body: unknown,
+  errorMap: Record<string, string> = {},
+  okMessage?: (data: unknown) => string,
+): Promise<Outcome> {
+  const beach = form('beach');
+  const code = form('code').trim().toUpperCase();
+  if (!slugPattern.test(beach) || !bookingCodePattern.test(code)) return bad();
+  const result = await apiCall<unknown>(method, `/v1/manage/beaches/${beach}${path(code)}`, { body, token: cookieToken(request) });
+  const back = `${manageCollectPath(lang, beach)}?code=${encodeURIComponent(code)}`;
+  if (result.ok) return { to: back, ok: okMessage ? okMessage(result.data) : '1' };
+  if (result.status === 401) return { to: accountPath(lang, 'signIn') };
+  const resolved = result.status === 0 ? 'unavailable' : result.code;
+  return { to: back, err: errorMap[resolved] ?? resolved };
+}
+
 /** The quantity fields of the extras, named extra-<serviceId>, as the chosen services. */
 function chosenExtras(form: Form): { serviceId: string; quantity: number }[] {
   const text = form('extras');
@@ -259,6 +284,9 @@ const actions: Record<string, (request: Request, form: Form, lang: Locale) => Pr
     const convention = form('convention');
     // The extras of the desk follow the same quantity fields as the public flow (spec §4.2).
     const extras = chosenExtras(form);
+    // Optional contacts and the collection choice: «later» confirms «da incassare» (spec §4.3, D31).
+    const email = form('email').trim();
+    const phone = form('phone').trim();
     return manage(
       request,
       form,
@@ -269,11 +297,92 @@ const actions: Record<string, (request: Request, form: Form, lang: Locale) => Pr
         spotId: form('spot'),
         day: form('day'),
         guestName: form('name'),
+        ...(email ? { guestEmail: email } : {}),
+        ...(phone ? { guestPhone: phone } : {}),
         ...(uuidPattern.test(convention) ? { conventionId: convention } : {}),
         ...(extras.length > 0 ? { extras } : {}),
+        collect: form('collect') === 'later' ? 'later' : 'now',
       },
       (data) => getDictionary(lang, config.brandName).account.deskDone((data as { code: string }).code),
     );
+  },
+
+  // ---- Collections, payment requests and late extras of one booking (spec §4.3, D31) ----
+  'banco-incassa': async (request, form, lang) => {
+    const { getDictionary, config, formatMoney } = await import('@ombre/shared');
+    return collectAct(
+      request,
+      form,
+      lang,
+      (code) => `/bookings/${encodeURIComponent(code)}/collect`,
+      'POST',
+      { amountCents: parseEuro(form('amount')) ?? -1 },
+      { invalid_state: 'collect_invalid' },
+      (data) => getDictionary(lang, config.brandName).collect.collectDone(formatMoney((data as { remainingCents: number }).remainingCents, lang)),
+    );
+  },
+  'banco-richiesta': async (request, form, lang) => {
+    const { getDictionary, config } = await import('@ombre/shared');
+    const note = form('note').trim();
+    const hours = form('hours').trim();
+    return collectAct(
+      request,
+      form,
+      lang,
+      (code) => `/bookings/${encodeURIComponent(code)}/payment-requests`,
+      'POST',
+      {
+        amountCents: parseEuro(form('amount')) ?? -1,
+        ...(note ? { note } : {}),
+        ...(hours === '' ? {} : { expiresInHours: /^\d{1,3}$/.test(hours) ? Number(hours) : -1 }),
+      },
+      { invalid_state: 'request_invalid' },
+      (data) => getDictionary(lang, config.brandName).collect.requestDone(Boolean((data as { notified: boolean }).notified)),
+    );
+  },
+  'banco-richiesta-annulla': (request, form, lang) => {
+    const requestId = form('request');
+    if (!uuidPattern.test(requestId)) return Promise.resolve(bad());
+    return collectAct(request, form, lang, () => `/payment-requests/${encodeURIComponent(requestId)}/cancel`, 'POST', undefined, { invalid_state: 'request_closed' });
+  },
+  'banco-extra': async (request, form, lang) => {
+    const { getDictionary, config, formatMoney } = await import('@ombre/shared');
+    const extras = chosenExtras(form);
+    return collectAct(
+      request,
+      form,
+      lang,
+      (code) => `/bookings/${encodeURIComponent(code)}/extras`,
+      'POST',
+      { extras, collect: form('collect') === 'later' ? 'later' : 'desk' },
+      { invalid_state: 'extras_add_invalid' },
+      (data) => {
+        const grown = data as { addedCents: number; remainingCents: number };
+        return getDictionary(lang, config.brandName).collect.extrasDone(formatMoney(grown.addedCents, lang), formatMoney(grown.remainingCents, lang));
+      },
+    );
+  },
+
+  // The test payment of a public /paga/{token} link (spec §4.3): the payment is opened
+  // with the test provider and its outcome is delivered at once, like the checkout one.
+  async 'paga-prova'(_request, form, lang) {
+    const secret = process.env.OMBRE_SANDBOX_WEBHOOK_SECRET;
+    const token = form('token');
+    const outcome = form('outcome');
+    if (!secret) return new Response('Not found', { status: 404 });
+    if (!/^[A-Za-z0-9._-]{10,200}$/.test(token) || (outcome !== 'succeeded' && outcome !== 'failed')) return bad();
+    const back = payPath(lang, token);
+    const started = await apiCall<{ payment: { reference: string } }>('POST', `/v1/pay-requests/${encodeURIComponent(token)}/payments`);
+    if (!started.ok) {
+      // The balance has changed under two pending requests: a clear message, not a neutral one.
+      if (started.status === 409) return { to: withQuery(back, { esito: 'residuo' }) };
+      // Any unusable token: back to the page, which answers the same polite 404.
+      if (started.status === 404) return { to: back };
+      return { to: withQuery(back, { esito: 'errore' }) };
+    }
+    const delivered = await sandboxNotify(started.data.payment.reference, outcome, secret);
+    if (!delivered) return { to: withQuery(back, { esito: 'errore' }) };
+    return { to: withQuery(back, { esito: outcome === 'succeeded' ? 'ok' : 'fallito' }) };
   },
   'banco-sposta': (request, form, lang) =>
     manage(request, form, lang, `/bookings/${encodeURIComponent(form('code'))}/move`, 'POST', { spotId: form('spot') }),

@@ -140,8 +140,16 @@ export function manageCommsPath(locale: Locale, beachSlug: string): string {
   return `${accountPath(locale, 'manage', beachSlug)}/${manageCommsSegment[locale]}`;
 }
 
+/** Last segment of the «Incassi e richieste» page of one booking (spec §4.3, D31). */
+export const manageCollectSegment: Record<Locale, string> = { it: 'incassi', en: 'payments' };
+
+/** Address of the collections page of a beach club; the booking code travels in the query. */
+export function manageCollectPath(locale: Locale, beachSlug: string): string {
+  return `${accountPath(locale, 'manage', beachSlug)}/${manageCollectSegment[locale]}`;
+}
+
 /** The pages one level under the management page of a beach club: the depth whitelist. */
-const manageSubPages: Record<Locale, string>[] = [beachLayoutSegment, manageCabinsSegment, manageTodaySegment, manageStatsSegment, manageDealsSegment, manageExtrasSegment, manageCommsSegment];
+const manageSubPages: Record<Locale, string>[] = [beachLayoutSegment, manageCabinsSegment, manageTodaySegment, manageStatsSegment, manageDealsSegment, manageExtrasSegment, manageCommsSegment, manageCollectSegment];
 
 /**
  * The temporary public payment page /paga/{token} (spec §4.3): a new first-level

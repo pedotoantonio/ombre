@@ -48,6 +48,9 @@ const nextConfig: NextConfig = {
       { source: '/', destination: '/it' },
       { source: '/bagni/:path*', destination: '/it/bagni/:path*' },
       { source: '/area/:path*', destination: '/it/area/:path*' },
+      // The public payment page (spec §4.3): both languages share the internal /paga segment.
+      { source: '/paga/:path*', destination: '/it/paga/:path*' },
+      { source: '/en/pay/:path*', destination: '/en/paga/:path*' },
       { source: '/:slug((?!(?:it|en|_next|api)$)[^/.]+)', destination: '/it/:slug' },
     ];
   },
