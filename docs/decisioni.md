@@ -244,3 +244,46 @@ del gestore, occupante tracciato). Nuovo ruolo `cabin_holder` e permesso
 `cabins.manage`. Nessun denaro nel sistema: periodi, persone e approvazioni; i canoni
 si regolano fuori, come oggi per i flussi economici non attivi. Le cabine non
 compaiono nel pubblico.
+
+## D28 — Iterazione dal confronto con un gestionale di mercato — accettata (16/11/2026)
+
+Dal confronto con spiagge.it (gruppo Zucchetti) emergono tredici mancanze,
+classificate in [specifica-confronto-gestionale.md](specifica-confronto-gestionale.md):
+sei si costruiscono ora in due ondate (A operativa: console del giorno,
+statistiche, postazione consigliata; B commerciale: convenzioni, extra,
+acconti e comunicazioni — in tre incrementi B1→B2→B3 ciascuno consegnabile da
+solo), le altre dipendono da fornitori o restano registrate. Il planner a
+linea temporale è rinviato: rende con le prenotazioni multi-giorno, che oggi
+non ci sono.
+
+## D29 — Console operativa: JavaScript di arricchimento ammesso, via senza script completa — accettata (16/11/2026)
+
+Su riferimento del committente (pagina operativa di spiagge.it PRO,
+[schermata](grafica/riferimento-console-operativa.png)) la console «Oggi sulla
+spiaggia» riprende l'impostazione a scena intera con tessere per postazione,
+resa nella grafica di Ombrè e derivata dallo stesso disegno dell'editor (la
+scena è la griglia, non una ricostruzione libera; nessun asset altrui). Deroga
+puntuale al vincolo trasversale: in questa sola pagina è ammesso JavaScript di
+arricchimento, in linea e di prima parte, con ogni funzione completa anche
+senza script e CSP invariata.
+
+## D30 — Convenzioni: l'ospite paga il prezzo convenzionato — accettata (16/11/2026)
+
+La convenzione applica all'ospite il prezzo concordato (mai sopra il listino);
+il rendiconto per struttura è informativo, per la riconciliazione mensile; la
+ripartizione economica resta quella ordinaria sul totale scontato, anche sulle
+giornate condivise. La variante con fattura mensile alla struttura (ospite che
+non paga) è rinviata e poggerà sulle fondamenta di D31. Un codice vive in un
+solo registro: convenzioni e promozioni si escludono a vicenda anche nel nome.
+
+## D31 — Più pagamenti per prenotazione e incasso rinviato — accettata (16/11/2026)
+
+Ogni pagamento acquisisce uno scopo (`checkout`, `desk`, `request`); il
+residuo è il totale meno i pagamenti riusciti; il webhook instrada per scopo e
+l'esito di una richiesta non passa mai dal percorso conferma/annulla del
+checkout. Al banco una prenotazione può essere confermata «da incassare»: pass
+subito (D5: pagare non è entrare), vendita registrata alla conferma, stato di
+pagamento derivato (saldata/parziale/da incassare). Le richieste di pagamento
+hanno token firmato, scadenza entro il giorno prenotato e link pubblico
+`/paga/{token}` col fornitore di prova; la tabella `notification` si estende a
+coda di messaggi pronti per il fornitore vero.
