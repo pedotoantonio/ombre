@@ -85,7 +85,7 @@ describe('routes', () => {
   });
 
   it('tell the pages of the site from unknown addresses, and in which language they are written', () => {
-    const known = ['/', '/en', '/esplora', '/en/explore', '/bagni/lido-aurora', '/bagni/lido-aurora/prenota', '/en/beach-clubs/lido-aurora/hold/abc', '/bagni/lido-aurora/prenotazione/abc', '/area/accesso', '/en/account/sign-in', '/area/gestione/lido-aurora', '/en/account/season/abc'];
+    const known = ['/', '/en', '/esplora', '/en/explore', '/bagni/lido-aurora', '/bagni/lido-aurora/prenota', '/en/beach-clubs/lido-aurora/hold/abc', '/bagni/lido-aurora/prenotazione/abc', '/area/accesso', '/en/account/sign-in', '/area/gestione/lido-aurora', '/en/account/season/abc', '/area/gestione/lido-aurora/extra', '/en/account/manage/lido-aurora/extras'];
     for (const path of known) expect(readAddress(path), path).toMatchObject({ known: true });
     const unknown = ['/pagina-che-non-esiste', '/fr', '/en/come-funziona', '/en/bagni/lido-aurora', '/bagni', '/bagni/lido-aurora/book', '/bagni/a/b/c/d', '/area', '/area/gestione', '/area/accesso/altro', '/a/b', '/it/esplora'];
     for (const path of unknown) expect(readAddress(path), path).toMatchObject({ known: false });

@@ -213,6 +213,7 @@ Gli indirizzi senza riferimento nel progetto v3.0 sono **proposte**.
 | Console operativa «Oggi sulla spiaggia» | `/area/gestione/{slug}/oggi` · `/en/account/manage/{slug}/today` | No, con accesso | Oggi sulla spiaggia · {Bagno} | Oggi sulla spiaggia — {Bagno} | — |
 | Statistiche dello stabilimento | `/area/gestione/{slug}/statistiche` · `/en/account/manage/{slug}/statistics` | No, con accesso | Statistiche · {Bagno} | Statistiche di {Bagno} | — |
 | Convenzioni hotel dello stabilimento | `/area/gestione/{slug}/convenzioni` · `/en/account/manage/{slug}/partner-deals` | No, con accesso | Convenzioni · {Bagno} | Convenzioni di {Bagno} | — |
+| Servizi extra dello stabilimento | `/area/gestione/{slug}/extra` · `/en/account/manage/{slug}/extras` | No, con accesso | Servizi extra · {Bagno} | Servizi extra di {Bagno} | — |
 
 Ogni pagina ha title sotto i 60 caratteri circa, una descrizione propria di 140–160
 caratteri che dice cosa si può fare lì, e un H1 diverso da quello delle altre pagine. Sul

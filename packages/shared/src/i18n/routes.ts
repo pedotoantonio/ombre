@@ -124,8 +124,16 @@ export function manageDealsPath(locale: Locale, beachSlug: string): string {
   return `${accountPath(locale, 'manage', beachSlug)}/${manageDealsSegment[locale]}`;
 }
 
+/** Last segment of the extra services page, under the management page of a beach club. */
+export const manageExtrasSegment: Record<Locale, string> = { it: 'extra', en: 'extras' };
+
+/** Address of the extra services page of a beach club, inside the reserved area. */
+export function manageExtrasPath(locale: Locale, beachSlug: string): string {
+  return `${accountPath(locale, 'manage', beachSlug)}/${manageExtrasSegment[locale]}`;
+}
+
 /** The pages one level under the management page of a beach club: the depth whitelist. */
-const manageSubPages: Record<Locale, string>[] = [beachLayoutSegment, manageCabinsSegment, manageTodaySegment, manageStatsSegment, manageDealsSegment];
+const manageSubPages: Record<Locale, string>[] = [beachLayoutSegment, manageCabinsSegment, manageTodaySegment, manageStatsSegment, manageDealsSegment, manageExtrasSegment];
 
 /** Internal address of the page shown for unknown addresses. It is never linked. */
 export const notFoundSegment = 'pagina-non-trovata';

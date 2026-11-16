@@ -23,7 +23,24 @@ import {
   type SpotMark as SpotMarkKind,
   type SpotZone,
 } from '@ombre/shared';
-import { api, dayPattern, formatDay, formatTime, isDay, slugPattern, uuidPattern, type ApiBeach, type ApiLayoutElement, type ApiMapSpot, type ApiSpot, type ApiZoneGaps } from '@/lib/api';
+import {
+  api,
+  dayPattern,
+  formatDay,
+  formatTime,
+  isDay,
+  localName,
+  slugPattern,
+  uuidPattern,
+  type ApiBeach,
+  type ApiExtraLine,
+  type ApiExtraRequest,
+  type ApiExtraService,
+  type ApiLayoutElement,
+  type ApiMapSpot,
+  type ApiSpot,
+  type ApiZoneGaps,
+} from '@/lib/api';
 import { JsonLd, privateMetadata } from '@/lib/seo';
 import { PageHead, PageShell, type Crumb } from './PageShell';
 import { BeachSite, localBusinessData } from './site-view';
@@ -880,7 +897,15 @@ export async function BeachView({ lang, section, slug, query }: { lang: string; 
   );
 }
 
-export function PriceSummary({ locale, rows, quote }: { locale: Locale; rows: [string, string][]; quote: { listPriceCents: number; discountCents: number; totalCents: number; promoCode: string | null } }) {
+export function PriceSummary({
+  locale,
+  rows,
+  quote,
+}: {
+  locale: Locale;
+  rows: [string, string][];
+  quote: { listPriceCents: number; discountCents: number; extrasCents: number; totalCents: number; promoCode: string | null; extras: ApiExtraLine[] };
+}) {
   const t = getDictionary(locale, config.brandName).booking;
   return (
     <dl className="summary">
@@ -900,11 +925,89 @@ export function PriceSummary({ locale, rows, quote }: { locale: Locale; rows: [s
           <dd>{formatMoney(-quote.discountCents, locale)}</dd>
         </div>
       ) : null}
+      {/* The chosen extras, one line each with its frozen subtotal, then their sum (spec §4.2). */}
+      {quote.extras.map((line) => (
+        <div key={line.serviceId}>
+          <dt>{t.extraLine(localName(line.name, locale), line.quantity)}</dt>
+          <dd>{formatMoney(line.subtotalCents, locale)}</dd>
+        </div>
+      ))}
+      {quote.extras.length > 0 ? (
+        <div>
+          <dt>{t.extrasRow}</dt>
+          <dd>{formatMoney(quote.extrasCents, locale)}</dd>
+        </div>
+      ) : null}
       <div className="summary__total">
         <dt>{t.total}</dt>
         <dd>{formatMoney(quote.totalCents, locale)}</dd>
       </div>
     </dl>
+  );
+}
+
+/** A quantity between 1 and the ceiling of 20, as the extras fields write it. */
+const extraQuantityPattern = /^(?:[1-9]|1\d|20)$/;
+
+/**
+ * The quantities asked in the address, read against the catalogue of the club: one field
+ * per service, named after it, so the choice survives the GET round trips like the promo code.
+ */
+export function readExtrasQuery(query: Query, catalogue: ApiExtraService[]): ApiExtraRequest[] {
+  return catalogue.flatMap((service) => {
+    const asked = first(query[`extra-${service.serviceId}`]);
+    return asked && extraQuantityPattern.test(asked) ? [{ serviceId: service.serviceId, quantity: Number(asked) }] : [];
+  });
+}
+
+/** The chosen quantities as hidden fields, so they travel with the promo form and up to the hold. */
+export function ExtrasHidden({ chosen }: { chosen: ApiExtraRequest[] }) {
+  return (
+    <>
+      {chosen.map((entry) => (
+        <input key={entry.serviceId} type="hidden" name={`extra-${entry.serviceId}`} value={entry.quantity} />
+      ))}
+    </>
+  );
+}
+
+/**
+ * One labelled quantity field per extra service, 0 to 20, shared by the guest summary and
+ * the front desk form. Plain number inputs: the totals are recomputed at submit, no scripts.
+ */
+export function ExtraQuantityFields({
+  locale,
+  idPrefix,
+  catalogue,
+  chosen,
+}: {
+  locale: Locale;
+  idPrefix: string;
+  catalogue: ApiExtraService[];
+  chosen: ApiExtraRequest[];
+}) {
+  const t = getDictionary(locale, config.brandName).booking;
+  const quantities = new Map(chosen.map((entry) => [entry.serviceId, entry.quantity]));
+  return (
+    <>
+      {catalogue.map((service) => (
+        <div className="field" key={service.serviceId}>
+          <label htmlFor={`${idPrefix}-${service.serviceId}`}>
+            {localName(service.name, locale)} · {formatMoney(service.unitPriceCents, locale)}
+            <span className="visually-hidden">. {t.extraQuantity(localName(service.name, locale))}</span>
+          </label>
+          <input
+            id={`${idPrefix}-${service.serviceId}`}
+            type="number"
+            name={`extra-${service.serviceId}`}
+            inputMode="numeric"
+            min={0}
+            max={20}
+            defaultValue={quantities.get(service.serviceId) ?? 0}
+          />
+        </div>
+      ))}
+    </>
   );
 }
 
@@ -916,13 +1019,32 @@ export async function BookView({ lang, section, slug, step, query }: { lang: str
   const day = first(query.day) ?? '';
   if (!uuidPattern.test(spotId) || !dayPattern.test(day)) notFound();
 
+  // The extras of the club, public only inside this flow (spec §4.2), and the asked quantities.
+  const catalogueResult = await api.extras(beach.slug);
+  const catalogue = catalogueResult.ok ? catalogueResult.data.extras : [];
+  let chosen = readExtrasQuery(query, catalogue);
+
   const promoAsked = first(query.promo)?.trim().slice(0, 40) || undefined;
   const request = { beachSlug: beach.slug, spotId, day };
-  let quote = await api.quote({ ...request, promoCode: promoAsked });
+  const withExtras = () => (chosen.length > 0 ? { extras: chosen } : {});
+  let quote = await api.quote({ ...request, ...withExtras(), promoCode: promoAsked });
   let promoRefused = Boolean(first(query.promoError));
+  let extrasRefused = Boolean(first(query.extrasError));
+  // A refused code or a retired service does not block the page: the part is dropped,
+  // the quote is recomputed without it and a clear message says what happened.
+  if (!quote.ok && quote.code === 'extra_not_available') {
+    extrasRefused = true;
+    chosen = [];
+    quote = await api.quote({ ...request, promoCode: promoAsked });
+  }
   if (!quote.ok && quote.code === 'promo_not_applicable') {
     promoRefused = true;
-    quote = await api.quote(request);
+    quote = await api.quote({ ...request, ...withExtras() });
+    if (!quote.ok && quote.code === 'extra_not_available') {
+      extrasRefused = true;
+      chosen = [];
+      quote = await api.quote(request);
+    }
   }
   const availability = await api.availability(beach.slug, day);
   const spot = availability.ok ? availability.data.spots.find((candidate) => candidate.spotId === spotId) : undefined;
@@ -948,6 +1070,7 @@ export async function BookView({ lang, section, slug, step, query }: { lang: str
             <div className="stack">
               <h2>{t.summaryTitle}</h2>
               {promoRefused ? <p className="alert" role="alert">{t.promoInvalid}</p> : null}
+              {extrasRefused ? <p className="alert" role="alert">{t.extrasInvalid}</p> : null}
               <PriceSummary
                 locale={locale}
                 quote={quote.data}
@@ -957,9 +1080,26 @@ export async function BookView({ lang, section, slug, step, query }: { lang: str
                   [t.equipmentRow, t.equipment(spot.umbrellas, spot.sunbeds)],
                 ]}
               />
+              {/* The extras picker: the quote is recomputed at submit, like the promo code (spec §4.2). */}
+              {catalogue.length > 0 ? (
+                <div className="panel">
+                  <h3>{t.extrasTitle}</h3>
+                  <p className="prose">{t.extrasLead}</p>
+                  <form className="form-row" method="get" action={selfHref}>
+                    <input type="hidden" name="spot" value={spotId} />
+                    <input type="hidden" name="day" value={day} />
+                    {quote.data.promoCode ? <input type="hidden" name="promo" value={quote.data.promoCode} /> : null}
+                    <ExtraQuantityFields locale={locale} idPrefix="extra" catalogue={catalogue} chosen={chosen} />
+                    <button className="button button--secondary" type="submit">
+                      {t.extrasApply}
+                    </button>
+                  </form>
+                </div>
+              ) : null}
               <form className="form-row" method="get" action={selfHref}>
                 <input type="hidden" name="spot" value={spotId} />
                 <input type="hidden" name="day" value={day} />
+                <ExtrasHidden chosen={chosen} />
                 <div className="field">
                   <label htmlFor="promo">{t.promoLabel}</label>
                   <input id="promo" name="promo" defaultValue={quote.data.promoCode ?? ''} maxLength={40} autoComplete="off" autoCapitalize="characters" />
@@ -978,6 +1118,7 @@ export async function BookView({ lang, section, slug, step, query }: { lang: str
                 <input type="hidden" name="spot" value={spotId} />
                 <input type="hidden" name="day" value={day} />
                 <input type="hidden" name="promo" value={quote.data.promoCode ?? ''} />
+                <ExtrasHidden chosen={chosen} />
                 <input type="hidden" name="key" value={`web-${crypto.randomUUID()}`} />
                 <button className="button button--block" type="submit">
                   {t.holdButton}

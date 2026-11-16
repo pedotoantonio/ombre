@@ -19,6 +19,8 @@ import {
   manageCabinsSegment,
   manageDealsPath,
   manageDealsSegment,
+  manageExtrasPath,
+  manageExtrasSegment,
   manageStatsPath,
   manageStatsSegment,
   manageTodayPath,
@@ -28,10 +30,12 @@ import {
   type Locale,
   type SpotZone,
 } from '@ombre/shared';
-import { api, apiCall, dayPattern, formatDate, formatDay, formatPeriod, slugPattern, uuidPattern } from '@/lib/api';
+import { api, apiCall, dayPattern, formatDate, formatDay, formatPeriod, localName, slugPattern, uuidPattern, type ApiExtraService, type ApiLocalName } from '@/lib/api';
+import { ExtraQuantityFields } from './beach';
 import { BeachLayoutView } from './beach-layout';
 import { CabinHolderView, CabinsManageView, CabinsTodayPanel } from './cabins';
 import { ConventionsView, dealPriceText } from './conventions';
+import { ExtrasView } from './extras';
 import { OperationsView } from './operations';
 import { StatisticsView } from './statistics';
 import { privateMetadata } from '@/lib/seo';
@@ -104,7 +108,9 @@ export async function accountMetadata(locale: Locale, segments: string[]): Promi
               ? t.stats.short
               : segments[2] === manageDealsSegment[locale]
                 ? t.deals.short
-                : null;
+                : segments[2] === manageExtrasSegment[locale]
+                  ? t.extras.short
+                  : null;
     if (subTitle !== null) {
       const beachSession = await signedIn();
       const club = beachSession?.me.memberships.find((entry) => entry.beachSlug === id)?.beachName;
@@ -329,6 +335,8 @@ interface BookingRow {
   guestName: string;
   spotCode: string;
   totalCents: number;
+  /** The extra services to hand over with the spot (spec §4.2). */
+  extras: { name: ApiLocalName; quantity: number }[];
 }
 interface Proposal {
   proposalId: string;
@@ -353,6 +361,7 @@ interface DeskConvention {
 async function ManageView({ locale, beachSlug, query }: { locale: Locale; beachSlug: string; query: Query }) {
   if (!slugPattern.test(beachSlug)) notFound();
   const t = getDictionary(locale, config.brandName).account;
+  const extraLine = getDictionary(locale, config.brandName).booking.extraLine;
   const { me, token } = await requireMe(locale);
   const membership = me.memberships.find((entry) => entry.beachSlug === beachSlug);
   if (!membership) notFound();
@@ -377,6 +386,9 @@ async function ManageView({ locale, beachSlug, query }: { locale: Locale; beachS
     // The conventions the desk may pick for the day, active and valid on it (spec §4.1).
     can(role, 'bookings.create') ? apiCall<{ conventions: DeskConvention[] }>('GET', `${base}/desk-conventions?day=${day}`, { token }) : null,
   ]);
+  // The active extras of the club: the desk sells them with the spot, same catalogue as online (spec §4.2).
+  const deskExtras = can(role, 'bookings.create') ? await api.extras(beachSlug) : null;
+  const deskCatalogue: ApiExtraService[] = deskExtras?.ok ? deskExtras.data.extras : [];
   const position = beachCard?.ok ? { latitude: beachCard.data.beach.latitude, longitude: beachCard.data.beach.longitude } : null;
   const deskConventions = deskDeals?.ok ? deskDeals.data.conventions : [];
   // Optional party size: with it the desk list carries the recommended spot (spec §3.3).
@@ -435,6 +447,11 @@ async function ManageView({ locale, beachSlug, query }: { locale: Locale; beachS
             {can(role, 'promotions.manage') ? (
               <Link className="button button--secondary" href={manageDealsPath(locale, beachSlug)}>
                 {t.openDeals}
+              </Link>
+            ) : null}
+            {can(role, 'promotions.manage') ? (
+              <Link className="button button--secondary" href={manageExtrasPath(locale, beachSlug)}>
+                {t.openExtras}
               </Link>
             ) : null}
           </p>
@@ -547,6 +564,14 @@ async function ManageView({ locale, beachSlug, query }: { locale: Locale; beachS
                           <p className="field__hint" id="banco-convenzione-nota">{t.deskConventionHint}</p>
                         </div>
                       ) : null}
+                      {/* The extras of the desk: same quantity fields as the public summary (spec §4.2). */}
+                      {deskCatalogue.length > 0 ? (
+                        <fieldset className="form-row">
+                          <legend>{t.deskExtras}</legend>
+                          <p className="field__hint">{t.deskExtrasHint}</p>
+                          <ExtraQuantityFields locale={locale} idPrefix="banco-extra" catalogue={deskCatalogue} chosen={[]} />
+                        </fieldset>
+                      ) : null}
                       <button className="button button--secondary" type="submit">{t.deskBook}</button>
                     </form>
                   )}
@@ -556,12 +581,16 @@ async function ManageView({ locale, beachSlug, query }: { locale: Locale; beachS
               {bookings.data.bookings.length === 0 ? (
                 <p className="prose">{t.noBookings}</p>
               ) : (
-                <DataTable label={t.bookingsTitle} columns={[t.code, t.spot, t.guest, t.booking, t.presence, t.actions].map((label) => ({ label }))}>
+                <DataTable label={t.bookingsTitle} columns={[t.code, t.spot, t.guest, t.colExtras, t.booking, t.presence, t.actions].map((label) => ({ label }))}>
                   {bookings.data.bookings.map((row) => (
                     <Row key={row.code}>
                       <Cell label={t.code}>{row.code}</Cell>
                       <Cell label={t.spot}>{row.spotCode}</Cell>
                       <Cell label={t.guest}>{row.guestName}</Cell>
+                      {/* The extras to hand over with the spot (spec §4.2). */}
+                      <Cell label={t.colExtras}>
+                        {row.extras.length === 0 ? null : row.extras.map((line) => extraLine(localName(line.name, locale), line.quantity)).join(', ')}
+                      </Cell>
                       <Cell label={t.booking}>{t.bookingStates[row.status]}</Cell>
                       <Cell label={t.presence}>{t.presences[row.presence]}</Cell>
                       <Cell label={t.actions}>
@@ -889,6 +918,8 @@ export async function AccountRoute({ locale, segments, query }: { locale: Locale
     return <StatisticsView locale={locale} beachSlug={segments[1]!} query={query} />;
   if (segments.length === 3 && page === 'manage' && segments[2] === manageDealsSegment[locale])
     return <ConventionsView locale={locale} beachSlug={segments[1]!} query={query} />;
+  if (segments.length === 3 && page === 'manage' && segments[2] === manageExtrasSegment[locale])
+    return <ExtrasView locale={locale} beachSlug={segments[1]!} query={query} />;
   if (segments.length === 2 && page === 'season') return <SeasonView locale={locale} contractId={segments[1]!} query={query} />;
   if (segments.length === 2 && page === 'site') return <SiteEditorView locale={locale} beachSlug={segments[1]!} query={query} />;
   notFound();

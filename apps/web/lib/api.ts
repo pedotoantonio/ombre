@@ -82,11 +82,47 @@ export interface ApiLayoutElement {
   colEnd: number | null;
 }
 
+/** A name written in Italian, with the optional English version (spec §4.2). */
+export interface ApiLocalName {
+  it: string;
+  en: string | null;
+}
+
+/** The localized form of a name: English falls back to Italian when the manager gave none. */
+export function localName(name: ApiLocalName, locale: 'it' | 'en'): string {
+  return locale === 'en' ? (name.en ?? name.it) : name.it;
+}
+
+/** An extra service a guest can add while booking, with its public unit price (spec §4.2). */
+export interface ApiExtraService {
+  serviceId: string;
+  name: ApiLocalName;
+  unitPriceCents: number;
+}
+
+/** A chosen extra, as quotes, holds and bookings carry it: frozen price and subtotal per line. */
+export interface ApiExtraLine {
+  serviceId: string;
+  name: ApiLocalName;
+  quantity: number;
+  unitPriceCents: number;
+  subtotalCents: number;
+}
+
+/** The quantities a request asks for, one entry per service. */
+export interface ApiExtraRequest {
+  serviceId: string;
+  quantity: number;
+}
+
 export interface ApiQuote {
+  /** Price and discount mean the spot alone; the extras are separate and the total is comprehensive. */
   listPriceCents: number;
   discountCents: number;
+  extrasCents: number;
   totalCents: number;
   promoCode: string | null;
+  extras: ApiExtraLine[];
 }
 
 export interface ApiHold extends ApiQuote {
@@ -146,6 +182,7 @@ export interface DayRequest {
   spotId: string;
   day: string;
   promoCode?: string;
+  extras?: ApiExtraRequest[];
 }
 
 function searchQuery(search: BeachSearch): string {
@@ -169,6 +206,8 @@ export const api = {
     call<{ spots: ApiSpot[]; layout: ApiMapSpot[]; gaps: ApiZoneGaps; seaSide: SeaSide; elements: ApiLayoutElement[]; guests?: number; suggestedSpotId?: string | null }>(
       `/v1/beaches/${encodeURIComponent(slug)}/availability?day=${encodeURIComponent(day)}${guests ? `&guests=${guests}` : ''}`,
     ),
+  // The active extra services of one club: public only here, inside its booking flow (spec §4.2).
+  extras: (slug: string) => call<{ beach: ApiBeach; currency: string; extras: ApiExtraService[] }>(`/v1/beaches/${encodeURIComponent(slug)}/extras`),
   quote: (request: DayRequest) => post<ApiQuote>('/v1/quotes', request),
   hold: (request: DayRequest, idempotencyKey: string) =>
     post<{ holdId: string }>('/v1/holds', request, { 'Idempotency-Key': idempotencyKey }),

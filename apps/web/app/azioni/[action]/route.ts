@@ -1,4 +1,4 @@
-import { accountPath, beachLayoutPath, beachPath, bookingPath, bookPath, holdPath, isLocale, manageCabinsPath, manageDealsPath, manageTodayPath, parseEuro, type Locale } from '@ombre/shared';
+import { accountPath, beachLayoutPath, beachPath, bookingPath, bookPath, holdPath, isLocale, manageCabinsPath, manageDealsPath, manageExtrasPath, manageTodayPath, parseEuro, type Locale } from '@ombre/shared';
 import { api, apiCall, dayPattern, sandboxNotify, slugPattern, uuidPattern } from '@/lib/api';
 import { clearSessionCookieHeader, sessionCookie, sessionCookieHeader } from '@/lib/session';
 
@@ -118,6 +118,27 @@ async function dealsAct(request: Request, form: Form, lang: Locale, path: string
   return { to: back, err: errorMap[code] ?? code };
 }
 
+/** Runs an extra services call and returns to the extras page with the result (spec §4.2). */
+async function extrasAct(request: Request, form: Form, lang: Locale, path: string, method: string, body: unknown, errorMap: Record<string, string> = {}): Promise<Outcome> {
+  const beach = form('beach');
+  if (!slugPattern.test(beach)) return bad();
+  const result = await apiCall<unknown>(method, `/v1/manage/beaches/${beach}/extras${path}`, { body, token: cookieToken(request) });
+  const back = manageExtrasPath(lang, beach);
+  if (result.ok) return { to: back, ok: '1' };
+  if (result.status === 401) return { to: accountPath(lang, 'signIn') };
+  const code = result.status === 0 ? 'unavailable' : result.code;
+  return { to: back, err: errorMap[code] ?? code };
+}
+
+/** The quantity fields of the extras, named extra-<serviceId>, as the chosen services. */
+function chosenExtras(form: Form): { serviceId: string; quantity: number }[] {
+  const text = form('extras');
+  return text === '' ? [] : text.split(',').map((entry) => {
+    const [serviceId = '', quantity = ''] = entry.split(':');
+    return { serviceId, quantity: Number(quantity) };
+  });
+}
+
 /** A percentage with up to two decimals, as basis points; -1 so the API refuses what is not one. */
 function percentBps(text: string): number {
   const match = /^(\d{1,3})(?:[.,](\d{1,2}))?$/.exec(text.trim());
@@ -149,10 +170,14 @@ const actions: Record<string, (request: Request, form: Form, lang: Locale) => Pr
     const day = form('day');
     const key = form('key');
     const promo = form('promo').trim();
+    const extras = chosenExtras(form);
     if (!slugPattern.test(beach) || !uuidPattern.test(spotId) || !dayPattern.test(day) || !/^web-[0-9a-f-]{36}$/.test(key)) return bad();
-    const result = await api.hold({ beachSlug: beach, spotId, day, ...(promo ? { promoCode: promo } : {}) }, key);
+    const result = await api.hold({ beachSlug: beach, spotId, day, ...(promo ? { promoCode: promo } : {}), ...(extras.length > 0 ? { extras } : {}) }, key);
     if (result.ok) return { to: holdPath(lang, beach, result.data.holdId) };
-    if (result.code === 'promo_not_applicable') return { to: `${bookPath(lang, beach)}?spot=${spotId}&day=${day}&promoError=1` };
+    // The chosen quantities come back in the address, next to the message that explains the refusal.
+    const extrasQuery = extras.map((entry) => `&extra-${entry.serviceId}=${entry.quantity}`).join('');
+    if (result.code === 'promo_not_applicable') return { to: `${bookPath(lang, beach)}?spot=${spotId}&day=${day}${extrasQuery}&promoError=1` };
+    if (result.code === 'extra_not_available') return { to: `${bookPath(lang, beach)}?spot=${spotId}&day=${day}${promo ? `&promo=${encodeURIComponent(promo)}` : ''}&extrasError=1` };
     if (result.code === 'inventory_conflict') return { to: `${beachPath(lang, beach)}?day=${day}&taken=1` };
     if (result.status === 404) return new Response('Not found', { status: 404 });
     return new Response('Service unavailable', { status: 503 });
@@ -232,13 +257,21 @@ const actions: Record<string, (request: Request, form: Form, lang: Locale) => Pr
     const { getDictionary, config } = await import('@ombre/shared');
     // An optional convention, picked from the list of the day; never a typed code (spec §4.1).
     const convention = form('convention');
+    // The extras of the desk follow the same quantity fields as the public flow (spec §4.2).
+    const extras = chosenExtras(form);
     return manage(
       request,
       form,
       lang,
       '/desk-bookings',
       'POST',
-      { spotId: form('spot'), day: form('day'), guestName: form('name'), ...(uuidPattern.test(convention) ? { conventionId: convention } : {}) },
+      {
+        spotId: form('spot'),
+        day: form('day'),
+        guestName: form('name'),
+        ...(uuidPattern.test(convention) ? { conventionId: convention } : {}),
+        ...(extras.length > 0 ? { extras } : {}),
+      },
       (data) => getDictionary(lang, config.brandName).account.deskDone((data as { code: string }).code),
     );
   },
@@ -662,11 +695,58 @@ const actions: Record<string, (request: Request, form: Form, lang: Locale) => Pr
     return dealsAct(request, form, lang, `/${encodeURIComponent(conventionId)}`, 'DELETE', undefined, { invalid_state: 'convention_used' });
   },
 
-  'reception-accesso': (request, form, lang) =>
-    manage(request, form, lang, '/access-events', 'POST', { credential: form('credential'), kind: form('kind') }, (data) => {
-      const entry = data as { code: string; spotCode: string; guestName: string };
-      return `${entry.code} · ${entry.spotCode} · ${entry.guestName}`;
-    }),
+  // Extra services (spec §4.2): one form for creation and edit, retirement and deletion.
+  async 'extra-salva'(request, form, lang) {
+    const beach = form('beach');
+    if (!slugPattern.test(beach)) return bad();
+    const serviceId = form('service');
+    const editing = uuidPattern.test(serviceId);
+    // A refusal comes back next to the form, keeping the edit open when there was one.
+    const backTo = (merr: string): Outcome => ({
+      to: `${withQuery(manageExtrasPath(lang, beach), { ...(editing ? { modifica: serviceId } : {}), merr })}#modulo-extra`,
+    });
+    const price = parseEuro(form('price'));
+    if (price === null) return backTo('invalid_request');
+    const position = form('position').trim();
+    const payload = {
+      nameIt: form('nameIt').trim(),
+      nameEn: form('nameEn').trim() || null,
+      unitPriceCents: price,
+      position: position === '' ? 0 : /^\d{1,5}$/.test(position) ? Number(position) : -1,
+    };
+    const result = await apiCall(editing ? 'PUT' : 'POST', `/v1/manage/beaches/${beach}/extras${editing ? `/${encodeURIComponent(serviceId)}` : ''}`, {
+      body: payload,
+      token: cookieToken(request),
+    });
+    if (result.ok) return { to: manageExtrasPath(lang, beach), ok: '1' };
+    if (result.status === 401) return { to: accountPath(lang, 'signIn') };
+    return backTo(result.status === 0 ? 'unavailable' : result.code === 'invalid_state' ? 'invalid_request' : result.code);
+  },
+  'extra-stato': (request, form, lang) => {
+    const serviceId = form('service');
+    if (!uuidPattern.test(serviceId)) return Promise.resolve(bad());
+    return extrasAct(request, form, lang, `/${encodeURIComponent(serviceId)}/status`, 'POST', { active: form('active') === 'yes' });
+  },
+  'extra-elimina': (request, form, lang) => {
+    const serviceId = form('service');
+    if (!uuidPattern.test(serviceId)) return Promise.resolve(bad());
+    // A used service cannot be deleted: the message points at retirement instead.
+    return extrasAct(request, form, lang, `/${encodeURIComponent(serviceId)}`, 'DELETE', undefined, { invalid_state: 'extra_used' });
+  },
+
+  'reception-accesso': async (request, form, lang) => {
+    const { getDictionary, config } = await import('@ombre/shared');
+    const t = getDictionary(lang, config.brandName);
+    return manage(request, form, lang, '/access-events', 'POST', { credential: form('credential'), kind: form('kind') }, (data) => {
+      const entry = data as { code: string; spotCode: string; guestName: string; extras?: { name: { it: string; en: string | null }; quantity: number }[] };
+      const base = `${entry.code} · ${entry.spotCode} · ${entry.guestName}`;
+      // The extras to hand over, right in the outcome of the check (spec §4.2).
+      const extras = entry.extras ?? [];
+      if (extras.length === 0) return base;
+      const lines = extras.map((line) => t.booking.extraLine(lang === 'en' ? (line.name.en ?? line.name.it) : line.name.it, line.quantity)).join(', ');
+      return `${base} · ${t.account.toDeliver}: ${lines}`;
+    });
+  },
 
   async 'sito-salva'(request, form, lang) {
     const { demoImage, demoMedia } = await import('@ombre/shared');
@@ -739,6 +819,16 @@ export async function POST(request: Request, context: { params: Promise<{ action
 
   const data = await request.formData();
   const form: Form = (name) => {
+    // The extras travel as one quantity field per service (extra-<serviceId>, 1–20, a quantity
+    // of zero stays home): they are assembled as id:qty pairs, read back by chosenExtras.
+    if (name === 'extras') {
+      const pairs: string[] = [];
+      for (const [key, value] of data.entries()) {
+        const match = /^extra-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i.exec(key);
+        if (match && typeof value === 'string' && /^(?:[1-9]|1\d|20)$/.test(value.trim())) pairs.push(`${match[1]}:${value.trim()}`);
+      }
+      return pairs.join(',');
+    }
     // Checkboxes with the same name arrive as several values: they are joined.
     const field = name === 'weekdays' ? 'weekday' : name === 'spots' ? 'spot' : name;
     const values = data.getAll(field).filter((value): value is string => typeof value === 'string');
