@@ -12,9 +12,18 @@ type Party = 'season_holder' | 'beach_club' | 'platform';
  * Writes the money trail of a confirmed booking: the payment and each party's share.
  * An ordinary day has no season holder: that share stays with the beach club.
  * The leftover cents of the division always go to the beach club.
+ *
+ * Extras (spec §4.2) belong entirely to the beach club: a dedicated ledger movement
+ * in the same transaction, no platform fee, no seasonal share — on a shared day the
+ * split below starts from the spot price alone (total − extras).
  */
-export async function recordSale(tx: Transaction, beachId: string, sale: { bookingId: string; inventoryDayId: string; totalCents: number }): Promise<void> {
+export async function recordSale(tx: Transaction, beachId: string, sale: { bookingId: string; inventoryDayId: string; totalCents: number; extrasCents?: number }): Promise<void> {
+  const extrasCents = sale.extrasCents ?? 0;
   await tx.insert(ledgerEntry).values({ beachId, bookingId: sale.bookingId, kind: 'payment_received', amountCents: sale.totalCents });
+  if (extrasCents > 0) {
+    await tx.insert(ledgerEntry).values({ beachId, bookingId: sale.bookingId, kind: 'extras_revenue', party: 'beach_club', amountCents: extrasCents });
+  }
+  const spotCents = sale.totalCents - extrasCents;
   const [rule] = await tx.select().from(splitRule).orderBy(desc(splitRule.createdAt)).limit(1);
   if (!rule) return;
 
@@ -35,7 +44,7 @@ export async function recordSale(tx: Transaction, beachId: string, sale: { booki
         { party: 'beach_club', bps: rule.seasonHolderBps + rule.beachClubBps },
         { party: 'platform', bps: rule.platformBps },
       ];
-  const amounts = splitAmount(sale.totalCents, shares, 'beach_club');
+  const amounts = splitAmount(spotCents, shares, 'beach_club');
 
   for (const share of shares) {
     const amountCents = amounts[share.party];

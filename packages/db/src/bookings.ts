@@ -2,11 +2,12 @@ import { createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypt
 import { and, asc, eq, sql } from 'drizzle-orm';
 import { canTransition } from '@ombre/shared';
 import { withActor, withBeach, type Database, type Transaction } from './client';
-import { acquireHold, conventionAppliesOn, DomainError } from './inventory';
+import { bookingExtraLines, bookingExtraLinesByBooking } from './extras';
+import { acquireHold, conventionAppliesOn, DomainError, type ExtraLine, type ExtraRequest } from './inventory';
 import { enqueue } from './jobs';
 import { recordRefundDue, recordSale } from './ledger';
 import type { Actor } from './manage';
-import { accessEvent, allocation, auditEvent, beach, booking, hold, hotelConvention, inventoryDay, ledgerEntry, pass, payment, promotion, providerEvent, refund, spot } from './schema';
+import { accessEvent, allocation, auditEvent, beach, booking, bookingExtra, hold, holdExtra, hotelConvention, inventoryDay, ledgerEntry, pass, payment, promotion, providerEvent, refund, spot } from './schema';
 
 /** Signs identifiers so that links and passes cannot be guessed and need no stored secret per row. */
 function sign(secret: string, purpose: string, id: string): string {
@@ -97,11 +98,21 @@ export function startCheckout(db: Database, beachId: string, request: CheckoutRe
         locale: request.locale ?? 'it',
         listPriceCents: held.listPriceCents,
         discountCents: held.discountCents,
+        extrasCents: held.extrasCents,
         totalCents: held.totalCents,
         promoCode: held.promoCode,
       })
       .returning();
     if (!created) throw new Error('booking was not created');
+
+    // The conversion copies the hold snapshot: quantities and the unit prices
+    // frozen at reservation time (spec §4.2), whatever the catalogue says now.
+    const frozen = await tx.select().from(holdExtra).where(eq(holdExtra.holdId, held.id));
+    if (frozen.length > 0) {
+      await tx
+        .insert(bookingExtra)
+        .values(frozen.map((line) => ({ beachId, bookingId: created.id, serviceId: line.serviceId, quantity: line.quantity, unitPriceCents: line.unitPriceCents })));
+    }
 
     const provider = request.source === 'desk' ? 'desk' : 'sandbox';
     const reference = `${provider === 'desk' ? 'desk' : 'sbx'}_${randomBytes(12).toString('hex')}`;
@@ -164,7 +175,7 @@ export async function applyPaymentOutcome(db: Database, notice: ProviderNotice):
       await tx.update(inventoryDay).set({ state: 'occupied', activeHoldId: null, updatedAt: sql`now()` }).where(eq(inventoryDay.id, day.id));
       await tx.update(booking).set({ status: 'confirmed', confirmedAt: sql`now()` }).where(eq(booking.id, reserved.id));
       await tx.insert(pass).values({ beachId, bookingId: reserved.id });
-      await recordSale(tx, beachId, { bookingId: reserved.id, inventoryDayId: day.id, totalCents: reserved.totalCents });
+      await recordSale(tx, beachId, { bookingId: reserved.id, inventoryDayId: day.id, totalCents: reserved.totalCents, extrasCents: reserved.extrasCents });
       await enqueue(tx, beachId, 'booking.confirmed', { bookingId: reserved.id });
       return 'confirmed';
     }
@@ -197,7 +208,8 @@ export interface BookingView {
   guestName: string;
   day: string;
   spot: { code: string; rowNumber: number; umbrellas: number; sunbeds: number };
-  quote: { listPrice: number; discount: number; total: number; promoCode: string | null };
+  /** `total` is comprehensive: spot discounted price + extras. */
+  quote: { listPrice: number; discount: number; total: number; promoCode: string | null; extrasCents: number; extras: ExtraLine[] };
   /** Text to show as a QR code. Present only while the booking is confirmed. */
   passCredential: string | null;
 }
@@ -229,7 +241,14 @@ export function getBooking(db: Database, beachId: string, bookingId: string, acc
       guestName: row.booking.guestName,
       day: row.day,
       spot: { code: row.spot.code, rowNumber: row.spot.rowNumber, umbrellas: row.spot.umbrellas, sunbeds: row.spot.sunbeds },
-      quote: { listPrice: row.booking.listPriceCents, discount: row.booking.discountCents, total: row.booking.totalCents, promoCode: row.booking.promoCode },
+      quote: {
+        listPrice: row.booking.listPriceCents,
+        discount: row.booking.discountCents,
+        total: row.booking.totalCents,
+        promoCode: row.booking.promoCode,
+        extrasCents: row.booking.extrasCents,
+        extras: await bookingExtraLines(tx, row.booking.id),
+      },
       passCredential: usable && row.passId ? passCredential(secret, row.passId) : null,
     };
   });
@@ -240,6 +259,8 @@ export interface AccessResult {
   spotCode: string;
   guestName: string;
   presence: (typeof booking.$inferSelect)['presence'];
+  /** What the front desk hands over with the pass (spec §4.2). */
+  extras: { name: { it: string; en: string | null }; quantity: number }[];
 }
 
 const shortCode = /^OM-\d{6}-\d{3}$/;
@@ -284,7 +305,8 @@ export function checkAccess(db: Database, actor: Actor, input: { credential: str
     await tx.update(booking).set({ presence: target }).where(eq(booking.id, reserved.id));
     await tx.insert(accessEvent).values({ beachId: actor.beachId, bookingId: reserved.id, kind: input.kind, operatorUserId: actor.userId });
     await tx.insert(auditEvent).values({ beachId: actor.beachId, actorUserId: actor.userId, action: `access.${input.kind}`, target: reserved.code, detail: {} });
-    return { code: reserved.code, spotCode: place.spotCode, guestName: reserved.guestName, presence: target };
+    const extras = (await bookingExtraLines(tx, reserved.id)).map((line) => ({ name: line.name, quantity: line.quantity }));
+    return { code: reserved.code, spotCode: place.spotCode, guestName: reserved.guestName, presence: target, extras };
   });
 }
 
@@ -295,18 +317,25 @@ export interface BookingRow {
   guestName: string;
   spotCode: string;
   totalCents: number;
+  /** Extras to hand over with the booking (spec §4.2). */
+  extras: { name: { it: string; en: string | null }; quantity: number }[];
 }
 
 export function listBookings(db: Database, actor: Actor, day: string): Promise<BookingRow[]> {
-  return withActor(db, actor.beachId, actor.userId, (tx) =>
-    tx
-      .select({ code: booking.code, status: booking.status, presence: booking.presence, guestName: booking.guestName, spotCode: spot.code, totalCents: booking.totalCents })
+  return withActor(db, actor.beachId, actor.userId, async (tx) => {
+    const rows = await tx
+      .select({ bookingId: booking.id, code: booking.code, status: booking.status, presence: booking.presence, guestName: booking.guestName, spotCode: spot.code, totalCents: booking.totalCents })
       .from(booking)
       .innerJoin(inventoryDay, eq(inventoryDay.id, booking.inventoryDayId))
       .innerJoin(spot, eq(spot.id, inventoryDay.spotId))
       .where(eq(inventoryDay.day, day))
-      .orderBy(asc(booking.code)),
-  );
+      .orderBy(asc(booking.code));
+    const lines = await bookingExtraLinesByBooking(tx, rows.map((row) => row.bookingId));
+    return rows.map(({ bookingId, ...row }) => ({
+      ...row,
+      extras: (lines.get(bookingId) ?? []).map((line) => ({ name: line.name, quantity: line.quantity })),
+    }));
+  });
 }
 
 /**
@@ -314,8 +343,15 @@ export function listBookings(db: Database, actor: Actor, day: string): Promise<B
  * same row lock as a purchase on the website: no channel can jump the queue. The desk
  * picks a hotel convention from a list (its identifier, never a typed code, spec §4.1);
  * the identifier is resolved to the code here and then follows the ordinary path.
+ * Extras (spec §4.2) travel the same internal hold: the snapshot and the ledger
+ * movement are exactly those of an online purchase.
  */
-export async function deskBooking(db: Database, actor: Actor, input: { spotId: string; day: string; guestName: string; conventionId?: string | null }, secret: string): Promise<{ code: string }> {
+export async function deskBooking(
+  db: Database,
+  actor: Actor,
+  input: { spotId: string; day: string; guestName: string; conventionId?: string | null; extras?: ExtraRequest[] },
+  secret: string,
+): Promise<{ code: string }> {
   let promoCode: string | undefined;
   if (input.conventionId) {
     const conventionId = input.conventionId;
@@ -326,7 +362,7 @@ export async function deskBooking(db: Database, actor: Actor, input: { spotId: s
     if (!deal) throw new DomainError('promo_not_applicable', 'This convention cannot be applied to this day');
     promoCode = deal.code;
   }
-  const held = await acquireHold(db, actor.beachId, { spotId: input.spotId, day: input.day, promoCode, idempotencyKey: `desk-${randomUUID()}`, ttlSeconds: 120 });
+  const held = await acquireHold(db, actor.beachId, { spotId: input.spotId, day: input.day, promoCode, extras: input.extras, idempotencyKey: `desk-${randomUUID()}`, ttlSeconds: 120 });
   const started = await startCheckout(db, actor.beachId, { holdId: held.holdId, guestName: input.guestName, guestEmail: null, source: 'desk' }, secret);
   const outcome = await applyPaymentOutcome(db, { provider: 'desk', eventId: `desk-${started.bookingId}`, reference: started.payment.reference, outcome: 'succeeded' });
   if (outcome !== 'confirmed') throw new DomainError('inventory_conflict', 'This spot has just been taken');
@@ -401,8 +437,11 @@ export function cancelByBeachClub(db: Database, actor: Actor, input: { code: str
     const [paid] = await tx.select().from(payment).where(eq(payment.bookingId, reserved.id));
     if (paid) await tx.insert(refund).values({ beachId: actor.beachId, paymentId: paid.id, amountCents: paid.amountCents, reason: input.reason });
     const reversed = await tx.update(allocation).set({ state: 'adjusted' }).where(eq(allocation.bookingId, reserved.id)).returning({ party: allocation.party, amountCents: allocation.amountCents });
+    // The refund is comprehensive (discounted spot + extras: totalCents carries both,
+    // spec §4.2); the extras movement is reversed like the shares are.
     await tx.insert(ledgerEntry).values([
       ...reversed.map((row) => ({ beachId: actor.beachId, bookingId: reserved.id, kind: 'adjustment', party: row.party, amountCents: -row.amountCents })),
+      ...(reserved.extrasCents > 0 ? [{ beachId: actor.beachId, bookingId: reserved.id, kind: 'adjustment', party: 'beach_club' as const, amountCents: -reserved.extrasCents }] : []),
       { beachId: actor.beachId, bookingId: reserved.id, kind: 'refund_due', amountCents: -reserved.totalCents },
     ]);
     await enqueue(tx, actor.beachId, 'booking.cancelled', { bookingId: reserved.id });

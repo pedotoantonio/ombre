@@ -65,6 +65,8 @@ describe.skipIf(!testAdminUrl)('inventory on a real PostgreSQL', () => {
       discount: 300,
       total: 2700,
       promoCode: 'MARE10',
+      extrasCents: 0,
+      extras: [],
     });
     const held = await acquireHold(db(), dune.beachId, { spotId, day, promoCode: 'MARE10', idempotencyKey: key(), ttlSeconds: 600 });
     expect(held.quote.total).toBe(2700);

@@ -125,6 +125,39 @@ export const hotelConvention = pgTable('hotel_convention', {
   notes: text('notes'),
 });
 
+// Extra services sold with the spot (spec §4.2). English name is optional and
+// falls back to the Italian one; a used service is retired, never deleted.
+export const extraService = pgTable('extra_service', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  beachId: uuid('beach_id').notNull(),
+  nameIt: text('name_it').notNull(),
+  nameEn: text('name_en'),
+  unitPriceCents: integer('unit_price_cents').notNull(),
+  active: boolean('active').notNull().default(true),
+  position: integer('position').notNull().default(0),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** Snapshot frozen at the hold: dies with the hold (FK ON DELETE CASCADE). */
+export const holdExtra = pgTable('hold_extra', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  beachId: uuid('beach_id').notNull(),
+  holdId: uuid('hold_id').notNull(),
+  serviceId: uuid('service_id').notNull(),
+  quantity: smallint('quantity').notNull(),
+  unitPriceCents: integer('unit_price_cents').notNull(),
+});
+
+/** Snapshot copied from hold_extra when the hold converts into a booking. */
+export const bookingExtra = pgTable('booking_extra', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  beachId: uuid('beach_id').notNull(),
+  bookingId: uuid('booking_id').notNull(),
+  serviceId: uuid('service_id').notNull(),
+  quantity: smallint('quantity').notNull(),
+  unitPriceCents: integer('unit_price_cents').notNull(),
+});
+
 export const inventoryDay = pgTable('inventory_day', {
   id: uuid('id').primaryKey().defaultRandom(),
   beachId: uuid('beach_id').notNull(),
@@ -149,6 +182,8 @@ export const hold = pgTable('hold', {
   requestHash: text('request_hash').notNull(),
   listPriceCents: integer('list_price_cents').notNull(),
   discountCents: integer('discount_cents').notNull(),
+  // Sum of the hold_extra snapshot; total_cents = list - discount + extras.
+  extrasCents: integer('extras_cents').notNull().default(0),
   totalCents: integer('total_cents').notNull(),
   promoCode: text('promo_code'),
   expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
@@ -194,6 +229,8 @@ export const booking = pgTable('booking', {
   source: text('source').notNull().default('online'),
   listPriceCents: integer('list_price_cents').notNull(),
   discountCents: integer('discount_cents').notNull(),
+  // Sum of the booking_extra snapshot; total_cents = list - discount + extras.
+  extrasCents: integer('extras_cents').notNull().default(0),
   totalCents: integer('total_cents').notNull(),
   promoCode: text('promo_code'),
   locale: text('locale').notNull().default('it'),

@@ -20,11 +20,13 @@ import {
   createCabin,
   createContract,
   createConvention,
+  createExtraService,
   createSpotType,
   decideProposal,
   decideSublet,
   deleteCabin,
   deleteConvention,
+  deleteExtraService,
   deleteSpot,
   deleteSpotType,
   deskBooking,
@@ -40,6 +42,7 @@ import {
   getSiteState,
   holderStatement,
   listActiveBeaches,
+  listActiveExtras,
   listCabins,
   listDayMap,
   listBookings,
@@ -47,6 +50,7 @@ import {
   listConventions,
   listDayOperations,
   listDeskConventions,
+  listExtraServices,
   listInventory,
   listMyCabins,
   listMyContracts,
@@ -73,6 +77,7 @@ import {
   setBlockedBulk,
   setContractStatus,
   setConventionStatus,
+  setExtraServiceStatus,
   setGapRows,
   setPrice,
   setRetired,
@@ -84,13 +89,16 @@ import {
   statisticsReport,
   updateCabin,
   updateConvention,
+  updateExtraService,
   updateSpot,
   updateSpotType,
   withdrawDay,
   quoteSpot,
+  maxExtraQuantity,
   type Database,
   type DomainErrorCode,
   type PublicBeach,
+  type PurchaseQuote,
   type SessionUser,
 } from '@ombre/db';
 import { buildOpenApi, type Operation } from './openapi';
@@ -164,6 +172,7 @@ const domainStatus: Record<DomainErrorCode, 401 | 403 | 404 | 409 | 422 | 429> =
   hold_expired: 409,
   pass_invalid: 422,
   wrong_day: 409,
+  extra_not_available: 422,
   cap_reached: 409,
   version_conflict: 409,
   totp_required: 401,
@@ -173,11 +182,19 @@ const domainStatus: Record<DomainErrorCode, 401 | 403 | 404 | 409 | 422 | 429> =
 
 const slugSchema = z.string().regex(/^[a-z0-9]+(-[a-z0-9]+)*$/).max(80);
 const daySchema = z.iso.date();
+// Extra services chosen with the spot (spec §4.2): quantities per service, each
+// service at most once, with a reasonable ceiling per quantity.
+const extrasRequestSchema = z
+  .array(z.object({ serviceId: z.uuid(), quantity: z.number().int().min(1).max(maxExtraQuantity) }))
+  .max(20)
+  .refine((extras) => new Set(extras.map((entry) => entry.serviceId)).size === extras.length)
+  .optional();
 const dayRequestSchema = z.object({
   beachSlug: slugSchema,
   spotId: z.uuid(),
   day: daySchema,
   promoCode: z.string().trim().min(1).max(40).optional(),
+  extras: extrasRequestSchema,
 });
 const codeSchema = z.string().regex(/^\d{6}$/);
 const loginSchema = z.object({ email: z.email().max(200), password: z.string().min(1).max(200), code: codeSchema.optional() });
@@ -236,7 +253,16 @@ const siteDraftSchema = z.object({
   content: z.object({ it: siteTextsSchema.refine((texts) => texts.description.length > 0), en: siteTextsSchema.nullable() }),
 });
 // The desk picks a convention from a list, by identifier, never by typing the code.
-const deskSchema = z.object({ spotId: z.uuid(), day: daySchema, guestName: z.string().trim().min(1).max(120), conventionId: z.uuid().nullable().optional() });
+// Extras follow the same internal hold as an online purchase (spec §4.2).
+const deskSchema = z.object({ spotId: z.uuid(), day: daySchema, guestName: z.string().trim().min(1).max(120), conventionId: z.uuid().nullable().optional(), extras: extrasRequestSchema });
+// ---- Extra services (spec §4.2): Italian name required, English optional with fallback ----
+const extraServiceSchema = z.object({
+  nameIt: z.string().trim().min(1).max(80),
+  nameEn: z.string().trim().min(1).max(80).nullable().default(null),
+  unitPriceCents: z.number().int().min(0).max(1_000_000),
+  position: z.number().int().min(0).max(10_000).default(0),
+});
+const extraStatusSchema = z.object({ active: z.boolean() });
 // ---- Hotel conventions (spec §4.1): one pricing out of two, optional validity window ----
 const conventionSchema = z
   .object({
@@ -367,6 +393,15 @@ function money(quote: DayQuote) {
     totalCents: quote.total,
     promoCode: quote.promoCode,
   };
+}
+
+/**
+ * Money of a purchase with extras (spec §4.2): listPriceCents and discountCents
+ * keep meaning the spot alone, extrasCents is separate and totalCents is
+ * comprehensive (list − discount + extras); `extras` lists the lines.
+ */
+function purchaseMoney(quote: PurchaseQuote) {
+  return { ...money(quote), extrasCents: quote.extrasCents, extras: quote.extras };
 }
 
 function publicBeach(beach: PublicBeach) {
@@ -563,7 +598,7 @@ export function createApp(options: AppOptions): Hono {
     if (!token) throw new HttpError(401, 'unauthenticated', 'The booking token is required');
     const view = await getBooking(db, beach.id, parse(z.uuid(), c.req.param('bookingId'), 'booking'), token, signingSecret);
     const { quote, ...rest } = view;
-    return c.json({ ...rest, beach: publicBeach(beach), ...money(quote) });
+    return c.json({ ...rest, beach: publicBeach(beach), ...purchaseMoney(quote) });
   });
 
   route({ method: 'post', path: '/v1/manage/beaches/:slug/access-events', summary: 'Register an entry or an exit from a pass', tag: 'Beach club', auth: 'session', request: accessSchema, success: 201, errors: [400, 401, 403, 409, 422] }, async (c) => {
@@ -571,7 +606,7 @@ export function createApp(options: AppOptions): Hono {
     return c.json(await checkAccess(db, actor, parse(accessSchema, await body(c.req.raw), 'request'), signingSecret), 201);
   });
 
-  route({ method: 'post', path: '/v1/manage/beaches/:slug/desk-bookings', summary: 'Book a spot at the front desk, paid there, optionally under a hotel convention', tag: 'Beach club', auth: 'session', request: deskSchema, success: 201, errors: [400, 401, 403, 404, 409, 422] }, async (c) => {
+  route({ method: 'post', path: '/v1/manage/beaches/:slug/desk-bookings', summary: 'Book a spot at the front desk, paid there, optionally under a hotel convention and with extra services', tag: 'Beach club', auth: 'session', request: deskSchema, success: 201, errors: [400, 401, 403, 404, 409, 422] }, async (c) => {
     const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'bookings.create');
     return c.json(await deskBooking(db, actor, parse(deskSchema, await body(c.req.raw), 'request'), signingSecret), 201);
   });
@@ -710,6 +745,38 @@ export function createApp(options: AppOptions): Hono {
   route({ method: 'delete', path: '/v1/manage/beaches/:slug/conventions/:conventionId', summary: 'Delete a hotel convention that was never used', tag: 'Beach club', auth: 'session', success: 204, errors: [400, 401, 403, 404, 409] }, async (c) => {
     const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'promotions.manage');
     await deleteConvention(db, actor, parse(z.uuid(), c.req.param('conventionId'), 'convention'));
+    return c.body(null, 204);
+  });
+
+  // ---- Extra services (spec §4.2): management CRUD and the public list of the booking flow ----
+  // Same permission as the other commercial codes (promotions.manage, like the hotel
+  // conventions): who shapes the commercial offer also shapes the extras.
+  route({ method: 'get', path: '/v1/manage/beaches/:slug/extras', summary: 'Extra services of the beach club, retired ones included', tag: 'Beach club', auth: 'session', success: 200, errors: [401, 403] }, async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'promotions.manage');
+    return c.json({ currency: 'EUR', extras: await listExtraServices(db, actor) });
+  });
+
+  route({ method: 'post', path: '/v1/manage/beaches/:slug/extras', summary: 'Register an extra service sold with the spot', tag: 'Beach club', auth: 'session', request: extraServiceSchema, success: 201, errors: [400, 401, 403] }, async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'promotions.manage');
+    return c.json({ currency: 'EUR', extra: await createExtraService(db, actor, parse(extraServiceSchema, await body(c.req.raw), 'extra service')) }, 201);
+  });
+
+  route({ method: 'put', path: '/v1/manage/beaches/:slug/extras/:serviceId', summary: 'Rewrite an extra service; reservations keep the prices they froze', tag: 'Beach club', auth: 'session', request: extraServiceSchema, success: 200, errors: [400, 401, 403, 404] }, async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'promotions.manage');
+    const serviceId = parse(z.uuid(), c.req.param('serviceId'), 'extra service');
+    return c.json({ currency: 'EUR', extra: await updateExtraService(db, actor, serviceId, parse(extraServiceSchema, await body(c.req.raw), 'extra service')) });
+  });
+
+  route({ method: 'post', path: '/v1/manage/beaches/:slug/extras/:serviceId/status', summary: 'Retire an extra service from sale, or put it back', tag: 'Beach club', auth: 'session', request: extraStatusSchema, success: 204, errors: [400, 401, 403, 404] }, async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'promotions.manage');
+    const { active } = parse(extraStatusSchema, await body(c.req.raw), 'request');
+    await setExtraServiceStatus(db, actor, parse(z.uuid(), c.req.param('serviceId'), 'extra service'), active);
+    return c.body(null, 204);
+  });
+
+  route({ method: 'delete', path: '/v1/manage/beaches/:slug/extras/:serviceId', summary: 'Delete an extra service that was never used', tag: 'Beach club', auth: 'session', success: 204, errors: [400, 401, 403, 404, 409] }, async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'promotions.manage');
+    await deleteExtraService(db, actor, parse(z.uuid(), c.req.param('serviceId'), 'extra service'));
     return c.body(null, 204);
   });
 
@@ -1016,6 +1083,14 @@ export function createApp(options: AppOptions): Hono {
     return c.json({ beach: publicBeach(beach), nextAvailableDay: await nextAvailableDay(db, beach), site: await getPublishedSite(db, beach.id) });
   });
 
+  // The dedicated route keeps the availability answer untouched; the unit prices of
+  // the extras are public only here, inside the booking flow of the beach club
+  // (spec §4.2): no list of beach clubs or availability map ever carries them.
+  route({ method: 'get', path: '/v1/beaches/:slug/extras', summary: 'Active extra services a guest can add while booking at this beach club', tag: 'Booking', auth: 'none', success: 200, errors: [400, 404] }, async (c) => {
+    const beach = await beachBySlug(parse(slugSchema, c.req.param('slug'), 'beach club'));
+    return c.json({ beach: publicBeach(beach), currency: 'EUR', extras: await listActiveExtras(db, beach.id) });
+  });
+
   route({ method: 'get', path: '/v1/beaches/:slug/holds/:holdId', summary: 'A hold, by its identifier', tag: 'Booking', auth: 'none', success: 200, errors: [400, 404] }, async (c) => {
     const beach = await beachBySlug(parse(slugSchema, c.req.param('slug'), 'beach club'));
     const held = await getHold(db, beach.id, parse(z.uuid(), c.req.param('holdId'), 'hold'));
@@ -1026,7 +1101,7 @@ export function createApp(options: AppOptions): Hono {
       beach: publicBeach(beach),
       day: held.day,
       spot: { code: held.spotCode, rowNumber: held.rowNumber, umbrellas: held.umbrellas, sunbeds: held.sunbeds },
-      ...money(held.quote),
+      ...purchaseMoney(held.quote),
     });
   });
 
@@ -1068,11 +1143,11 @@ export function createApp(options: AppOptions): Hono {
     },
   );
 
-  route({ method: 'post', path: '/v1/quotes', summary: 'Price of a day as the server computes it', tag: 'Booking', auth: 'none', request: dayRequestSchema, success: 200, errors: [400, 404, 409, 422, 429] }, async (c) => {
+  route({ method: 'post', path: '/v1/quotes', summary: 'Price of a day, with the chosen extras per line, as the server computes it', tag: 'Booking', auth: 'none', request: dayRequestSchema, success: 200, errors: [400, 404, 409, 422, 429] }, async (c) => {
     const request = parse(dayRequestSchema, await body(c.req.raw), 'request');
     const beach = await beachBySlug(request.beachSlug);
     const quote = await quoteSpot(db, beach.id, request);
-    return c.json({ beachSlug: beach.slug, spotId: request.spotId, day: request.day, ...money(quote) });
+    return c.json({ beachSlug: beach.slug, spotId: request.spotId, day: request.day, ...purchaseMoney(quote) });
   });
 
   route({ method: 'post', path: '/v1/holds', summary: 'Hold a spot for a limited time', tag: 'Booking', auth: 'none', request: dayRequestSchema, headers: { 'Idempotency-Key': 'Chosen by the client: the same key returns the same hold' }, success: 201, errors: [400, 404, 409, 422, 429] }, async (c) => {
@@ -1090,7 +1165,7 @@ export function createApp(options: AppOptions): Hono {
         beachSlug: beach.slug,
         spotId: request.spotId,
         day: request.day,
-        ...money(held.quote),
+        ...purchaseMoney(held.quote),
       },
       held.replayed ? 200 : 201,
     );

@@ -1,9 +1,9 @@
 import { createHash } from 'node:crypto';
-import { and, asc, eq, gte, ilike, or, sql } from 'drizzle-orm';
+import { and, asc, eq, gte, ilike, inArray, or, sql } from 'drizzle-orm';
 import { quoteConventionDay, quoteDay, type DayQuote, type SeaSide, type SpotMark } from '@ombre/shared';
 import { withBeach, type Database, type Transaction } from './client';
 import { listElements, type LayoutElementView } from './layout';
-import { beach, hold, hotelConvention, inventoryDay, promotion, spot, spotType } from './schema';
+import { beach, extraService, hold, holdExtra, hotelConvention, inventoryDay, promotion, spot, spotType } from './schema';
 
 export type DomainErrorCode =
   | 'not_found'
@@ -18,6 +18,7 @@ export type DomainErrorCode =
   | 'hold_expired'
   | 'pass_invalid'
   | 'wrong_day'
+  | 'extra_not_available'
   | 'cap_reached'
   | 'version_conflict'
   | 'totp_required'
@@ -257,7 +258,8 @@ export interface HoldView {
   rowNumber: number;
   umbrellas: number;
   sunbeds: number;
-  quote: DayQuote;
+  /** `total` is comprehensive: spot discounted price + extras. */
+  quote: PurchaseQuote;
 }
 
 export async function getHold(db: Database, beachId: string, holdId: string): Promise<HoldView> {
@@ -292,15 +294,115 @@ export async function getHold(db: Database, beachId: string, holdId: string): Pr
         discount: row.hold.discountCents,
         total: row.hold.totalCents,
         promoCode: row.hold.promoCode,
+        extrasCents: row.hold.extrasCents,
+        extras: await holdExtraLines(tx, row.hold.id),
       },
     };
   });
+}
+
+// ---- Extra services in the purchase flow (spec §4.2) ----
+
+/** Quantities per service, as the quote and hold requests carry them. */
+export interface ExtraRequest {
+  serviceId: string;
+  quantity: number;
+}
+
+/** Reasonable per-service ceiling, mirrored by a database CHECK. */
+export const maxExtraQuantity = 20;
+
+/** One quote line per chosen service. The English name is null when the manager gave none: callers fall back to the Italian one, like the website contents. */
+export interface ExtraLine {
+  serviceId: string;
+  name: { it: string; en: string | null };
+  quantity: number;
+  unitPriceCents: number;
+  subtotalCents: number;
+}
+
+/**
+ * A full purchase quote: the spot fields of DayQuote (list price, discount — a
+ * promotion or hotel convention discounts the spot alone, never the extras) plus
+ * the extras per line. `total` is comprehensive: listPrice − discount + extrasCents.
+ */
+export interface PurchaseQuote extends DayQuote {
+  extrasCents: number;
+  extras: ExtraLine[];
+}
+
+const lineOrder = (left: ExtraLine, right: ExtraLine) => left.name.it.localeCompare(right.name.it) || left.serviceId.localeCompare(right.serviceId);
+
+/**
+ * Prices the requested extras against the live catalogue of the beach club. A
+ * retired or unknown service is refused with a clear domain error; quantities
+ * are bounded. Returns the lines in the manager's display order.
+ */
+async function priceExtras(tx: Transaction, requested: ExtraRequest[]): Promise<{ lines: ExtraLine[]; extrasCents: number }> {
+  if (requested.length === 0) return { lines: [], extrasCents: 0 };
+  const ids = requested.map((entry) => entry.serviceId);
+  if (new Set(ids).size !== ids.length) throw new DomainError('invalid_state', 'Each extra service may appear at most once');
+  for (const entry of requested) {
+    if (!Number.isInteger(entry.quantity) || entry.quantity < 1 || entry.quantity > maxExtraQuantity) {
+      throw new DomainError('invalid_state', `Each extra quantity must be between 1 and ${maxExtraQuantity}`);
+    }
+  }
+  const services = await tx
+    .select({ id: extraService.id, nameIt: extraService.nameIt, nameEn: extraService.nameEn, unitPriceCents: extraService.unitPriceCents, active: extraService.active, position: extraService.position })
+    .from(extraService)
+    .where(inArray(extraService.id, ids));
+  const byId = new Map(services.map((service) => [service.id, service]));
+  const lines = requested.map((entry) => {
+    const service = byId.get(entry.serviceId);
+    if (!service || !service.active) throw new DomainError('extra_not_available', 'This extra service is not available');
+    return {
+      serviceId: service.id,
+      name: { it: service.nameIt, en: service.nameEn },
+      quantity: entry.quantity,
+      unitPriceCents: service.unitPriceCents,
+      subtotalCents: service.unitPriceCents * entry.quantity,
+      position: service.position,
+    };
+  });
+  lines.sort((left, right) => left.position - right.position || lineOrder(left, right));
+  return {
+    lines: lines.map((line) => ({ serviceId: line.serviceId, name: line.name, quantity: line.quantity, unitPriceCents: line.unitPriceCents, subtotalCents: line.subtotalCents })),
+    extrasCents: lines.reduce((sum, line) => sum + line.subtotalCents, 0),
+  };
+}
+
+/** The snapshot of a hold as quote lines: frozen prices, live names. */
+async function holdExtraLines(tx: Transaction, holdId: string): Promise<ExtraLine[]> {
+  const rows = await tx
+    .select({
+      serviceId: holdExtra.serviceId,
+      nameIt: extraService.nameIt,
+      nameEn: extraService.nameEn,
+      quantity: holdExtra.quantity,
+      unitPriceCents: holdExtra.unitPriceCents,
+      position: extraService.position,
+    })
+    .from(holdExtra)
+    .innerJoin(extraService, eq(extraService.id, holdExtra.serviceId))
+    .where(eq(holdExtra.holdId, holdId));
+  const lines = rows.map((row) => ({
+    serviceId: row.serviceId,
+    name: { it: row.nameIt, en: row.nameEn },
+    quantity: row.quantity,
+    unitPriceCents: row.unitPriceCents,
+    subtotalCents: row.unitPriceCents * row.quantity,
+    position: row.position,
+  }));
+  lines.sort((left, right) => left.position - right.position || lineOrder(left, right));
+  return lines.map((line) => ({ serviceId: line.serviceId, name: line.name, quantity: line.quantity, unitPriceCents: line.unitPriceCents, subtotalCents: line.subtotalCents }));
 }
 
 export interface DayRequest {
   spotId: string;
   day: string;
   promoCode?: string | null;
+  /** Quantities per extra service; empty or missing means a spot alone. */
+  extras?: ExtraRequest[];
 }
 
 export function normalizePromo(code: string | null | undefined): string | null {
@@ -341,8 +443,13 @@ async function findConvention(tx: Transaction, code: string, day: string): Promi
   return deal;
 }
 
-/** Price of a day as the server computes it. It reserves nothing. */
-export function quoteSpot(db: Database, beachId: string, request: DayRequest): Promise<DayQuote> {
+/** Joins a spot quote and its extra lines into a comprehensive purchase quote. */
+function withExtras(quote: DayQuote, priced: { lines: ExtraLine[]; extrasCents: number }): PurchaseQuote {
+  return { ...quote, total: quote.total + priced.extrasCents, extrasCents: priced.extrasCents, extras: priced.lines };
+}
+
+/** Price of a day, with the chosen extras per line, as the server computes it. It reserves nothing. */
+export function quoteSpot(db: Database, beachId: string, request: DayRequest): Promise<PurchaseQuote> {
   return withBeach(db, beachId, async (tx) => {
     const [row] = await tx
       .select({ priceCents: inventoryDay.priceCents })
@@ -352,17 +459,19 @@ export function quoteSpot(db: Database, beachId: string, request: DayRequest): P
       .where(and(eq(inventoryDay.spotId, request.spotId), eq(inventoryDay.day, request.day), eq(spot.retired, false), isFree));
     if (!row) throw new DomainError('inventory_conflict', 'This spot is not available on this day');
 
+    const priced = await priceExtras(tx, request.extras ?? []);
     const code = normalizePromo(request.promoCode);
-    if (!code) return quoteDay(row.priceCents);
+    if (!code) return withExtras(quoteDay(row.priceCents), priced);
 
     const [promo] = await tx
       .select({ percentBps: promotion.percentBps })
       .from(promotion)
       .where(and(eq(promotion.code, code), eq(promotion.active, true), sql`(${promotion.maxUses} is null or ${promotion.committedUses} < ${promotion.maxUses})`));
-    if (promo) return quoteDay(row.priceCents, { code, percentBps: promo.percentBps });
+    // A promotion or convention discounts the spot alone: the extras are added after.
+    if (promo) return withExtras(quoteDay(row.priceCents, { code, percentBps: promo.percentBps }), priced);
     const deal = await findConvention(tx, code, request.day);
     if (!deal) throw codeRefused();
-    return quoteConventionDay(row.priceCents, code, deal);
+    return withExtras(quoteConventionDay(row.priceCents, code, deal), priced);
   });
 }
 
@@ -370,12 +479,13 @@ export interface HoldResult {
   holdId: string;
   status: (typeof hold.$inferSelect)['status'];
   expiresAt: Date;
-  quote: DayQuote;
+  /** `total` is comprehensive: spot discounted price + extras. */
+  quote: PurchaseQuote;
   /** True when the same request had already been served and nothing new was created. */
   replayed: boolean;
 }
 
-function toResult(row: typeof hold.$inferSelect, replayed: boolean): HoldResult {
+function toResult(row: typeof hold.$inferSelect, extras: ExtraLine[], replayed: boolean): HoldResult {
   return {
     holdId: row.id,
     status: row.status,
@@ -385,6 +495,8 @@ function toResult(row: typeof hold.$inferSelect, replayed: boolean): HoldResult 
       discount: row.discountCents,
       total: row.totalCents,
       promoCode: row.promoCode,
+      extrasCents: row.extrasCents,
+      extras,
     },
     replayed,
   };
@@ -415,7 +527,15 @@ export interface HoldRequest extends DayRequest {
  */
 export async function acquireHold(db: Database, beachId: string, request: HoldRequest): Promise<HoldResult> {
   const promoCode = normalizePromo(request.promoCode);
-  const requestHash = createHash('sha256').update(JSON.stringify([request.spotId, request.day, promoCode])).digest('hex');
+  // The idempotency fingerprint covers the extras in a canonical, sorted form: the
+  // same request replays the same hold, different quantities are a different request.
+  // Without extras the fingerprint is the same as before migration 015.
+  const canonicalExtras = (request.extras ?? [])
+    .map((entry) => [entry.serviceId, entry.quantity] as const)
+    .sort((left, right) => left[0].localeCompare(right[0]));
+  const hashedParts: unknown[] = [request.spotId, request.day, promoCode];
+  if (canonicalExtras.length > 0) hashedParts.push(canonicalExtras);
+  const requestHash = createHash('sha256').update(JSON.stringify(hashedParts)).digest('hex');
 
   try {
     return await withBeach(db, beachId, async (tx) => {
@@ -430,7 +550,7 @@ export async function acquireHold(db: Database, beachId: string, request: HoldRe
         if (previous.requestHash !== requestHash) {
           throw new DomainError('idempotency_mismatch', 'This idempotency key was used for a different request');
         }
-        return toResult(previous, true);
+        return toResult(previous, await holdExtraLines(tx, previous.id), true);
       }
       if (!row) throw new DomainError('not_found', 'Spot or day not found');
       const [place] = await tx.select({ retired: spot.retired }).from(spot).where(eq(spot.id, request.spotId));
@@ -468,12 +588,15 @@ export async function acquireHold(db: Database, beachId: string, request: HoldRe
         }
       }
 
+      // The discount applies to the spot alone; the hold freezes the unit prices
+      // of the extras in its own snapshot (hold_extra).
       const quote =
         promoCode && promo
           ? quoteDay(row.priceCents, { code: promoCode, percentBps: promo.percentBps })
           : promoCode && deal
             ? quoteConventionDay(row.priceCents, promoCode, deal)
             : quoteDay(row.priceCents);
+      const priced = await priceExtras(tx, request.extras ?? []);
       const [created] = await tx
         .insert(hold)
         .values({
@@ -485,18 +608,24 @@ export async function acquireHold(db: Database, beachId: string, request: HoldRe
           requestHash,
           listPriceCents: quote.listPrice,
           discountCents: quote.discount,
-          totalCents: quote.total,
+          extrasCents: priced.extrasCents,
+          totalCents: quote.total + priced.extrasCents,
           promoCode: quote.promoCode,
           expiresAt: sql`now() + make_interval(secs => ${request.ttlSeconds})`,
         })
         .returning();
       if (!created) throw new Error('hold was not created');
+      if (priced.lines.length > 0) {
+        await tx
+          .insert(holdExtra)
+          .values(priced.lines.map((line) => ({ beachId, holdId: created.id, serviceId: line.serviceId, quantity: line.quantity, unitPriceCents: line.unitPriceCents })));
+      }
 
       await tx
         .update(inventoryDay)
         .set({ state: 'held', activeHoldId: created.id, updatedAt: sql`now()` })
         .where(eq(inventoryDay.id, row.id));
-      return toResult(created, false);
+      return toResult(created, priced.lines, false);
     });
   } catch (error) {
     // Two different requests raced with the same key: the unique index stopped the second.
