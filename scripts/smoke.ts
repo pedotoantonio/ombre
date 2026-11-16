@@ -146,6 +146,20 @@ for (const [path, lang] of [['/pagina-che-non-esiste', 'it'], ['/fr', 'it'], ['/
   check(tags(html, 'meta').some((tag) => attribute(tag, 'name') === 'robots' && (attribute(tag, 'content') ?? '').includes('noindex')), `${path}: a not-found page must be noindex`);
 }
 
+// A /paga link with an unusable token answers the polite page as plain HTML, status 404,
+// noindex, in the language of the address — rendered on the server, scripts or not
+// (spec §4.3; regression of the wave B acceptance run: the message reached the
+// visitor only through scripts, so without JavaScript the page was blank).
+const payGone = { it: { path: '/paga/', title: 'Collegamento non più valido' }, en: { path: '/en/pay/', title: 'Link no longer valid' } } as const;
+for (const lang of ['it', 'en'] as const) {
+  const target = `${payGone[lang].path}00000000-0000-4000-8000-000000000000.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`;
+  const response = await fetch(base + target, { redirect: 'manual' });
+  const html = await response.text();
+  const main = /<main\b[^]*<\/main>/.exec(html)?.[0] ?? '';
+  check(response.status === 404, `${target}: status ${response.status}, expected 404`);
+  check(new RegExp(`<h1[^>]*>${payGone[lang].title}</h1>`).test(main), `${target}: no "${payGone[lang].title}" heading in the page as served`);
+  check(tags(html, 'meta').some((tag) => attribute(tag, 'name') === 'robots' && (attribute(tag, 'content') ?? '').includes('noindex')), `${target}: the polite /paga page must be noindex`);
+}
 // Reserved pages are never indexed, but they still need a title: here the one that needs no sign-in.
 for (const [path, title] of [['/area/accesso', 'Accedi'], ['/en/account/sign-in', 'Sign in']] as const) {
   const html = await (await fetch(base + path, { redirect: 'manual' })).text();
@@ -187,6 +201,7 @@ const robots = await fetch(`${base}/robots.txt`);
 const robotsText = await robots.text();
 check(robots.status === 200 && robotsText.includes(`Sitemap: ${siteUrl}/sitemap.xml`), 'robots.txt: missing or without sitemap');
 check(robotsText.includes('Disallow: /area') && robotsText.includes('Disallow: /en/account'), 'robots.txt: reserved areas not listed');
+check(robotsText.includes('Disallow: /paga') && robotsText.includes('Disallow: /en/pay'), 'robots.txt: the temporary payment links are not excluded');
 
 const sitemap = await fetch(`${base}/sitemap.xml`);
 const sitemapText = await sitemap.text();
