@@ -1,4 +1,4 @@
-import { accountPath, beachLayoutPath, beachPath, bookingPath, bookPath, holdPath, isLocale, manageCabinsPath, parseEuro, type Locale } from '@ombre/shared';
+import { accountPath, beachLayoutPath, beachPath, bookingPath, bookPath, holdPath, isLocale, manageCabinsPath, manageTodayPath, parseEuro, type Locale } from '@ombre/shared';
 import { api, apiCall, dayPattern, sandboxNotify, slugPattern, uuidPattern } from '@/lib/api';
 import { clearSessionCookieHeader, sessionCookie, sessionCookieHeader } from '@/lib/session';
 
@@ -556,6 +556,41 @@ const actions: Record<string, (request: Request, form: Form, lang: Locale) => Pr
     return layoutAct(request, form, lang, `/spots/${encodeURIComponent(spotId)}`, 'DELETE', undefined, { invalid_state: 'spot_used' });
   },
 
+  // Bulk block and unblock from the console «Oggi sulla spiaggia»: the outcome comes back
+  // aggregated in the query string of the redirect, like the other outcome flags.
+  async 'console-blocco'(request, form, lang) {
+    const beach = form('beach');
+    const day = form('day');
+    const op = form('op');
+    if (!slugPattern.test(beach) || !dayPattern.test(day) || (op !== 'block' && op !== 'unblock')) return bad();
+    const spotIds = form('spots').split(',').filter((value) => uuidPattern.test(value));
+    const reason = form('reason').trim().slice(0, 200);
+    const keep: Record<string, string | undefined> = {
+      day,
+      vista: form('vista') || undefined,
+      selezione: '1',
+      q: form('q') || undefined,
+    };
+    const back = manageTodayPath(lang, beach);
+    const { getDictionary, config } = await import('@ombre/shared');
+    const o = getDictionary(lang, config.brandName).ops;
+    if (spotIds.length === 0) return { to: withQuery(back, keep), err: 'nothing_selected' };
+    const result = await apiCall<{ done: number; refused: { spotId: string; reason: 'not_published' | 'held' | 'occupied' | 'not_blocked' }[] }>(
+      'POST',
+      `/v1/manage/beaches/${beach}/inventory/bulk-block`,
+      { body: { day, spotIds, blocked: op === 'block', ...(reason ? { reason } : {}) }, token: cookieToken(request) },
+    );
+    if (!result.ok) {
+      if (result.status === 401) return { to: accountPath(lang, 'signIn') };
+      return { to: withQuery(back, keep), err: result.status === 0 ? 'unavailable' : result.code };
+    }
+    const refusals = (reason2: 'not_published' | 'held' | 'occupied' | 'not_blocked') => result.data.refused.filter((entry) => entry.reason === reason2).length;
+    return {
+      to: withQuery(back, keep),
+      ok: o.bulkOutcome(op === 'block', result.data.done, refusals('held'), refusals('occupied'), refusals('not_published'), refusals('not_blocked')),
+    };
+  },
+
   'reception-accesso': (request, form, lang) =>
     manage(request, form, lang, '/access-events', 'POST', { credential: form('credential'), kind: form('kind') }, (data) => {
       const entry = data as { code: string; spotCode: string; guestName: string };
@@ -634,8 +669,9 @@ export async function POST(request: Request, context: { params: Promise<{ action
   const data = await request.formData();
   const form: Form = (name) => {
     // Checkboxes with the same name arrive as several values: they are joined.
-    const values = data.getAll(name === 'weekdays' ? 'weekday' : name).filter((value): value is string => typeof value === 'string');
-    return name === 'weekdays' || name === 'gallery' ? values.join(',') : (values[0] ?? '');
+    const field = name === 'weekdays' ? 'weekday' : name === 'spots' ? 'spot' : name;
+    const values = data.getAll(field).filter((value): value is string => typeof value === 'string');
+    return name === 'weekdays' || name === 'gallery' || name === 'spots' ? values.join(',') : (values[0] ?? '');
   };
   const lang = form('lang');
   if (!isLocale(lang)) return bad();

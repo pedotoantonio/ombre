@@ -99,7 +99,7 @@ export async function stepMetadata(lang: string, section: string, slug: string, 
 /** Where the day picker and the map start: the target of the button under the lead. */
 const pickerAnchor = 'disponibilita';
 
-function SpotCard({ locale, beach, spot, day, selected }: { locale: Locale; beach: ApiBeach; spot: ApiSpot; day: string; selected: boolean }) {
+function SpotCard({ locale, beach, spot, day, selected, suggested }: { locale: Locale; beach: ApiBeach; spot: ApiSpot; day: string; selected: boolean; suggested: boolean }) {
   const t = getDictionary(locale, config.brandName).booking;
   const href = `${bookPath(locale, beach.slug)}?spot=${spot.spotId}&day=${day}`;
   return (
@@ -108,9 +108,10 @@ function SpotCard({ locale, beach, spot, day, selected }: { locale: Locale; beac
       <p>{spot.typeName}</p>
       <p>{t.equipment(spot.umbrellas, spot.sunbeds)}</p>
       <p>{t.guests(spot.maxGuests)}</p>
-      {spot.shared || selected ? (
+      {spot.shared || selected || suggested ? (
         <p className="plan-tags">
           {spot.shared ? <span className="badge">{t.sharedDay}</span> : null}
+          {suggested ? <span className="badge badge--suggested">{t.suggestedBadge}</span> : null}
           {selected ? <span className="badge">{t.status.selected}</span> : null}
         </p>
       ) : null}
@@ -141,7 +142,7 @@ const stripesPath = [0, 2, 4, 6].map((index) => `M24 24L${canopy[index]!.join(' 
  * The mark of a spot on the map. The state is in the drawing, not only in the colour:
  * a full canopy is free, a canopy in alternate wedges is a shared day, a crossed one is not available.
  */
-function UmbrellaMark({ status, selected = false }: { status: ApiMapSpot['status']; selected?: boolean }) {
+function UmbrellaMark({ status, selected = false, suggested = false }: { status: ApiMapSpot['status']; selected?: boolean; suggested?: boolean }) {
   return (
     <svg className={`plan-mark plan-mark--${status}`} viewBox="0 0 48 48" aria-hidden="true" focusable="false">
       <path className="plan-mark__canopy" d={canopyPath} />
@@ -160,6 +161,7 @@ function UmbrellaMark({ status, selected = false }: { status: ApiMapSpot['status
         </>
       )}
       {selected ? <SelectedBadge /> : null}
+      {suggested ? <SuggestedBadge /> : null}
     </svg>
   );
 }
@@ -174,23 +176,34 @@ function SelectedBadge() {
   );
 }
 
+/** Sparkle badge of the recommended spot: its own shape and corner, never colour alone. */
+function SuggestedBadge() {
+  return (
+    <>
+      <circle className="plan-mark__suggest" cx="10" cy="10" r="8.5" />
+      <path className="plan-mark__spark" d="M10 4.5l1.6 3.9 3.9 1.6-3.9 1.6-1.6 3.9-1.6-3.9L4.5 10l3.9-1.6Z" />
+    </>
+  );
+}
+
 /**
  * A single sunbed seen from above: a bed with its pillow, a different shape from the umbrella.
  * The state stays in the drawing too: bands for a shared day, a cross when not available.
  */
-function SunbedMark({ status, selected = false }: { status: ApiMapSpot['status']; selected?: boolean }) {
+function SunbedMark({ status, selected = false, suggested = false }: { status: ApiMapSpot['status']; selected?: boolean; suggested?: boolean }) {
   return (
     <svg className={`plan-mark plan-mark--${status}`} viewBox="0 0 48 48" aria-hidden="true" focusable="false">
       <rect className="plan-mark__canopy" x="15" y="6" width="18" height="36" rx="5" />
       {status === 'shared' ? <path className="plan-mark__bands" d="M16 22h16M16 31h16" /> : null}
       {status === 'unavailable' ? <path className="plan-mark__cross" d="M18 18l12 12M30 18L18 30" /> : <path className="plan-mark__pillow" d="M20 13h8" />}
       {selected ? <SelectedBadge /> : null}
+      {suggested ? <SuggestedBadge /> : null}
     </svg>
   );
 }
 
 /** A gazebo seen from above: a square roof with its ridges, a shape of its own next to the round umbrella. */
-function GazeboMark({ status, selected = false }: { status: ApiMapSpot['status']; selected?: boolean }) {
+function GazeboMark({ status, selected = false, suggested = false }: { status: ApiMapSpot['status']; selected?: boolean; suggested?: boolean }) {
   return (
     <svg className={`plan-mark plan-mark--${status}`} viewBox="0 0 48 48" aria-hidden="true" focusable="false">
       <rect className="plan-mark__canopy" x="8" y="8" width="32" height="32" rx="4" />
@@ -209,12 +222,13 @@ function GazeboMark({ status, selected = false }: { status: ApiMapSpot['status']
         </>
       )}
       {selected ? <SelectedBadge /> : null}
+      {suggested ? <SuggestedBadge /> : null}
     </svg>
   );
 }
 
 /** A tent seen from the front: a triangle with its door, nothing like the other marks. */
-function TentMark({ status, selected = false }: { status: ApiMapSpot['status']; selected?: boolean }) {
+function TentMark({ status, selected = false, suggested = false }: { status: ApiMapSpot['status']; selected?: boolean; suggested?: boolean }) {
   return (
     <svg className={`plan-mark plan-mark--${status}`} viewBox="0 0 48 48" aria-hidden="true" focusable="false">
       <path className="plan-mark__canopy" d="M24 6L44 41H4Z" />
@@ -226,23 +240,25 @@ function TentMark({ status, selected = false }: { status: ApiMapSpot['status']; 
       ) : null}
       {status === 'unavailable' ? <path className="plan-mark__cross" d="M18 23l12 12M30 23L18 35" /> : <path className="plan-mark__stripes" d="M20 41l4-11 4 11Z" />}
       {selected ? <SelectedBadge /> : null}
+      {suggested ? <SuggestedBadge /> : null}
     </svg>
   );
 }
 
 /** A daybed seen from above: a wide bed, clearly broader than the single sunbed. */
-function DaybedMark({ status, selected = false }: { status: ApiMapSpot['status']; selected?: boolean }) {
+function DaybedMark({ status, selected = false, suggested = false }: { status: ApiMapSpot['status']; selected?: boolean; suggested?: boolean }) {
   return (
     <svg className={`plan-mark plan-mark--${status}`} viewBox="0 0 48 48" aria-hidden="true" focusable="false">
       <rect className="plan-mark__canopy" x="6" y="14" width="36" height="20" rx="5" />
       {status === 'shared' ? <path className="plan-mark__bands" d="M20 16v16M28 16v16" /> : null}
       {status === 'unavailable' ? <path className="plan-mark__cross" d="M18 18l12 12M30 18L18 30" /> : <path className="plan-mark__pillow" d="M12 20v8" />}
       {selected ? <SelectedBadge /> : null}
+      {suggested ? <SuggestedBadge /> : null}
     </svg>
   );
 }
 
-const markComponents: Record<SpotMarkKind, (props: { status: ApiMapSpot['status']; selected?: boolean }) => ReactNode> = {
+const markComponents: Record<SpotMarkKind, (props: { status: ApiMapSpot['status']; selected?: boolean; suggested?: boolean }) => ReactNode> = {
   umbrella: UmbrellaMark,
   sunbed: SunbedMark,
   gazebo: GazeboMark,
@@ -252,22 +268,51 @@ const markComponents: Record<SpotMarkKind, (props: { status: ApiMapSpot['status'
 
 
 /** The mark of a spot, from the fixed repertoire. Without a mark, the equipment decides. */
-export function SpotMark({ mark, umbrellas = 1, status, selected = false }: { mark?: SpotMarkKind; umbrellas?: number; status: ApiMapSpot['status']; selected?: boolean }) {
+export function SpotMark({
+  mark,
+  umbrellas = 1,
+  status,
+  selected = false,
+  suggested = false,
+}: {
+  mark?: SpotMarkKind;
+  umbrellas?: number;
+  status: ApiMapSpot['status'];
+  selected?: boolean;
+  suggested?: boolean;
+}) {
   const Mark = markComponents[mark ?? (umbrellas === 0 ? 'sunbed' : 'umbrella')];
-  return <Mark status={status} selected={selected} />;
+  return <Mark status={status} selected={selected} suggested={suggested} />;
 }
 
-function MapSpot({ locale, beach, spot, day, selected }: { locale: Locale; beach: ApiBeach; spot: ApiMapSpot; day: string; selected: boolean }) {
+function MapSpot({
+  locale,
+  beach,
+  spot,
+  day,
+  selected,
+  suggested,
+  guests,
+}: {
+  locale: Locale;
+  beach: ApiBeach;
+  spot: ApiMapSpot;
+  day: string;
+  selected: boolean;
+  suggested: boolean;
+  guests?: number;
+}) {
   const t = getDictionary(locale, config.brandName).booking;
   const content = (
     <>
-      <SpotMark mark={spot.typeMark} status={spot.status} selected={selected} />
+      <SpotMark mark={spot.typeMark} status={spot.status} selected={selected} suggested={suggested} />
       <span className="plan-spot__code" aria-hidden="true">
         {spot.code}
       </span>
       <span className="visually-hidden">
         {t.mapSpot(spot.typeName, spot.code, t.status[spot.status], spot.priceCents === null ? undefined : formatMoney(spot.priceCents, locale))}
         {`. ${t.equipment(spot.umbrellas, spot.sunbeds)}`}
+        {suggested ? `. ${t.suggestedBadge}` : ''}
         {selected ? `. ${t.status.selected}` : ''}
       </span>
     </>
@@ -284,8 +329,8 @@ function MapSpot({ locale, beach, spot, day, selected }: { locale: Locale; beach
   return (
     <li id={`postazione-${spot.code}`}>
       <Link
-        className={`plan-spot plan-spot--${spot.status}${selected ? ' plan-spot--selected' : ''}`}
-        href={`${beachPath(locale, beach.slug)}?day=${day}&spot=${spot.spotId}#postazione-${spot.code}`}
+        className={`plan-spot plan-spot--${spot.status}${selected ? ' plan-spot--selected' : ''}${suggested ? ' plan-spot--suggested' : ''}`}
+        href={`${beachPath(locale, beach.slug)}?day=${day}${guests ? `&guests=${guests}` : ''}&spot=${spot.spotId}#postazione-${spot.code}`}
         prefetch={false}
         aria-current={selected ? 'true' : undefined}
       >
@@ -341,15 +386,15 @@ function verticalLanes(elements: ApiLayoutElement[]): ApiLayoutElement[] {
 }
 
 /** Distance in rem from the first cell to the start of a column, vertical lanes included. */
-function colOffsetRem(col: number, lanes: ApiLayoutElement[]): number {
+function colOffsetRem(col: number, lanes: ApiLayoutElement[], cellRem = planCellRem): number {
   const before = lanes.filter((lane) => (lane.colStart ?? 0) < col).length;
-  return (col - 1) * (planCellRem + planGapRem) + before * (planLaneRem + planGapRem);
+  return (col - 1) * (cellRem + planGapRem) + before * (planLaneRem + planGapRem);
 }
 
 /** Width in rem of a span of columns, with the vertical lanes that run inside it. */
-function spanWidthRem(from: number, to: number, lanes: ApiLayoutElement[]): number {
+function spanWidthRem(from: number, to: number, lanes: ApiLayoutElement[], cellRem = planCellRem): number {
   const inside = lanes.filter((lane) => (lane.colStart ?? 0) >= from && (lane.colStart ?? 0) < to).length;
-  return (to - from + 1) * planCellRem + (to - from) * planGapRem + inside * (planLaneRem + planGapRem);
+  return (to - from + 1) * cellRem + (to - from) * planGapRem + inside * (planLaneRem + planGapRem);
 }
 
 /** The narrow lane of a vertical walkway, announced in the reading of every row it crosses. */
@@ -365,10 +410,10 @@ function VerticalLane({ locale, lane, zone }: { locale: Locale; lane: ApiLayoutE
 }
 
 /** A structure or a cabin block: a labelled box over a rectangle of free cells. */
-function PlanBox({ locale, element, lanes }: { locale: Locale; element: ApiLayoutElement; lanes: ApiLayoutElement[] }) {
+function PlanBox({ locale, element, lanes, cellRem }: { locale: Locale; element: ApiLayoutElement; lanes: ApiLayoutElement[]; cellRem?: number }) {
   const t = getDictionary(locale, config.brandName).booking;
   const cabins = element.kind === 'cabin_block';
-  const width = spanWidthRem(element.colStart ?? 1, element.colEnd ?? element.colStart ?? 1, lanes);
+  const width = spanWidthRem(element.colStart ?? 1, element.colEnd ?? element.colStart ?? 1, lanes, cellRem);
   return (
     <li className={cabins ? 'plan-box plan-box--cabins' : 'plan-box'} style={{ width: `${width}rem` }}>
       <span className="visually-hidden">{cabins ? t.cabinBlockKind : t.structureKind}: </span>
@@ -384,6 +429,7 @@ function PlanRowCells<T extends PlanPlace>({
   spots,
   rects,
   lanes,
+  cellRem,
   renderSpot,
 }: {
   locale: Locale;
@@ -391,6 +437,7 @@ function PlanRowCells<T extends PlanPlace>({
   spots: T[];
   rects: ApiLayoutElement[];
   lanes: ApiLayoutElement[];
+  cellRem?: number;
   renderSpot: (spot: T) => ReactNode;
 }) {
   const bySpotCol = new Map(spots.map((spot) => [spot.col, spot]));
@@ -402,7 +449,7 @@ function PlanRowCells<T extends PlanPlace>({
     const rect = byRectStart.get(col);
     const spot = bySpotCol.get(col);
     const last = rect ? (rect.colEnd ?? col) : col;
-    if (rect) cells.push(<PlanBox key={`box-${col}`} locale={locale} element={rect} lanes={lanes} />);
+    if (rect) cells.push(<PlanBox key={`box-${col}`} locale={locale} element={rect} lanes={lanes} cellRem={cellRem} />);
     else if (spot) cells.push(<Fragment key={`spot-${col}`}>{renderSpot(spot)}</Fragment>);
     else cells.push(<li key={`hole-${col}`} className="plan-hole" aria-hidden="true" />);
     // A lane right after this cell; lanes crossed by a box are already inside its width.
@@ -415,14 +462,14 @@ function PlanRowCells<T extends PlanPlace>({
 }
 
 /** The lane of a horizontal walkway: its own drawing row, placed along its columns. */
-function HorizontalLane({ locale, element, lanes }: { locale: Locale; element: ApiLayoutElement; lanes: ApiLayoutElement[] }) {
+function HorizontalLane({ locale, element, lanes, cellRem }: { locale: Locale; element: ApiLayoutElement; lanes: ApiLayoutElement[]; cellRem?: number }) {
   const t = getDictionary(locale, config.brandName).booking;
   const from = element.colStart ?? 1;
   const to = element.colEnd ?? from;
   return (
     <div className="plan-row plan-row--lane">
       <p className="plan-row__label" aria-hidden="true" />
-      <div className="plan-lane" style={{ marginInlineStart: `${colOffsetRem(from, lanes)}rem`, width: `${spanWidthRem(from, to, lanes)}rem` }}>
+      <div className="plan-lane" style={{ marginInlineStart: `${colOffsetRem(from, lanes, cellRem)}rem`, width: `${spanWidthRem(from, to, lanes, cellRem)}rem` }}>
         <span className="plan-lane__label">
           {t.walkway}
           {element.label ? ` · ${element.label}` : ''}
@@ -446,6 +493,7 @@ export function PlanCanvas<T extends PlanPlace>({
   elements = [],
   spots,
   idPrefix,
+  cellRem,
   renderSpot,
 }: {
   locale: Locale;
@@ -454,6 +502,8 @@ export function PlanCanvas<T extends PlanPlace>({
   elements?: ApiLayoutElement[];
   spots: T[];
   idPrefix: string;
+  /** Width in rem of one spot cell, when the renderer draws wider cards than the public map. */
+  cellRem?: number;
   renderSpot: (spot: T) => ReactNode;
 }) {
   const t = getDictionary(locale, config.brandName).booking;
@@ -505,7 +555,7 @@ export function PlanCanvas<T extends PlanPlace>({
                     {walkways
                       .filter((lane) => (lane.rowAfter ?? 0) === 0)
                       .map((lane) => (
-                        <HorizontalLane key={lane.elementId} locale={locale} element={lane} lanes={lanes} />
+                        <HorizontalLane key={lane.elementId} locale={locale} element={lane} lanes={lanes} cellRem={cellRem} />
                       ))}
                     {rows.map((row) => (
                       <Fragment key={row}>
@@ -520,6 +570,7 @@ export function PlanCanvas<T extends PlanPlace>({
                               spots={inZone.filter((spot) => spot.rowNumber === row)}
                               rects={rects.filter((rect) => rect.rowNumber === row)}
                               lanes={lanes}
+                              cellRem={cellRem}
                               renderSpot={renderSpot}
                             />
                           </ol>
@@ -527,7 +578,7 @@ export function PlanCanvas<T extends PlanPlace>({
                         {walkways
                           .filter((lane) => (lane.rowAfter ?? 0) === row || (row === lastRow && (lane.rowAfter ?? 0) > lastRow))
                           .map((lane) => (
-                            <HorizontalLane key={lane.elementId} locale={locale} element={lane} lanes={lanes} />
+                            <HorizontalLane key={lane.elementId} locale={locale} element={lane} lanes={lanes} cellRem={cellRem} />
                           ))}
                       </Fragment>
                     ))}
@@ -568,6 +619,8 @@ function BeachMap({
   elements,
   day,
   selected,
+  suggested,
+  guests,
 }: {
   locale: Locale;
   beach: ApiBeach;
@@ -577,6 +630,8 @@ function BeachMap({
   elements: ApiLayoutElement[];
   day: string;
   selected: ApiMapSpot | undefined;
+  suggested: ApiMapSpot | undefined;
+  guests?: number;
 }) {
   const t = getDictionary(locale, config.brandName).booking;
   const free = layout.filter((spot) => spot.status !== 'unavailable').length;
@@ -620,6 +675,12 @@ function BeachMap({
           <UmbrellaMark status="free" selected />
           {t.status.selected}
         </li>
+        {suggested ? (
+          <li>
+            <UmbrellaMark status="free" suggested />
+            {t.suggestedLegend}
+          </li>
+        ) : null}
         <MarkLegendItems locale={locale} marks={layout.map((spot) => spot.typeMark)} />
       </ul>
       <PlanCanvas
@@ -629,7 +690,17 @@ function BeachMap({
         elements={elements}
         spots={layout}
         idPrefix="planimetria"
-        renderSpot={(spot) => <MapSpot locale={locale} beach={beach} spot={spot} day={day} selected={spot.spotId === selected?.spotId} />}
+        renderSpot={(spot) => (
+          <MapSpot
+            locale={locale}
+            beach={beach}
+            spot={spot}
+            day={day}
+            selected={spot.spotId === selected?.spotId}
+            suggested={spot.spotId === suggested?.spotId}
+            guests={guests}
+          />
+        )}
       />
     </div>
   );
@@ -662,7 +733,10 @@ export async function BeachView({ lang, section, slug, query }: { lang: string; 
   const texts = site ? site.content[locale] : null;
   const asked = first(query.day);
   const day = isDay(asked) ? asked : nextDay;
-  const availability = day ? await api.availability(beach.slug, day) : null;
+  // Guests are optional: with them the answer carries the recommended spot (spec §3.3).
+  const guestsAsked = first(query.guests);
+  const guests = guestsAsked && /^\d{1,2}$/.test(guestsAsked) && Number(guestsAsked) >= 1 && Number(guestsAsked) <= 20 ? Number(guestsAsked) : undefined;
+  const availability = day ? await api.availability(beach.slug, day, guests) : null;
   const spots = availability?.ok ? availability.data.spots : [];
   const layout = availability?.ok ? availability.data.layout : [];
   const gaps = availability?.ok ? availability.data.gaps : { shoreGapRows: 1, landGapRows: 1 };
@@ -675,7 +749,9 @@ export async function BeachView({ lang, section, slug, query }: { lang: string; 
   const askedSpot = first(query.spot);
   const picked = askedSpot && uuidPattern.test(askedSpot) ? layout.find((spot) => spot.spotId === askedSpot) : undefined;
   const selected = picked && picked.priceCents !== null ? { ...picked, priceCents: picked.priceCents } : undefined;
-  const alternateQuery = isDay(asked) ? `?day=${asked}${selected ? `&spot=${selected.spotId}` : ''}` : '';
+  const suggestedId = availability?.ok ? (availability.data.suggestedSpotId ?? null) : null;
+  const suggested = suggestedId ? layout.find((spot) => spot.spotId === suggestedId) : undefined;
+  const alternateQuery = isDay(asked) ? `?day=${asked}${guests ? `&guests=${guests}` : ''}${selected ? `&spot=${selected.spotId}` : ''}` : '';
 
   return (
     <PageShell locale={locale} page="explore" alternatePath={beachPath(otherLocale(locale), beach.slug) + alternateQuery} crumbs={crumbsFor(locale, beach)}>
@@ -713,11 +789,32 @@ export async function BeachView({ lang, section, slug, query }: { lang: string; 
                   <label htmlFor="giorno">{t.dayLabel}</label>
                   <input id="giorno" type="date" name="day" defaultValue={day} required />
                 </div>
+                <div className="field">
+                  <label htmlFor="ospiti">{t.guestsOptional}</label>
+                  <input
+                    id="ospiti"
+                    type="number"
+                    name="guests"
+                    inputMode="numeric"
+                    min={1}
+                    max={20}
+                    defaultValue={guests}
+                    aria-describedby="ospiti-aiuto"
+                  />
+                  <p className="field__hint" id="ospiti-aiuto">
+                    {t.guestsHint}
+                  </p>
+                </div>
                 <button className="button button--secondary" type="submit">
                   {t.showDay}
                 </button>
               </form>
               <h2>{t.freeTitle(formatDay(day, locale))}</h2>
+              {guests && suggested ? (
+                <p className="plan__notice">
+                  <strong>{t.suggestedNotice(suggested.code, guests)}</strong>
+                </p>
+              ) : null}
               {!availability?.ok ? (
                 <div className="empty">
                   <h3>{t.unavailableTitle}</h3>
@@ -726,7 +823,18 @@ export async function BeachView({ lang, section, slug, query }: { lang: string; 
               ) : (
                 <>
                   {layout.length > 0 ? (
-                    <BeachMap locale={locale} beach={beach} layout={layout} gaps={gaps} seaSide={seaSide} elements={elements} day={day} selected={selected} />
+                    <BeachMap
+                      locale={locale}
+                      beach={beach}
+                      layout={layout}
+                      gaps={gaps}
+                      seaSide={seaSide}
+                      elements={elements}
+                      day={day}
+                      selected={selected}
+                      suggested={suggested}
+                      guests={guests}
+                    />
                   ) : null}
                   {spots.length === 0 ? (
                     <div className="empty">
@@ -743,7 +851,15 @@ export async function BeachView({ lang, section, slug, query }: { lang: string; 
                               <h3>{manyZones ? `${t.zones[zone]} · ${t.row(row)}` : t.row(row)}</h3>
                               <ul className="spots">
                                 {inRow.map((spot) => (
-                                  <SpotCard key={spot.spotId} locale={locale} beach={beach} spot={spot} day={day} selected={spot.spotId === selected?.spotId} />
+                                  <SpotCard
+                                    key={spot.spotId}
+                                    locale={locale}
+                                    beach={beach}
+                                    spot={spot}
+                                    day={day}
+                                    selected={spot.spotId === selected?.spotId}
+                                    suggested={spot.spotId === suggestedId}
+                                  />
                                 ))}
                               </ul>
                             </div>

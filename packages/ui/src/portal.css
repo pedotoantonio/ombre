@@ -259,9 +259,11 @@
   scroll-margin-top: 5rem;
   /* One column that never grows past the panel: the map inside scrolls instead. */
   grid-template-columns: minmax(0, 1fr);
-  /* Width the longest row needs: its spots, the gaps between them and the vertical walkways. */
+  /* Width the longest row needs: its spots, the gaps between them and the vertical walkways.
+     The cell width is a token, so the console can draw wider cards on the same drawing. */
   container-type: inline-size;
-  --plan-need: calc(var(--plan-cols, 8) * 4.75rem + var(--plan-lanes, 0) * 1.75rem - 0.5rem);
+  --plan-cell: 4.25rem;
+  --plan-need: calc(var(--plan-cols, 8) * (var(--plan-cell) + 0.5rem) + var(--plan-lanes, 0) * 1.75rem - 0.5rem);
 }
 
 .plan__head p {
@@ -414,7 +416,7 @@
 @media (min-width: 40rem) {
   .plan {
     padding: var(--spazio-6);
-    --plan-need: calc(var(--plan-cols, 8) * 4.75rem + var(--plan-lanes, 0) * 1.75rem + 4.5rem);
+    --plan-need: calc(var(--plan-cols, 8) * (var(--plan-cell) + 0.5rem) + var(--plan-lanes, 0) * 1.75rem + 4.5rem);
   }
 
   .plan-row {
@@ -436,7 +438,7 @@
   justify-items: center;
   align-content: center;
   gap: var(--spazio-1);
-  width: 4.25rem;
+  width: var(--plan-cell, 4.25rem);
   min-height: 5rem;
   padding: var(--spazio-2) var(--spazio-1);
   border: 1.5px solid transparent;
@@ -1108,7 +1110,7 @@ html:has(.plan-bar) {
 
 /* Un buco di colonna è sabbia: non selezionabile, fuori legenda, nascosto alla lettura. */
 .plan-hole {
-  width: 4.25rem;
+  width: var(--plan-cell, 4.25rem);
   min-height: 5rem;
   border-radius: var(--raggio);
   background:
@@ -1498,4 +1500,505 @@ button.draw-erase:hover {
 .layout-spot__type {
   padding-top: var(--spazio-2);
   border-top: 1px dashed var(--bordo);
+}
+
+/* ---- Postazione consigliata (§3.3): badge a scintilla, mai solo colore ---- */
+.plan-mark__suggest {
+  fill: var(--oceano);
+  stroke: var(--carta);
+  stroke-width: 2;
+}
+
+.plan-mark__spark {
+  fill: var(--carta);
+}
+
+a.plan-spot--suggested,
+a.plan-spot--suggested:hover {
+  border-color: var(--oceano);
+  box-shadow: 0 0 0 2px var(--oceano);
+}
+
+.badge--suggested {
+  border-color: transparent;
+  background: var(--oceano);
+  color: var(--su-scuro);
+}
+
+/* ---- Console operativa «Oggi sulla spiaggia» (§3.1) ----
+   La scena è la griglia del disegno: stesso canvas delle pagine pubbliche, celle più
+   larghe (--plan-cell impostato dalla pagina) e tessere colorate dallo stato. Ogni stato
+   è dato anche da distintivo testuale e tabella: mai solo colore. */
+
+/* La scena scorre localmente nei due assi: mai la pagina intera. */
+.ops .plan__scroll {
+  overflow: auto;
+  max-height: min(70vh, 48rem);
+  overscroll-behavior: contain;
+}
+
+/* Fascia del mare più presente e fondo sabbia, coi soli token della palette. */
+.ops .plan__sea {
+  padding-block: var(--spazio-4);
+  background: var(--oceano);
+  color: var(--su-scuro);
+}
+
+.ops .plan__rows {
+  padding: var(--spazio-3);
+  border-radius: var(--raggio);
+  background: color-mix(in srgb, var(--ambra) 8%, var(--carta));
+}
+
+.ops .plan-row__label {
+  background: transparent;
+}
+
+/* ---- La tessera: almeno 88×56 px nella vista Completa ---- */
+.ops-tile {
+  display: grid;
+  gap: 0.125rem;
+  width: var(--plan-cell, 5.5rem);
+  min-height: 3.5rem;
+  padding: var(--spazio-1) var(--spazio-2);
+  border: 1.5px solid var(--bordo);
+  border-top-width: 4px;
+  border-radius: var(--raggio-piccolo);
+  background: var(--carta);
+  color: var(--abisso);
+  font-size: var(--testo-minimo);
+  line-height: 1.25;
+  text-decoration: none;
+  box-shadow: var(--ombra-1);
+}
+
+a.ops-tile {
+  transition: border-color var(--normale) ease, transform var(--rapido) ease-out;
+}
+
+a.ops-tile:hover {
+  border-color: var(--oceano);
+}
+
+a.ops-tile:active {
+  transform: scale(0.97);
+}
+
+.ops-tile__head {
+  display: flex;
+  align-items: center;
+  gap: var(--spazio-1);
+  min-width: 0;
+}
+
+.ops-tile__head .plan-mark {
+  flex: none;
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+.ops-tile__code {
+  overflow: hidden;
+  font-weight: 800;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.ops-tile__badges {
+  display: inline-flex;
+  flex: none;
+  gap: 0.125rem;
+  margin-inline-start: auto;
+}
+
+.ops-tile__badge {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.125rem;
+  height: 1.125rem;
+  padding-inline: 0.125rem;
+  border: 1px solid var(--abisso);
+  border-radius: 0.375rem;
+  background: var(--carta);
+  color: var(--abisso);
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.ops-tile__guest,
+.ops-tile__kit {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.ops-tile__kit {
+  color: var(--testo-secondario);
+  font-weight: 600;
+}
+
+/* Colore dello stato: riempie il segno del tipo e la riga alta del bordo.
+   Bloccata e non in vendita tengono anche la croce del segno: forma, non solo colore. */
+.ops-tile--free { border-top-color: var(--libero); }
+.ops-tile--reserved { border-top-color: var(--ambra); }
+.ops-tile--expected { border-top-color: var(--condiviso); }
+.ops-tile--present { border-top-color: var(--oceano); }
+.ops-tile--departed { border-top-color: var(--abisso); }
+.ops-tile--blocked { border-top-color: var(--occupato); }
+.ops-tile--not_for_sale { border-top-color: var(--bordo-campo); }
+
+.ops-tile--free .plan-mark__canopy { fill: var(--libero); stroke: var(--libero); }
+.ops-tile--reserved .plan-mark__canopy { fill: var(--ambra); stroke: var(--ambra); }
+.ops-tile--expected .plan-mark__canopy { fill: var(--condiviso); stroke: var(--condiviso); }
+.ops-tile--present .plan-mark__canopy { fill: var(--oceano); stroke: var(--oceano); }
+.ops-tile--departed .plan-mark__canopy { fill: var(--abisso); stroke: var(--abisso); }
+.ops-tile--blocked .plan-mark__canopy { fill: var(--occupato); stroke: var(--occupato); }
+.ops-tile--not_for_sale .plan-mark__canopy { fill: var(--bordo-campo); stroke: var(--bordo-campo); }
+
+.ops-tile--not_for_sale {
+  background: color-mix(in srgb, var(--bordo) 35%, var(--carta));
+}
+
+/* Risultato della ricerca: anello ambra sulla tessera e riga marcata in tabella. */
+.ops-tile--hit {
+  outline: 3px solid var(--ambra);
+  outline-offset: 1px;
+}
+
+.is-hit > td,
+.is-hit > th {
+  background: var(--spuma);
+}
+
+/* ---- Modalità selezione: l'intera tessera è il controllo ---- */
+.ops-tile--check {
+  position: relative;
+  padding-inline-end: 1.75rem;
+  cursor: pointer;
+}
+
+.ops-tile--check .ops-tile__badges {
+  margin-inline-end: 0.25rem;
+}
+
+.ops-tile__box {
+  position: absolute;
+  top: 0.25rem;
+  inset-inline-end: 0.25rem;
+  width: 1.25rem;
+  height: 1.25rem;
+  margin: 0;
+  accent-color: var(--oceano);
+}
+
+.ops-tile--check:has(.ops-tile__box:checked) {
+  background: var(--spuma);
+  outline: 3px solid var(--oceano);
+  outline-offset: 1px;
+}
+
+.ops-tile--check:has(.ops-tile__box:focus-visible) {
+  outline: 3px solid var(--fuoco);
+  outline-offset: 1px;
+}
+
+/* ---- Barra, navigazione per data, viste e azioni ---- */
+.ops-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--spazio-3);
+}
+
+.ops-bar__search {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--spazio-3);
+}
+
+.ops-bar__search .button {
+  margin-top: 1.625rem;
+}
+
+.ops-bar__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spazio-2);
+}
+
+.ops-nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spazio-2) var(--spazio-3);
+}
+
+.ops-nav__arrow {
+  min-width: var(--tocco);
+}
+
+.ops-nav__day {
+  font-size: var(--testo-titolo-3);
+}
+
+.ops-nav__form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spazio-2);
+}
+
+.ops-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spazio-2) var(--spazio-4);
+}
+
+.ops-views {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spazio-2);
+}
+
+.ops-note {
+  color: var(--testo-secondario);
+  font-size: var(--testo-piccolo);
+}
+
+.ops-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--spazio-3);
+  margin-bottom: var(--spazio-4);
+}
+
+.ops-quick {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spazio-2);
+}
+
+.ops-quick__count {
+  font-weight: 700;
+}
+
+/* ---- Riepilogo del giorno ---- */
+.ops-summary__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
+  gap: var(--spazio-3);
+  margin: var(--spazio-3) 0 0;
+}
+
+.ops-summary__grid dt {
+  color: var(--testo-secondario);
+  font-size: var(--testo-piccolo);
+}
+
+.ops-summary__grid dd {
+  margin: 0;
+  font-size: 1.375rem;
+  font-weight: 800;
+}
+
+.ops-summary__revenue dd {
+  color: var(--oceano);
+}
+
+/* ---- Viste commutabili: Completa / Numeri / Dotazioni ----
+   Senza vista esplicita (auto) la Completa vale sui grandi schermi e la Numeri al telefono. */
+.ops--numeri .ops-tile__guest,
+.ops--numeri .ops-tile__kit,
+.ops--dotazioni .ops-tile__guest {
+  display: none;
+}
+
+@media (max-width: 40rem) {
+  .ops--auto .ops-tile__guest,
+  .ops--auto .ops-tile__kit {
+    display: none;
+  }
+}
+
+/* ---- Statistiche (§3.2): indicatori, barre solo CSS, heatmap ---- */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  gap: var(--spazio-4);
+  margin: 0;
+}
+
+.stat-card {
+  padding: var(--spazio-4);
+  border: 1px solid var(--bordo);
+  border-radius: var(--raggio);
+  background: var(--carta);
+  box-shadow: var(--ombra-1);
+}
+
+.stat-card dt {
+  color: var(--testo-secondario);
+  font-size: var(--testo-piccolo);
+  font-weight: 600;
+}
+
+.stat-card dd {
+  margin: var(--spazio-1) 0 0;
+  font-size: 1.75rem;
+  font-weight: 800;
+}
+
+.stat-card .stat-card__text {
+  font-size: var(--testo-corpo);
+  font-weight: 600;
+}
+
+.stat-card .stat-card__note {
+  margin-top: var(--spazio-2);
+  color: var(--testo-secondario);
+  font-size: var(--testo-piccolo);
+  font-weight: 400;
+}
+
+/* Barre solo CSS: nascoste alla lettura, la tabella accanto dice gli stessi numeri. */
+.stat-bars {
+  display: grid;
+  gap: var(--spazio-2);
+  margin: var(--spazio-3) 0;
+}
+
+.stat-bars li {
+  display: grid;
+  grid-template-columns: minmax(6rem, 10rem) 1fr auto;
+  gap: var(--spazio-2);
+  align-items: center;
+}
+
+.stat-bars__label {
+  overflow: hidden;
+  font-size: var(--testo-piccolo);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.stat-bars__track {
+  display: block;
+  height: 1rem;
+  overflow: hidden;
+  border-radius: var(--raggio-pillola);
+  background: var(--spuma);
+}
+
+.stat-bars__fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--oceano);
+}
+
+.stat-bars__value {
+  font-size: var(--testo-piccolo);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Heatmap sulla scena del disegno: intensità sempre accompagnata dalla percentuale scritta. */
+.heat-cell {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 0.125rem;
+  width: var(--plan-cell, 4.25rem);
+  min-height: 3.25rem;
+  border: 1px solid var(--bordo);
+  border-radius: var(--raggio-piccolo);
+  color: var(--abisso);
+  font-size: var(--testo-minimo);
+}
+
+.heat-cell__code {
+  font-weight: 800;
+}
+
+.heat-cell__rate {
+  font-variant-numeric: tabular-nums;
+}
+
+.heat-swatch {
+  display: inline-block;
+  width: 1.75rem;
+  height: 1.125rem;
+  border: 1px solid var(--bordo);
+  border-radius: 0.25rem;
+}
+
+/* Soglie: mai pubblicata (trama), poi quattro intensità del verde oceano. */
+.heat--0 {
+  background: repeating-linear-gradient(45deg, var(--carta), var(--carta) 4px, var(--spuma) 4px, var(--spuma) 8px);
+  color: var(--testo-secondario);
+}
+
+.heat--1 { background: color-mix(in srgb, var(--oceano) 12%, var(--carta)); }
+.heat--2 { background: color-mix(in srgb, var(--oceano) 28%, var(--carta)); }
+.heat--3 { background: color-mix(in srgb, var(--oceano) 48%, var(--carta)); }
+
+.heat--4 {
+  background: var(--oceano);
+  color: var(--su-scuro);
+}
+
+.heat--4 .heat-cell__code,
+.heat--4 .heat-cell__rate {
+  color: var(--su-scuro);
+}
+
+/* ---- Stampa ----
+   Il foglio gira per lo stabilimento: la console stampa la vista «Dotazioni», senza nomi
+   né tabella; stampare la «Completa» (nomi inclusi) è la scelta esplicita di quella vista.
+   L'intelaiatura del sito non si stampa su nessuna pagina. */
+@media print {
+  .skip-link,
+  .notice,
+  .site-header,
+  .account-bar,
+  .breadcrumb,
+  .site-footer,
+  .ops-bar,
+  .ops-nav__form,
+  .ops-nav__arrow,
+  .ops-tools,
+  .ops-note,
+  .ops-actions,
+  .alert {
+    display: none !important;
+  }
+
+  .ops .plan__scroll {
+    max-height: none;
+    overflow: visible;
+  }
+
+  .ops .plan__rows {
+    width: auto;
+  }
+
+  .ops-tile {
+    box-shadow: none;
+  }
+
+  .section--ops:not(.ops-view-completa) .ops-tile__guest,
+  .section--ops:not(.ops-view-completa) .ops-table {
+    display: none !important;
+  }
+
+  /* Anche dalla vista Numeri la stampa torna alla Dotazioni: la dotazione si vede, i nomi no. */
+  .section--ops:not(.ops-view-completa) .ops-tile__kit {
+    display: block !important;
+  }
 }

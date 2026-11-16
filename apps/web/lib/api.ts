@@ -164,9 +164,10 @@ export const api = {
   beaches: (search: BeachSearch = {}) => call<{ beaches: ApiBeachOffer[] }>(`/v1/beaches${searchQuery(search)}`),
   beach: (slug: string) =>
     call<{ beach: ApiBeach; nextAvailableDay: string | null; site: { template: SiteTemplate; content: SiteContent } | null }>(`/v1/beaches/${encodeURIComponent(slug)}`),
-  availability: (slug: string, day: string) =>
-    call<{ spots: ApiSpot[]; layout: ApiMapSpot[]; gaps: ApiZoneGaps; seaSide: SeaSide; elements: ApiLayoutElement[] }>(
-      `/v1/beaches/${encodeURIComponent(slug)}/availability?day=${encodeURIComponent(day)}`,
+  // With guests the answer also carries the recommended spot for that party (spec §3.3).
+  availability: (slug: string, day: string, guests?: number) =>
+    call<{ spots: ApiSpot[]; layout: ApiMapSpot[]; gaps: ApiZoneGaps; seaSide: SeaSide; elements: ApiLayoutElement[]; guests?: number; suggestedSpotId?: string | null }>(
+      `/v1/beaches/${encodeURIComponent(slug)}/availability?day=${encodeURIComponent(day)}${guests ? `&guests=${guests}` : ''}`,
     ),
   quote: (request: DayRequest) => post<ApiQuote>('/v1/quotes', request),
   hold: (request: DayRequest, idempotencyKey: string) =>

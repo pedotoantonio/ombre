@@ -31,8 +31,12 @@ export function DataTable({ label, columns, children }: { label: string; columns
   );
 }
 
-export function Row({ children }: { children: ReactNode }) {
-  return <tr role="row">{children}</tr>;
+export function Row({ id, className, children }: { id?: string; className?: string; children: ReactNode }) {
+  return (
+    <tr role="row" id={id} className={className}>
+      {children}
+    </tr>
+  );
 }
 
 /** First cell of a row when it names the row: on phones it becomes the title of the card. */

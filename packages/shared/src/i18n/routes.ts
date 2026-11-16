@@ -100,6 +100,25 @@ export function manageCabinsPath(locale: Locale, beachSlug: string): string {
   return `${accountPath(locale, 'manage', beachSlug)}/${manageCabinsSegment[locale]}`;
 }
 
+/** Last segment of the operational console «Oggi sulla spiaggia», under the management page. */
+export const manageTodaySegment: Record<Locale, string> = { it: 'oggi', en: 'today' };
+
+/** Address of the operational console of a beach club, inside the reserved area. */
+export function manageTodayPath(locale: Locale, beachSlug: string): string {
+  return `${accountPath(locale, 'manage', beachSlug)}/${manageTodaySegment[locale]}`;
+}
+
+/** Last segment of the statistics page, under the management page of a beach club. */
+export const manageStatsSegment: Record<Locale, string> = { it: 'statistiche', en: 'statistics' };
+
+/** Address of the statistics page of a beach club, inside the reserved area. */
+export function manageStatsPath(locale: Locale, beachSlug: string): string {
+  return `${accountPath(locale, 'manage', beachSlug)}/${manageStatsSegment[locale]}`;
+}
+
+/** The pages one level under the management page of a beach club: the depth whitelist. */
+const manageSubPages: Record<Locale, string>[] = [beachLayoutSegment, manageCabinsSegment, manageTodaySegment, manageStatsSegment];
+
 /** Internal address of the page shown for unknown addresses. It is never linked. */
 export const notFoundSegment = 'pagina-non-trovata';
 
@@ -128,8 +147,8 @@ export function readAddress(pathname: string): { locale: Locale; known: boolean 
   if (first === accountSection[locale]) {
     const page = (Object.keys(accountPages) as AccountPage[]).find((id) => accountPages[id][locale] === second);
     if (page === undefined) return { locale, known: false };
-    // The beach layout and cabins pages live one level under the management page of a beach club.
-    if (page === 'manage' && rest.length === 4) return { locale, known: rest[3] === beachLayoutSegment[locale] || rest[3] === manageCabinsSegment[locale] };
+    // The beach layout, cabins, console and statistics pages live one level under the management page of a beach club.
+    if (page === 'manage' && rest.length === 4) return { locale, known: manageSubPages.some((segment) => rest[3] === segment[locale]) };
     return { locale, known: accountDepth[page] === rest.length };
   }
   return { locale, known: false };

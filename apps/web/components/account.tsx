@@ -17,12 +17,20 @@ import {
   locales,
   manageCabinsPath,
   manageCabinsSegment,
+  manageStatsPath,
+  manageStatsSegment,
+  manageTodayPath,
+  manageTodaySegment,
+  suggestSpot,
   type AccountPage,
   type Locale,
+  type SpotZone,
 } from '@ombre/shared';
 import { api, apiCall, dayPattern, formatDate, formatDay, formatPeriod, slugPattern, uuidPattern } from '@/lib/api';
 import { BeachLayoutView } from './beach-layout';
 import { CabinHolderView, CabinsManageView, CabinsTodayPanel } from './cabins';
+import { OperationsView } from './operations';
+import { StatisticsView } from './statistics';
 import { privateMetadata } from '@/lib/seo';
 import { signedIn, type Me } from '@/lib/session';
 import { PageHead, PageShell } from './PageShell';
@@ -81,10 +89,22 @@ export async function accountMetadata(locale: Locale, segments: string[]): Promi
               : null;
     return privateMetadata(locale, title ?? t.nav.reservedArea);
   }
-  if (segments.length === 3 && page === 'manage' && (segments[2] === beachLayoutSegment[locale] || segments[2] === manageCabinsSegment[locale])) {
-    const beachSession = await signedIn();
-    const club = beachSession?.me.memberships.find((entry) => entry.beachSlug === id)?.beachName;
-    return privateMetadata(locale, segments[2] === beachLayoutSegment[locale] ? t.layout.short : t.cabins.short, { club });
+  if (segments.length === 3 && page === 'manage') {
+    const subTitle =
+      segments[2] === beachLayoutSegment[locale]
+        ? t.layout.short
+        : segments[2] === manageCabinsSegment[locale]
+          ? t.cabins.short
+          : segments[2] === manageTodaySegment[locale]
+            ? t.ops.short
+            : segments[2] === manageStatsSegment[locale]
+              ? t.stats.short
+              : null;
+    if (subTitle !== null) {
+      const beachSession = await signedIn();
+      const club = beachSession?.me.memberships.find((entry) => entry.beachSlug === id)?.beachName;
+      return privateMetadata(locale, subTitle, { club });
+    }
   }
   const session = segments.length === 2 ? await signedIn() : null;
   if (session && (page === 'manage' || page === 'site')) {
@@ -288,6 +308,11 @@ async function TwoFactorView({ locale, query }: { locale: Locale; query: Query }
 interface InventoryRow {
   spotId: string;
   code: string;
+  zone: SpotZone;
+  rowNumber: number;
+  /** Column and capacity travel with the inventory so the desk can rank spots like the public map (spec §3.3). */
+  col: number;
+  maxGuests: number;
   state: 'unpublished' | 'unpublishable' | 'available' | 'held' | 'occupied' | 'blocked';
   priceCents: number | null;
   shared: boolean;
@@ -338,12 +363,19 @@ async function ManageView({ locale, beachSlug, query }: { locale: Locale; beachS
     can(role, 'layout.edit') ? api.beach(beachSlug) : null,
   ]);
   const position = beachCard?.ok ? { latitude: beachCard.data.beach.latitude, longitude: beachCard.data.beach.longitude } : null;
+  // Optional party size: with it the desk list carries the recommended spot (spec §3.3).
+  const guestsAsked = first(query.guests);
+  const guests = guestsAsked && /^\d{1,2}$/.test(guestsAsked) && Number(guestsAsked) >= 1 && Number(guestsAsked) <= 20 ? Number(guestsAsked) : undefined;
   // After a refused save the typed values come back in the address, next to their errors.
   const latAsked = first(query.lat);
   const lngAsked = first(query.lng);
   const latError = first(query.latErr) === '1';
   const lngError = first(query.lngErr) === '1';
   const freeSpots = inventory?.ok ? inventory.data.spots.filter((row) => row.state === 'available') : [];
+  // The same shared heuristic as the public page, fed with the extended inventory rows.
+  const suggested = guests
+    ? suggestSpot(freeSpots.flatMap((row) => (row.priceCents === null ? [] : [{ ...row, priceCents: row.priceCents }])), guests)
+    : null;
   const euro = (cents: number | null) => (cents === null ? '' : (cents / 100).toFixed(2).replace('.', locale === 'it' ? ',' : '.'));
 
   return (
@@ -372,6 +404,16 @@ async function ManageView({ locale, beachSlug, query }: { locale: Locale; beachS
             {can(role, 'cabins.manage') ? (
               <Link className="button button--secondary" href={manageCabinsPath(locale, beachSlug)}>
                 {t.openCabins}
+              </Link>
+            ) : null}
+            {can(role, 'inventory.read') ? (
+              <Link className="button button--secondary" href={`${manageTodayPath(locale, beachSlug)}?day=${day}`}>
+                {t.openToday}
+              </Link>
+            ) : null}
+            {can(role, 'reports.read') ? (
+              <Link className="button button--secondary" href={manageStatsPath(locale, beachSlug)}>
+                {t.openStats}
               </Link>
             ) : null}
           </p>
@@ -423,6 +465,12 @@ async function ManageView({ locale, beachSlug, query }: { locale: Locale; beachS
               <label htmlFor="giorno">{t.day}</label>
               <input id="giorno" type="date" name="day" defaultValue={day} required />
             </div>
+            {can(role, 'bookings.create') ? (
+              <div className="field">
+                <label htmlFor="ospiti-banco">{t.deskGuestsLabel}</label>
+                <input id="ospiti-banco" type="number" name="guests" inputMode="numeric" min={1} max={20} defaultValue={guests} />
+              </div>
+            ) : null}
             <button className="button button--secondary" type="submit">{t.show}</button>
           </form>
 
@@ -452,9 +500,11 @@ async function ManageView({ locale, beachSlug, query }: { locale: Locale; beachS
                       <Hidden values={common} />
                       <div className="field">
                         <label htmlFor="banco-postazione">{t.spot}</label>
-                        <select id="banco-postazione" name="spot" required>
+                        <select id="banco-postazione" name="spot" required defaultValue={suggested?.spotId}>
                           {freeSpots.map((row) => (
-                            <option key={row.spotId} value={row.spotId}>{`${row.code} · ${row.priceCents === null ? '' : formatMoney(row.priceCents, locale)}`}</option>
+                            <option key={row.spotId} value={row.spotId}>
+                              {`${row.code} · ${row.priceCents === null ? '' : formatMoney(row.priceCents, locale)}${row.spotId === suggested?.spotId ? ` · ${t.deskSuggested}` : ''}`}
+                            </option>
                           ))}
                         </select>
                       </div>
@@ -798,6 +848,10 @@ export async function AccountRoute({ locale, segments, query }: { locale: Locale
     return <BeachLayoutView locale={locale} beachSlug={segments[1]!} query={query} />;
   if (segments.length === 3 && page === 'manage' && segments[2] === manageCabinsSegment[locale])
     return <CabinsManageView locale={locale} beachSlug={segments[1]!} query={query} />;
+  if (segments.length === 3 && page === 'manage' && segments[2] === manageTodaySegment[locale])
+    return <OperationsView locale={locale} beachSlug={segments[1]!} query={query} />;
+  if (segments.length === 3 && page === 'manage' && segments[2] === manageStatsSegment[locale])
+    return <StatisticsView locale={locale} beachSlug={segments[1]!} query={query} />;
   if (segments.length === 2 && page === 'season') return <SeasonView locale={locale} contractId={segments[1]!} query={query} />;
   if (segments.length === 2 && page === 'site') return <SiteEditorView locale={locale} beachSlug={segments[1]!} query={query} />;
   notFound();
