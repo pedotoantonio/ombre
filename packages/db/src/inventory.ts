@@ -1,14 +1,15 @@
 import { createHash } from 'node:crypto';
 import { and, asc, eq, gte, ilike, or, sql } from 'drizzle-orm';
-import { quoteDay, type DayQuote, type SeaSide, type SpotMark } from '@ombre/shared';
+import { quoteConventionDay, quoteDay, type DayQuote, type SeaSide, type SpotMark } from '@ombre/shared';
 import { withBeach, type Database, type Transaction } from './client';
 import { listElements, type LayoutElementView } from './layout';
-import { beach, hold, inventoryDay, promotion, spot, spotType } from './schema';
+import { beach, hold, hotelConvention, inventoryDay, promotion, spot, spotType } from './schema';
 
 export type DomainErrorCode =
   | 'not_found'
   | 'inventory_conflict'
   | 'promo_not_applicable'
+  | 'code_taken'
   | 'idempotency_mismatch'
   | 'invalid_credentials'
   | 'account_locked'
@@ -302,9 +303,42 @@ export interface DayRequest {
   promoCode?: string | null;
 }
 
-function normalizePromo(code: string | null | undefined): string | null {
+export function normalizePromo(code: string | null | undefined): string | null {
   const trimmed = code?.trim().toUpperCase();
   return trimmed ? trimmed : null;
+}
+
+/** An active convention whose validity window, when set, contains the booked day. */
+export const conventionAppliesOn = (day: string) =>
+  and(
+    eq(hotelConvention.active, true),
+    sql`(${hotelConvention.validFrom} is null or ${hotelConvention.validFrom} <= ${day})`,
+    sql`(${hotelConvention.validTo} is null or ${hotelConvention.validTo} >= ${day})`,
+  );
+
+interface ConventionPricing {
+  id: string;
+  percentBps: number | null;
+  fixedPriceCents: number | null;
+}
+
+/**
+ * One code field serves both registries. A promotion is looked up first, then a
+ * convention: the order is documented and, since migration 014 keeps a code in a
+ * single registry per beach club, it can never be ambiguous. The refusal is the
+ * same for every failure (unknown, suspended, exhausted, out of validity), so the
+ * answer never reveals whether a convention exists.
+ */
+function codeRefused(): DomainError {
+  return new DomainError('promo_not_applicable', 'This code cannot be applied');
+}
+
+async function findConvention(tx: Transaction, code: string, day: string): Promise<ConventionPricing | undefined> {
+  const [deal] = await tx
+    .select({ id: hotelConvention.id, percentBps: hotelConvention.percentBps, fixedPriceCents: hotelConvention.fixedPriceCents })
+    .from(hotelConvention)
+    .where(and(eq(hotelConvention.code, code), conventionAppliesOn(day)));
+  return deal;
 }
 
 /** Price of a day as the server computes it. It reserves nothing. */
@@ -325,8 +359,10 @@ export function quoteSpot(db: Database, beachId: string, request: DayRequest): P
       .select({ percentBps: promotion.percentBps })
       .from(promotion)
       .where(and(eq(promotion.code, code), eq(promotion.active, true), sql`(${promotion.maxUses} is null or ${promotion.committedUses} < ${promotion.maxUses})`));
-    if (!promo) throw new DomainError('promo_not_applicable', 'This promotion cannot be applied');
-    return quoteDay(row.priceCents, { code, percentBps: promo.percentBps });
+    if (promo) return quoteDay(row.priceCents, { code, percentBps: promo.percentBps });
+    const deal = await findConvention(tx, code, request.day);
+    if (!deal) throw codeRefused();
+    return quoteConventionDay(row.priceCents, code, deal);
   });
 }
 
@@ -416,23 +452,35 @@ export async function acquireHold(db: Database, beachId: string, request: HoldRe
       }
       if (state !== 'available') throw new DomainError('inventory_conflict', 'This spot has just been taken');
 
+      // Promotion first, then convention (same documented order as the quote); a
+      // convention has no use counter, so it is only read, never locked.
       let promo: { id: string; percentBps: number } | undefined;
+      let deal: { id: string; percentBps: number | null; fixedPriceCents: number | null } | undefined;
       if (promoCode) {
         [promo] = await tx
           .update(promotion)
           .set({ committedUses: sql`${promotion.committedUses} + 1` })
           .where(and(eq(promotion.code, promoCode), eq(promotion.active, true), sql`(${promotion.maxUses} is null or ${promotion.committedUses} < ${promotion.maxUses})`))
           .returning({ id: promotion.id, percentBps: promotion.percentBps });
-        if (!promo) throw new DomainError('promo_not_applicable', 'This promotion cannot be applied');
+        if (!promo) {
+          deal = await findConvention(tx, promoCode, request.day);
+          if (!deal) throw codeRefused();
+        }
       }
 
-      const quote = quoteDay(row.priceCents, promo && promoCode ? { code: promoCode, percentBps: promo.percentBps } : undefined);
+      const quote =
+        promoCode && promo
+          ? quoteDay(row.priceCents, { code: promoCode, percentBps: promo.percentBps })
+          : promoCode && deal
+            ? quoteConventionDay(row.priceCents, promoCode, deal)
+            : quoteDay(row.priceCents);
       const [created] = await tx
         .insert(hold)
         .values({
           beachId,
           inventoryDayId: row.id,
           promotionId: promo?.id ?? null,
+          conventionId: deal?.id ?? null,
           idempotencyKey: request.idempotencyKey,
           requestHash,
           listPriceCents: quote.listPrice,

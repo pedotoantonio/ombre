@@ -12,6 +12,10 @@ export const actions = [
   'bookings.move',
   'bookings.cancel',
   'sharing.manage',
+  // Commercial codes: promotions and hotel conventions share this one permission
+  // (spec §4.1). Introduced with the conventions, since promotions were only ever
+  // seeded owner-side and had no management permission of their own.
+  'promotions.manage',
   'reports.read',
   'site.read',
   'site.edit',

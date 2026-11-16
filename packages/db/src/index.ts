@@ -2,6 +2,7 @@ export * from './client';
 export * from './auth';
 export * from './bookings';
 export * from './cabins';
+export * from './conventions';
 export * from './spot-types';
 export * from './inventory';
 export * from './jobs';

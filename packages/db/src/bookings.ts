@@ -2,11 +2,11 @@ import { createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypt
 import { and, asc, eq, sql } from 'drizzle-orm';
 import { canTransition } from '@ombre/shared';
 import { withActor, withBeach, type Database, type Transaction } from './client';
-import { acquireHold, DomainError } from './inventory';
+import { acquireHold, conventionAppliesOn, DomainError } from './inventory';
 import { enqueue } from './jobs';
 import { recordRefundDue, recordSale } from './ledger';
 import type { Actor } from './manage';
-import { accessEvent, allocation, auditEvent, beach, booking, hold, inventoryDay, ledgerEntry, pass, payment, promotion, providerEvent, refund, spot } from './schema';
+import { accessEvent, allocation, auditEvent, beach, booking, hold, hotelConvention, inventoryDay, ledgerEntry, pass, payment, promotion, providerEvent, refund, spot } from './schema';
 
 /** Signs identifiers so that links and passes cannot be guessed and need no stored secret per row. */
 function sign(secret: string, purpose: string, id: string): string {
@@ -88,6 +88,7 @@ export function startCheckout(db: Database, beachId: string, request: CheckoutRe
         inventoryDayId: day.id,
         holdId: held.id,
         promotionId: held.promotionId,
+        conventionId: held.conventionId,
         code,
         status: 'under_review',
         guestName: request.guestName,
@@ -310,15 +311,33 @@ export function listBookings(db: Database, actor: Actor, day: string): Promise<B
 
 /**
  * Booking taken at the front desk and paid there. It goes through the same hold and the
- * same row lock as a purchase on the website: no channel can jump the queue.
+ * same row lock as a purchase on the website: no channel can jump the queue. The desk
+ * picks a hotel convention from a list (its identifier, never a typed code, spec §4.1);
+ * the identifier is resolved to the code here and then follows the ordinary path.
  */
-export async function deskBooking(db: Database, actor: Actor, input: { spotId: string; day: string; guestName: string }, secret: string): Promise<{ code: string }> {
-  const held = await acquireHold(db, actor.beachId, { spotId: input.spotId, day: input.day, idempotencyKey: `desk-${randomUUID()}`, ttlSeconds: 120 });
+export async function deskBooking(db: Database, actor: Actor, input: { spotId: string; day: string; guestName: string; conventionId?: string | null }, secret: string): Promise<{ code: string }> {
+  let promoCode: string | undefined;
+  if (input.conventionId) {
+    const conventionId = input.conventionId;
+    const [deal] = await withBeach(db, actor.beachId, (tx) =>
+      tx.select({ code: hotelConvention.code }).from(hotelConvention).where(and(eq(hotelConvention.id, conventionId), conventionAppliesOn(input.day))),
+    );
+    // Suspended or outside its validity window for the booked day: same refusal as online.
+    if (!deal) throw new DomainError('promo_not_applicable', 'This convention cannot be applied to this day');
+    promoCode = deal.code;
+  }
+  const held = await acquireHold(db, actor.beachId, { spotId: input.spotId, day: input.day, promoCode, idempotencyKey: `desk-${randomUUID()}`, ttlSeconds: 120 });
   const started = await startCheckout(db, actor.beachId, { holdId: held.holdId, guestName: input.guestName, guestEmail: null, source: 'desk' }, secret);
   const outcome = await applyPaymentOutcome(db, { provider: 'desk', eventId: `desk-${started.bookingId}`, reference: started.payment.reference, outcome: 'succeeded' });
   if (outcome !== 'confirmed') throw new DomainError('inventory_conflict', 'This spot has just been taken');
   await withActor(db, actor.beachId, actor.userId, (tx) =>
-    tx.insert(auditEvent).values({ beachId: actor.beachId, actorUserId: actor.userId, action: 'booking.desk', target: started.code, detail: { totalCents: started.payment.amountCents } }),
+    tx.insert(auditEvent).values({
+      beachId: actor.beachId,
+      actorUserId: actor.userId,
+      action: 'booking.desk',
+      target: started.code,
+      detail: { totalCents: started.payment.amountCents, conventionId: input.conventionId ?? null },
+    }),
   );
   return { code: started.code };
 }

@@ -16,12 +16,15 @@ import {
   cancelByBeachClub,
   checkAccess,
   confirmTwoFactor,
+  conventionStatement,
   createCabin,
   createContract,
+  createConvention,
   createSpotType,
   decideProposal,
   decideSublet,
   deleteCabin,
+  deleteConvention,
   deleteSpot,
   deleteSpotType,
   deskBooking,
@@ -41,7 +44,9 @@ import {
   listDayMap,
   listBookings,
   listContracts,
+  listConventions,
   listDayOperations,
+  listDeskConventions,
   listInventory,
   listMyCabins,
   listMyContracts,
@@ -67,6 +72,7 @@ import {
   setBlocked,
   setBlockedBulk,
   setContractStatus,
+  setConventionStatus,
   setGapRows,
   setPrice,
   setRetired,
@@ -77,6 +83,7 @@ import {
   startCheckout,
   statisticsReport,
   updateCabin,
+  updateConvention,
   updateSpot,
   updateSpotType,
   withdrawDay,
@@ -148,6 +155,7 @@ const domainStatus: Record<DomainErrorCode, 401 | 403 | 404 | 409 | 422 | 429> =
   not_found: 404,
   inventory_conflict: 409,
   promo_not_applicable: 422,
+  code_taken: 409,
   idempotency_mismatch: 422,
   invalid_credentials: 401,
   account_locked: 429,
@@ -227,7 +235,23 @@ const siteDraftSchema = z.object({
   template: z.enum(siteTemplates),
   content: z.object({ it: siteTextsSchema.refine((texts) => texts.description.length > 0), en: siteTextsSchema.nullable() }),
 });
-const deskSchema = z.object({ spotId: z.uuid(), day: daySchema, guestName: z.string().trim().min(1).max(120) });
+// The desk picks a convention from a list, by identifier, never by typing the code.
+const deskSchema = z.object({ spotId: z.uuid(), day: daySchema, guestName: z.string().trim().min(1).max(120), conventionId: z.uuid().nullable().optional() });
+// ---- Hotel conventions (spec §4.1): one pricing out of two, optional validity window ----
+const conventionSchema = z
+  .object({
+    partnerName: z.string().trim().min(1).max(120),
+    // Normalized server-side like promotion codes: upper case, no spaces.
+    code: z.string().trim().min(1).max(40).regex(/^\S+$/),
+    percentBps: z.number().int().min(1).max(10_000).nullable(),
+    fixedPriceCents: priceSchema.nullable(),
+    validFrom: daySchema.nullable().default(null),
+    validTo: daySchema.nullable().default(null),
+    notes: z.string().trim().min(1).max(500).nullable().default(null),
+  })
+  .refine((deal) => (deal.percentBps === null) !== (deal.fixedPriceCents === null))
+  .refine((deal) => deal.validFrom === null || deal.validTo === null || deal.validFrom <= deal.validTo);
+const conventionStatusSchema = z.object({ active: z.boolean() });
 const bookingCodeSchema = z.string().regex(/^OM-\d{6}-\d{3}$/i);
 const idempotencyKeySchema = z.string().min(8).max(200).regex(/^[\x21-\x7e]+$/);
 // A position is complete or absent: a lone coordinate would be meaningless.
@@ -547,7 +571,7 @@ export function createApp(options: AppOptions): Hono {
     return c.json(await checkAccess(db, actor, parse(accessSchema, await body(c.req.raw), 'request'), signingSecret), 201);
   });
 
-  route({ method: 'post', path: '/v1/manage/beaches/:slug/desk-bookings', summary: 'Book a spot at the front desk, paid there', tag: 'Beach club', auth: 'session', request: deskSchema, success: 201, errors: [400, 401, 403, 404, 409] }, async (c) => {
+  route({ method: 'post', path: '/v1/manage/beaches/:slug/desk-bookings', summary: 'Book a spot at the front desk, paid there, optionally under a hotel convention', tag: 'Beach club', auth: 'session', request: deskSchema, success: 201, errors: [400, 401, 403, 404, 409, 422] }, async (c) => {
     const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'bookings.create');
     return c.json(await deskBooking(db, actor, parse(deskSchema, await body(c.req.raw), 'request'), signingSecret), 201);
   });
@@ -658,6 +682,74 @@ export function createApp(options: AppOptions): Hono {
     await decideProposal(db, actor, parse(z.uuid(), c.req.param('proposalId'), 'proposal'), decision);
     return c.body(null, 204);
   });
+
+  // ---- Hotel conventions (spec §4.1): management, desk list and statement ----
+  route({ method: 'get', path: '/v1/manage/beaches/:slug/conventions', summary: 'Hotel conventions of the beach club', tag: 'Beach club', auth: 'session', success: 200, errors: [401, 403] }, async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'promotions.manage');
+    return c.json({ currency: 'EUR', conventions: await listConventions(db, actor) });
+  });
+
+  route({ method: 'post', path: '/v1/manage/beaches/:slug/conventions', summary: 'Register a hotel convention: percent discount or fixed price per day', tag: 'Beach club', auth: 'session', request: conventionSchema, success: 201, errors: [400, 401, 403, 409] }, async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'promotions.manage');
+    return c.json({ currency: 'EUR', convention: await createConvention(db, actor, parse(conventionSchema, await body(c.req.raw), 'convention')) }, 201);
+  });
+
+  route({ method: 'put', path: '/v1/manage/beaches/:slug/conventions/:conventionId', summary: 'Rewrite a hotel convention; bookings keep the price they were given', tag: 'Beach club', auth: 'session', request: conventionSchema, success: 200, errors: [400, 401, 403, 404, 409] }, async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'promotions.manage');
+    const conventionId = parse(z.uuid(), c.req.param('conventionId'), 'convention');
+    return c.json({ currency: 'EUR', convention: await updateConvention(db, actor, conventionId, parse(conventionSchema, await body(c.req.raw), 'convention')) });
+  });
+
+  route({ method: 'post', path: '/v1/manage/beaches/:slug/conventions/:conventionId/status', summary: 'Suspend or resume a hotel convention', tag: 'Beach club', auth: 'session', request: conventionStatusSchema, success: 204, errors: [400, 401, 403, 404] }, async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'promotions.manage');
+    const { active } = parse(conventionStatusSchema, await body(c.req.raw), 'request');
+    await setConventionStatus(db, actor, parse(z.uuid(), c.req.param('conventionId'), 'convention'), active);
+    return c.body(null, 204);
+  });
+
+  route({ method: 'delete', path: '/v1/manage/beaches/:slug/conventions/:conventionId', summary: 'Delete a hotel convention that was never used', tag: 'Beach club', auth: 'session', success: 204, errors: [400, 401, 403, 404, 409] }, async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'promotions.manage');
+    await deleteConvention(db, actor, parse(z.uuid(), c.req.param('conventionId'), 'convention'));
+    return c.body(null, 204);
+  });
+
+  route(
+    {
+      method: 'get',
+      path: '/v1/manage/beaches/:slug/desk-conventions',
+      summary: 'Conventions the front desk can pick for a booked day',
+      tag: 'Beach club',
+      auth: 'session',
+      query: { day: 'YYYY-MM-DD, the booked day the validity window is checked against' },
+      success: 200,
+      errors: [400, 401, 403],
+    },
+    async (c) => {
+      const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'bookings.create');
+      const day = parse(daySchema, c.req.query('day'), 'day');
+      return c.json({ day, currency: 'EUR', conventions: await listDeskConventions(db, actor, day) });
+    },
+  );
+
+  route(
+    {
+      method: 'get',
+      path: '/v1/manage/beaches/:slug/conventions/:conventionId/statement',
+      summary: 'Bookings and totals of one convention over a period of booked days',
+      tag: 'Beach club',
+      auth: 'session',
+      query: { from: 'YYYY-MM-DD', to: 'YYYY-MM-DD' },
+      success: 200,
+      errors: [400, 401, 403, 404],
+    },
+    async (c) => {
+      const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'reports.read');
+      const conventionId = parse(z.uuid(), c.req.param('conventionId'), 'convention');
+      const from = parse(daySchema, c.req.query('from'), 'start day');
+      const to = parse(daySchema, c.req.query('to'), 'end day');
+      return c.json({ currency: 'EUR', ...(await conventionStatement(db, actor, conventionId, from, to)) });
+    },
+  );
 
   route({ method: 'get', path: '/v1/manage/beaches/:slug/reports/summary', summary: 'Financial summary of a period', tag: 'Beach club', auth: 'session', query: { from: 'YYYY-MM-DD', to: 'YYYY-MM-DD' }, success: 200, errors: [400, 401, 403] }, async (c) => {
     const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'reports.read');

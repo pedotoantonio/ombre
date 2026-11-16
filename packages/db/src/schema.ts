@@ -110,6 +110,21 @@ export const promotion = pgTable('promotion', {
   committedUses: integer('committed_uses').notNull().default(0),
 });
 
+export const hotelConvention = pgTable('hotel_convention', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  beachId: uuid('beach_id').notNull(),
+  partnerName: text('partner_name').notNull(),
+  code: text('code').notNull(),
+  // Exactly one of the two pricings, enforced by a database CHECK.
+  percentBps: integer('percent_bps'),
+  fixedPriceCents: integer('fixed_price_cents'),
+  // Compared with the booked day, not with the purchase date.
+  validFrom: date('valid_from', { mode: 'string' }),
+  validTo: date('valid_to', { mode: 'string' }),
+  active: boolean('active').notNull().default(true),
+  notes: text('notes'),
+});
+
 export const inventoryDay = pgTable('inventory_day', {
   id: uuid('id').primaryKey().defaultRandom(),
   beachId: uuid('beach_id').notNull(),
@@ -128,6 +143,7 @@ export const hold = pgTable('hold', {
   beachId: uuid('beach_id').notNull(),
   inventoryDayId: uuid('inventory_day_id').notNull(),
   promotionId: uuid('promotion_id'),
+  conventionId: uuid('convention_id'),
   status: holdStatus('status').notNull().default('active'),
   idempotencyKey: text('idempotency_key').notNull(),
   requestHash: text('request_hash').notNull(),
@@ -169,6 +185,7 @@ export const booking = pgTable('booking', {
   inventoryDayId: uuid('inventory_day_id').notNull(),
   holdId: uuid('hold_id').notNull(),
   promotionId: uuid('promotion_id'),
+  conventionId: uuid('convention_id'),
   code: text('code').notNull(),
   status: bookingStatus('status').notNull().default('draft'),
   presence: presenceStatus('presence').notNull().default('expected'),

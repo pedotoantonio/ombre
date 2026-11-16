@@ -3,7 +3,7 @@ import type { SpotMark } from '@ombre/shared';
 import { withActor, type Database } from './client';
 import { zoneOrder, type SpotZone } from './inventory';
 import type { Actor } from './manage';
-import { beach, booking, inventoryDay, payment, spot, spotType } from './schema';
+import { beach, booking, hotelConvention, inventoryDay, payment, spot, spotType } from './schema';
 
 /** Figures only, never a guest: the statistics page shows numbers, not people. */
 export interface SpotFigures {
@@ -35,6 +35,8 @@ export interface StatisticsReport {
   /** Sold days over published days. Blocked days stay in the denominator (declared on the page). */
   occupancy: { soldDays: number; publishedDays: number; rateBps: number | null };
   byChannel: { source: string; bookings: number; grossCents: number }[];
+  /** The convention is a dimension, never a channel: `source` stays online/desk (D30). */
+  byConvention: { conventionId: string; partnerName: string; bookings: number; grossCents: number }[];
   byPaymentStatus: { status: string; bookings: number }[];
   /** Arrivals come from the access events, never from the presence, which ends every evening. */
   arrivals: { arrived: number; notArrived: number };
@@ -81,6 +83,19 @@ export function statisticsReport(db: Database, actor: Actor, from: string, to: s
       .where(sold)
       .groupBy(booking.source)
       .orderBy(asc(booking.source));
+    const byConvention = await tx
+      .select({
+        conventionId: hotelConvention.id,
+        partnerName: hotelConvention.partnerName,
+        bookings: sql<number>`count(*)::int`,
+        grossCents: sql<number>`coalesce(sum(${booking.totalCents}), 0)::int`,
+      })
+      .from(booking)
+      .innerJoin(inventoryDay, eq(inventoryDay.id, booking.inventoryDayId))
+      .innerJoin(hotelConvention, eq(hotelConvention.id, booking.conventionId))
+      .where(sold)
+      .groupBy(hotelConvention.id, hotelConvention.partnerName)
+      .orderBy(asc(hotelConvention.partnerName));
     const byPaymentStatus = await tx
       .select({ status: sql<string>`${payment.status}::text`, bookings: sql<number>`count(distinct ${booking.id})::int` })
       .from(booking)
@@ -159,6 +174,7 @@ export function statisticsReport(db: Database, actor: Actor, from: string, to: s
       averageCents: soldDays > 0 ? Math.round(grossCents / soldDays) : null,
       occupancy: { soldDays, publishedDays, rateBps: publishedDays > 0 ? Math.round((soldDays * 10_000) / publishedDays) : null },
       byChannel,
+      byConvention,
       byPaymentStatus,
       arrivals: { arrived: arrived?.bookings ?? 0, notArrived: soldDays - (arrived?.bookings ?? 0) },
       byType,

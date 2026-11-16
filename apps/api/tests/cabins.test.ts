@@ -186,7 +186,9 @@ describe.skipIf(!testAdminUrl)('sea cabins: assignments, sublets and the holder 
 
   it('never lets a cabin reach the public pages: the drawn block yes, the register no', async () => {
     // Cabin codes, assignments, sublets, holders and occupants are management data.
-    const hidden = /CAB\d|assignment|sublet|holder|occupant|Marchetti|Lanzi|titolare/i;
+    // The cabin code is matched as a whole JSON string: a random identifier may
+    // contain the hex letters "cab" by pure chance and must not trip the check.
+    const hidden = /"CAB\d"|assignment|sublet|holder|occupant|Marchetti|Lanzi|titolare/i;
     const open = JSON.stringify(await (await send('GET', `/v1/beaches/${demoBeach.slug}/availability?day=${demoBeach.day}`)).json());
     expect(open).not.toMatch(hidden);
     const beaches = JSON.stringify(await (await send('GET', '/v1/beaches')).json());

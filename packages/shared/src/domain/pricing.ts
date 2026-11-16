@@ -32,6 +32,24 @@ export function quoteDay(listPrice: Cents, promo?: { code: string; percentBps: B
   return { listPrice, discount, total: listPrice - discount, promoCode: promo?.code ?? null };
 }
 
+/**
+ * Price of a day under a hotel convention (spec §4.1, D30): a percent discount works
+ * like a promotion; a fixed price means the guest pays `min(list price, fixed price)`,
+ * so the discount is never negative, as the whole quote→hold→booking chain assumes.
+ * The guest sees the outcome in the same promoCode/discount fields as a promotion.
+ */
+export function quoteConventionDay(listPrice: Cents, code: string, pricing: { percentBps: BasisPoints | null; fixedPriceCents: Cents | null }): DayQuote {
+  if (pricing.percentBps !== null) return quoteDay(listPrice, { code, percentBps: pricing.percentBps });
+  assertCents(listPrice, 'list price');
+  if (listPrice < 0) throw new RangeError('list price must not be negative');
+  const fixed = pricing.fixedPriceCents;
+  if (fixed === null) throw new RangeError('a convention must carry a percent discount or a fixed price');
+  assertCents(fixed, 'fixed price');
+  if (fixed < 0) throw new RangeError('fixed price must not be negative');
+  const total = Math.min(listPrice, fixed);
+  return { listPrice, discount: listPrice - total, total, promoCode: code };
+}
+
 export interface Share<Party extends string> {
   party: Party;
   bps: BasisPoints;
