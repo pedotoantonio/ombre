@@ -1,6 +1,6 @@
 # Stato del progetto
 
-Aggiornato al 15/11/2026.
+Aggiornato al 16/11/2026.
 
 ## Dove siamo
 
@@ -41,6 +41,28 @@ indicizzato.
   [specifica-editor-tipi-cabine.md](specifica-editor-tipi-cabine.md) e
   [prompt-editor-tipi-cabine.md](prompt-editor-tipi-cabine.md); decisioni D25, D26 e
   D27, con le idee dei mock-up del committente registrate come fase successiva.
+- Iterazione dal confronto con un gestionale di mercato (spiagge.it), 16/11/2026,
+  specifica e prompt in
+  [specifica-confronto-gestionale.md](specifica-confronto-gestionale.md) e
+  [prompt-confronto-gestionale.md](prompt-confronto-gestionale.md), decisioni
+  D28–D31. **Ondata A (operativa)**: console «Oggi sulla spiaggia» per gestore e
+  reception — scena a tutto schermo derivata dal disegno, una tessera per
+  postazione con stato operativo, cognome e dotazione, tre viste, ricerca del
+  giorno, navigazione per data, selezione multipla con blocco/sblocco in blocco,
+  stampa senza nomi, impostazione ripresa dal riferimento del committente (la
+  scena resta la griglia del disegno, non un paesaggio); statistiche su periodo
+  (vendute, incasso, carrello medio, occupazione, canali, arrivi dagli ingressi,
+  tipi, migliori e peggiori postazioni, heatmap della spiaggia); postazione
+  «Consigliata» con euristica deterministica, in scheda pubblica e al banco.
+  **Ondata B (commerciale)**: convenzioni hotel con codice nel campo esistente,
+  prezzo fisso o percentuale, rendiconto per struttura e dimensione nelle
+  statistiche; servizi extra scelti nel riepilogo online e al banco, congelati
+  alla riserva, interamente dello stabilimento nel registro economico,
+  rimborsati con l'annullamento; pagamenti multipli per prenotazione (scopo,
+  residuo, stato saldata/parziale/da incassare), prenotazione al banco «da
+  incassare» con pass subito, richieste di pagamento con link temporaneo
+  `/paga/{token}` sul fornitore di prova, coda delle comunicazioni col testo
+  pronto e pagina «Comunicazioni».
 - Prenotazione dell'ospite: scelta della postazione, riepilogo con codice promozionale,
   riserva, dati, pagamento di prova, pass con codice QR e codice breve.
 - Reception: verifica del pass con ingresso, uscita e rientro, prenotazione al banco,
@@ -61,8 +83,14 @@ indicizzato.
 
 **Non fatto**
 
-- Pagamenti, rimborsi e liquidazioni con un fornitore reale.
-- Invio reale della posta e delle notifiche.
+- Pagamenti, rimborsi e liquidazioni con un fornitore reale (acconti e link di
+  pagamento sono già modellati sul fornitore di prova).
+- Invio reale della posta e delle notifiche (la coda con i testi pronti c'è;
+  manca il fornitore).
+- Dal confronto col gestionale di mercato, registrati e non costruiti: planner
+  a linea temporale, cassa fiscale, bar/ristorante, app mobile, marketplace di
+  esperienze, gestionale piscina, convenzioni con fattura mensile alla
+  struttura (vedi §7 della specifica del confronto).
 - Inviti e recupero della password: oggi gli accessi li crea l'amministratore da riga di
   comando.
 - Console centrale della piattaforma, gruppi e cooperative, piani in `plan_feature`.
@@ -95,6 +123,15 @@ La sera del 15/11/2026, dopo disegno, tipi di postazione e cabine: `pnpm check` 
 (0–8) della seconda specifica tutti superati; un difetto trovato e corretto (il
 conteggio d'uso dei tipi usciva a zero dall'elenco del gestore); sette schermate
 nuove in [schermate](schermate/).
+
+Il 16/11/2026, iterazione dal confronto. Ondata A: 147 test con database, suite
+fumo verdi, 140 verifiche HTTP sui criteri 1–3 e sul criterio 0, tutte superate
+alla prima esecuzione completa, nessun difetto. Ondata B: 174 test con database
+(contratto a 93 rotte), suite fumo verdi (smoke a 279 controlli), 116 verifiche
+HTTP sui criteri 4–7 più 15 a database, tutte superate; un difetto trovato e
+corretto (la pagina cortese di `/paga` arrivava vuota senza JavaScript). In
+coda, i tag `canonical`/`hreflang`/`og:url` sono omessi quando l'indirizzo
+pubblico non è configurato (prima puntavano al segnaposto `localhost`).
 
 Limiti noti del codice: la Content-Security-Policy ammette gli script in linea, perché
 il framework scrive in linea i dati delle pagine; i limiti alle richieste vivono nella
