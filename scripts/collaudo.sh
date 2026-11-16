@@ -9,6 +9,8 @@ export OMBRE_SEED_DEMO=true
 export OMBRE_DEMO_PASSWORD="collaudo-password-123"
 export OMBRE_SANDBOX_WEBHOOK_SECRET="collaudo-segreto-fornitore"
 export OMBRE_MAIL_PROVIDER=log
+# The acceptance stack declares its public address, so canonical/hreflang stay under test.
+export OMBRE_SITE_URL="http://localhost:3210"
 export OMBRE_WORKER_INTERVAL_SECONDS=2
 
 step() { printf '\n== %s ==\n' "$1"; }

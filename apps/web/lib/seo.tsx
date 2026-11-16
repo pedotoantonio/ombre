@@ -24,12 +24,13 @@ export function buildMetadata(page: PageId, locale: Locale): Metadata {
   return {
     title: copy.title,
     description: copy.description,
-    alternates: { canonical: pageUrl(page, locale), languages },
+    // Without a configured public address the absolute URLs would be wrong: leave them out.
+    ...(config.siteUrlConfigured ? { alternates: { canonical: pageUrl(page, locale), languages } } : {}),
     openGraph: {
       type: 'website',
       title: copy.title,
       description: copy.description,
-      url: pageUrl(page, locale),
+      ...(config.siteUrlConfigured ? { url: pageUrl(page, locale) } : {}),
       siteName: config.brandName,
       locale: ogLocale[locale],
     },
@@ -64,8 +65,8 @@ export function breadcrumbData(page: Exclude<PageId, 'home'>, locale: Locale): R
   return {
     '@type': 'BreadcrumbList',
     itemListElement: [
-      { '@type': 'ListItem', position: 1, name: config.brandName, item: pageUrl('home', locale) },
-      { '@type': 'ListItem', position: 2, name: crumbLabel(page, locale), item: pageUrl(page, locale) },
+      { '@type': 'ListItem', position: 1, name: config.brandName, ...(config.siteUrlConfigured ? { item: pageUrl('home', locale) } : {}) },
+      { '@type': 'ListItem', position: 2, name: crumbLabel(page, locale), ...(config.siteUrlConfigured ? { item: pageUrl(page, locale) } : {}) },
     ],
   };
 }

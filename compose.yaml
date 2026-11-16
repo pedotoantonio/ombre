@@ -96,7 +96,7 @@ services:
       OMBRE_DB_URL: postgres://ombre_app:${OMBRE_DB_APP_PASSWORD:-dev_app_only}@db:5432/ombre
       OMBRE_SIGNING_SECRET: ${OMBRE_SIGNING_SECRET:-dev_only_signing_secret_not_for_production}
       OMBRE_BRAND_NAME: ${OMBRE_BRAND_NAME:-Ombrè}
-      OMBRE_SITE_URL: ${OMBRE_SITE_URL:-http://localhost:3210}
+      OMBRE_SITE_URL: ${OMBRE_SITE_URL:-}
       # "none" sends nothing; "log" writes to the log what would be sent. No real provider yet.
       OMBRE_MAIL_PROVIDER: ${OMBRE_MAIL_PROVIDER:-none}
       OMBRE_WORKER_INTERVAL_SECONDS: ${OMBRE_WORKER_INTERVAL_SECONDS:-15}
@@ -118,7 +118,7 @@ services:
       target: web
       args:
         OMBRE_BRAND_NAME: ${OMBRE_BRAND_NAME:-Ombrè}
-        OMBRE_SITE_URL: ${OMBRE_SITE_URL:-http://localhost:3210}
+        OMBRE_SITE_URL: ${OMBRE_SITE_URL:-}
         OMBRE_INDEXABLE: ${OMBRE_INDEXABLE:-false}
         OMBRE_BOOKINGS_OPEN: ${OMBRE_BOOKINGS_OPEN:-false}
         # true on a demonstration environment: the notice says sample data, no real payment.

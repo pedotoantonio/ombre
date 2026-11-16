@@ -8,6 +8,6 @@ const reserved = ['/area', '/en/account', '/azioni', '/dati', '/paga', '/en/pay'
 export default function robots(): MetadataRoute.Robots {
   return {
     rules: { userAgent: '*', allow: '/', disallow: reserved },
-    sitemap: `${config.siteUrl}/sitemap.xml`,
+    ...(config.siteUrlConfigured ? { sitemap: `${config.siteUrl}/sitemap.xml` } : {}),
   };
 }

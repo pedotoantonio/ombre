@@ -99,7 +99,8 @@ export async function beachMetadata(lang: string, section: string, slug: string,
   return {
     title: t.beachTitle(beach.name, beach.locality),
     description: t.beachDescription(beach.name, beach.locality),
-    alternates: { canonical: config.siteUrl + beachPath(locale, beach.slug), languages },
+    // Without a configured public address the absolute URLs would be wrong: leave them out.
+    ...(config.siteUrlConfigured ? { alternates: { canonical: config.siteUrl + beachPath(locale, beach.slug), languages } } : {}),
     // Sample data must never reach a search engine.
     ...(beach.demo ? { robots: { index: false, follow: false } } : filtered ? { robots: { index: false, follow: true } } : {}),
   };

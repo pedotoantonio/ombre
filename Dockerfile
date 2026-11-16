@@ -2,7 +2,7 @@
 
 # Values of the public pages, fixed when the web image is built (see .env.example).
 ARG OMBRE_BRAND_NAME=Ombrè
-ARG OMBRE_SITE_URL=http://localhost:3210
+ARG OMBRE_SITE_URL=
 ARG OMBRE_INDEXABLE=false
 ARG OMBRE_BOOKINGS_OPEN=false
 ARG OMBRE_DEMO_MODE=false
