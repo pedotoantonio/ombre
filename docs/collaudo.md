@@ -1,5 +1,88 @@
 # Collaudo
 
+## Collaudo del 16/11/2026 — ondata B: convenzioni, extra, pagamenti multipli e comunicazioni
+
+Collaudo dell'ondata B della [specifica del confronto gestionale](specifica-confronto-gestionale.md)
+(commit `ed9ec68`+`a16e03a` B1 convenzioni, `44b1c9f`+`21511e5` B2 extra,
+`693b67a`+`e5a3049` B3 pagamenti multipli/acconti/comunicazioni), eseguito su uno stack
+Docker dedicato ricostruito da zero (progetto `ombre-collaudo`, volume ricreato, migrazioni
+014–016 applicate dal servizio `migrate`, seed dimostrativi e vetrina) con `pnpm check`,
+`pnpm test:db`, i sette collaudi fumo e la verifica HTTP dei criteri 0 e 4–7 del §6, nei
+panni di gestore, reception, contabilità e di un ospite, con `curl` e moduli GET/POST,
+**senza eseguire alcuno script**. I numeri qui sotto sono quelli del ciclo finale, ripetuto
+per intero su un database appena seminato dopo la correzione del difetto trovato.
+
+### Test e collaudi fumo
+
+| Parte | Controlli | Esito |
+|---|---|---|
+| Lint, tipi e build (`pnpm check`) | tutto il codice, contratto OpenAPI a **93 rotte** | Superati |
+| Test con PostgreSQL vero (`pnpm test:db`) | 174 (34 shared, 2 comms, 25 db, 107 api, 6 worker) | Superati |
+| Pagine pubbliche (`smoke`) | **279** (7 nuovi: la pagina cortese di /paga, vedi difetti) | Superati |
+| Ricerca, planimetria e riserva (`smoke:flow`) | 69 | Superati |
+| Aree riservate (`smoke:areas`) | 67 | Superati |
+| Sito dello stabilimento (`smoke:site`) | 24 | Superati |
+| Prenotazione e ruoli sull'API (`smoke:booking`) | 15 | Superati |
+| Acquisti simultanei sull'API (`smoke:api`) | 13 | Superati |
+| Verifica in due passaggi (`smoke:2fa`) | 11 | Superati |
+| Criteri 0 e 4–7 da HTTP | 116 | Superati |
+| Verifiche a database (trigger, ripartizioni, scopi, rimborsi, registro) | 15 | Superate |
+
+I collaudi fumo sono stati eseguiti nell'ordine di `scripts/collaudo.sh` sullo stack appena
+seminato, con `OMBRE_SITE_URL=http://localhost:3210` (il valore cotto nell'immagine del
+sito) e gli indirizzi reali `127.0.0.1:3232/3231`; la verifica in due passaggi lasciata
+attiva dalla suite `smoke:2fa` è stata rispenta a database prima delle prove di ruolo, come
+nel collaudo dell'ondata A. La verifica dei criteri è un giro HTTP che crea i propri dati:
+cinque giornate nuove più l'odierna sul Bagno delle Dune a 30 €, cinque convenzioni e due
+servizi extra.
+
+### Criteri di accettazione della specifica (§6, ondata B)
+
+| # | Criterio | Esito |
+|---|---|---|
+| 0 | Tutte le suite del collaudo precedente verdi sullo stack nuovo; la disponibilità pubblica ha esattamente le chiavi di prima (`beach, currency, day, elements, gaps, layout, seaSide, spots`, più `guests`+`suggestedSpotId` solo a richiesta); console «Oggi sulla spiaggia» e statistiche dell'ondata A ancora in piedi (giro rapido: tessere e legenda, incasso solo col permesso `reports.read`, statistiche con la dimensione «Convenzioni»); lo stato di pagamento nelle statistiche è derivato dal residuo su `paid`/`partial`/`to_collect`; la contabilità riceve 403 sulle convenzioni, le comunicazioni rispondono 401 senza accesso | Superato |
+| 4 | Convenzione a prezzo fisso (25 € su listino 30 €) e a sconto percentuale (15% → 25,50 €) applicate online **nello stesso campo del promo** (riepilogo web → riserva → pass a 25,00 €) e al banco **da elenco** (`desk-conventions` del giorno con le sole valide); prezzo fisso sopra il listino (50 €) → vale il listino, sconto mai negativo; scaduta, sospesa e codice ignoto rifiutati con lo stesso messaggio (422 `promo_not_applicable`, confrontato byte per byte) sia online sia al banco; convenzione e promozione non cumulabili (un campo, un codice un solo significato: `MARE10` resta una promozione al 10%); creare una convenzione col codice `MARE10` → 409 `code_taken`, creare una promozione col codice `HOTELFIX` → rifiutata dal trigger di migrazione 014; su giornata condivisa di Lido Aurora la quota stagionale esce dal prezzo convenzionato (20 €: 10,00/8,00/2,00 al 50/40/10, verificato sulle `allocation`) ed è nel rendiconto; il rendiconto conta le prenotazioni giuste (2 per la fissa a 50,00 €, 1 per la percentuale, 0 dopo l'annullamento); convenzione usata non eliminabile (409), mai usata eliminata | Superato |
+| 5 | Acquisto online con 2 extra (2 teli + 1 cassaforte, 13,00 €) fino al pass: preventivo per voce, campi quantità nel riepilogo senza script, riserva a 43,00 €, pass con gli extra; elenco del giorno della reception con «2 × Telo mare» e l'esito della verifica del pass con «Da consegnare»; stessa richiesta → stessa riserva, quantità diverse con la stessa chiave → `idempotency_mismatch` (richiesta diversa); riserva scaduta: la postazione torna acquistabile e nulla resta impegnato (0 prenotazioni dallo snapshot); economia: `extras_revenue` di 13,00 € interamente allo stabilimento, quote (`allocation`) calcolate sul solo prezzo postazione (27,00/3,00 € su 30,00 €); annullamento → rimborso di 43,00 € (postazione+extra) con storno delle quote | Superato |
+| 6 | Prenotazione al banco «da incassare» con email → confermata, pass emesso subito, residuo = totale, stato «Da incassare» in pagina; richiesta di acconto (10 €) → link `/paga/{token}` e notifica «in coda» col testo completo, visibile in «Comunicazioni»; link aperto senza accesso, pagamento di prova riuscito → residuo 20 €, stato «Parziale»; seconda richiesta a saldo → «Saldata», un'ulteriore richiesta → 409; link pagato, annullato e token inventato → la stessa pagina cortese, 404, identica byte per byte a token normalizzato; due richieste pendenti da 20 € su un residuo di 30 €: la prima incassa, l'esito della seconda non incassa (richiesta chiusa, rimborso `over_collection` di 20 € registrato, residuo intatto); richiesta su prenotazione poi annullata → rimborso `booking_cancelled`, mai incasso; scadenza chiesta a 240 ore ma troncata alla fine del giorno prenotato (fuso Europe/Rome); incasso parziale al banco (5 €, «Parziale»); extra a vendita fatta con incasso al banco (residuo invariato) e lasciato nel residuo (totale e residuo crescono) | Superato |
+| 7 | Le rotte pubbliche (elenco, scheda, disponibilità, `/dati/mappa`) non espongono convenzioni, richieste, statistiche o comunicazioni (chiavi JSON confrontate sul vivo; gli extra pubblici dicono solo `serviceId, name, unitPriceCents`); `/paga/{token}` non valido → 404 neutro che non rivela nulla, `noindex`, escluso da robots.txt (`/paga` e `/en/pay`), sotto limite di richieste (429 alla 61ª in un minuto); il checkout online esistente è identico a prima: un solo pagamento con scopo `checkout`, `in_progress` in verifica, flusso completo fino al pass, saldata a 30,00 € | Superato |
+
+### Difetti trovati e correzioni
+
+- **Pagina cortese di `/paga` vuota senza script** (B3, frontend): con un token non più
+  valido la pagina rispondeva sì 404 e `noindex`, ma con il **corpo vuoto** — il messaggio
+  cortese viveva solo nel payload degli script, perché `notFound()` su una rotta dinamica
+  rende il suo boundary solo lato client. Chi apriva il link senza JavaScript (o un lettore
+  che non esegue script) vedeva una pagina bianca, contro il §5 e il «messaggio cortese»
+  del §4.3. Corretto in `13717cb`: il proxy verifica il collegamento e riscrive quelli
+  inutilizzabili sulla pagina cortese dedicata (`non-disponibile`), resa dal server con
+  stato 404 nelle due lingue — lo stesso schema di `pagina-non-trovata`; la lettura della
+  richiesta sale nella pagina (`loadPayRequest`). Verifica di regressione nei controlli
+  fumo delle pagine pubbliche (7 controlli nuovi: 404, titolo cortese nel `main`,
+  `noindex`, esclusione in robots.txt, due lingue); `pnpm check`, `pnpm test:db` e tutto il
+  ciclo rieseguiti dopo la correzione.
+- Nessun altro difetto: tutte le altre verifiche sono passate alla prima esecuzione
+  completa (le prime stesure dello script di verifica hanno corretto solo attese dello
+  script stesso: forme delle risposte, campo `lang` dei moduli, campi quantità
+  `extra-<servizio>`).
+
+### Limiti residui e note
+
+- **Le 404 da `notFound()` dinamico restano a corpo vuoto altrove**: `/bagni/{slug
+  ignoto}` risponde 404 con corpo vuoto senza script anche sull'immagine della demo
+  (comportamento pre-esistente, non una regressione dell'ondata): da sistemare con lo
+  stesso schema del proxy in un'iterazione futura.
+- Il seed non crea dati dimostrativi per convenzioni, extra e richieste: cosa può provare
+  un visitatore della demo è documentato in [demo.md](demo.md) (percorsi 13–15).
+- L'ambiente `ombre-collaudo` resta acceso con i dati del collaudo: le giornate dal 21 al
+  25/06/2027 e l'odierna sul Bagno delle Dune, le convenzioni di prova (HOTELFIX,
+  HOTELPERC, HOTELCARO, HOTELFERMO sospesa, AURCONV su Lido Aurora), i due servizi extra,
+  le prenotazioni dei criteri (annullate comprese) e i rimborsi registrati da eseguire.
+- Le schermate di fine iterazione si fanno alla chiusura dell'iterazione, dopo questo
+  collaudo.
+- Come prima: esclusi pagamenti reali, invio reale delle comunicazioni (le notifiche
+  restano «in coda» con il fornitore «nessuno», per costruzione), carico, prove con
+  persone e lettore di schermo.
+
 ## Collaudo del 16/11/2026 — ondata A: console operativa, statistiche, postazione consigliata
 
 Collaudo dell'ondata A della [specifica del confronto gestionale](specifica-confronto-gestionale.md)

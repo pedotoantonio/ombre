@@ -71,6 +71,10 @@ L'accesso è in fondo a ogni pagina, «Area riservata».
 | Ieri e l'altro ieri | Cinque prenotazioni concluse, con le quote già maturate |
 | Proposte | Quattro proposte degli stagionali aspettano la decisione del gestore; una è stata rifiutata |
 
+Convenzioni hotel, servizi extra e richieste di pagamento non hanno dati dimostrativi
+pronti: si creano in pochi passi dalle pagine del gestore («Convenzioni», «Extra») e
+della reception («Incassi e richieste»), come nei percorsi 13–15 qui sotto.
+
 ## Percorsi da provare
 
 1. **Ospite**. «Esplora» → Lido Aurora → scegli una postazione di oggi → prova `MARE10`
@@ -114,6 +118,26 @@ L'accesso è in fondo a ogni pagina, «Area riservata».
 11. **Ruoli**. Entra come contabilità: vedi solo l'economia. Entra come reception: i
    prezzi non si possono cambiare.
 12. **Due lingue**. Ripeti un percorso dall'indirizzo inglese, con «English» in alto.
+13. **Convenzioni hotel** (gestore). Il seed non ne crea: dalla gestione apri
+   «Convenzioni» e registrane una, a sconto percentuale o a prezzo fisso a giornata
+   (sopra il listino vale comunque il listino). L'ospite scrive il codice nel campo
+   del riepilogo, lo stesso delle promozioni; al banco la reception la sceglie da un
+   elenco. Nella stessa pagina c'è il rendiconto per struttura su un periodo; prova
+   anche a crearne una col codice `MARE10` per vedere il rifiuto (codice già usato da
+   una promozione).
+14. **Servizi extra** (gestore e ospite). Anche questi si creano dalla gestione, pagina
+   «Extra» (nome, prezzo a unità, ordine). Poi compra online una giornata scegliendo le
+   quantità nel riepilogo: preventivo per voce, totale comprensivo, extra sul pass;
+   la reception li ritrova nell'elenco del giorno e nell'esito della verifica del pass
+   («Da consegnare»). Al banco si aggiungono anche a vendita già fatta, con incasso
+   subito o lasciato nel residuo.
+15. **Incasso rinviato e richieste di pagamento** (reception). Al banco conferma una
+   prenotazione «Da incassare» (pass subito, residuo pari al totale), poi da «Incassi e
+   richieste» chiedi un acconto: nasce un link temporaneo `/paga/{token}` da aprire
+   anche senza accesso, con il fornitore di prova. Dopo il pagamento lo stato passa a
+   «Parziale» e poi a «Saldata»; un link scaduto o annullato risponde con la stessa
+   pagina cortese. I testi pronti da copiare (WhatsApp/email a mano) sono nella pagina
+   «Comunicazioni» del gestore.
 
 ## Avvio
 
