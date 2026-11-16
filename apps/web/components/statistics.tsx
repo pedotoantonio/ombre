@@ -337,7 +337,7 @@ export async function StatisticsView({ locale, beachSlug, query }: { locale: Loc
                     <Bars
                       rows={data.byPaymentStatus.map((row) => ({
                         key: row.status,
-                        label: (s.payments as Record<string, string>)[row.status] ?? row.status,
+                        label: (t.account.paymentStates as Record<string, string>)[row.status] ?? (s.payments as Record<string, string>)[row.status] ?? row.status,
                         value: row.bookings,
                         text: String(row.bookings),
                       }))}
@@ -345,7 +345,7 @@ export async function StatisticsView({ locale, beachSlug, query }: { locale: Loc
                     <DataTable label={s.byPaymentTitle} columns={[{ label: s.byPaymentTitle }, { label: t.account.bookingsCount, numeric: true }]}>
                       {data.byPaymentStatus.map((row) => (
                         <Row key={row.status}>
-                          <RowHead>{(s.payments as Record<string, string>)[row.status] ?? row.status}</RowHead>
+                          <RowHead>{(t.account.paymentStates as Record<string, string>)[row.status] ?? (s.payments as Record<string, string>)[row.status] ?? row.status}</RowHead>
                           <Cell label={t.account.bookingsCount} numeric>
                             {row.bookings}
                           </Cell>
