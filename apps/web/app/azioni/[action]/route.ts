@@ -1,4 +1,4 @@
-import { accountPath, beachLayoutPath, beachPath, bookingPath, bookPath, holdPath, isLocale, manageCabinsPath, manageTodayPath, parseEuro, type Locale } from '@ombre/shared';
+import { accountPath, beachLayoutPath, beachPath, bookingPath, bookPath, holdPath, isLocale, manageCabinsPath, manageDealsPath, manageTodayPath, parseEuro, type Locale } from '@ombre/shared';
 import { api, apiCall, dayPattern, sandboxNotify, slugPattern, uuidPattern } from '@/lib/api';
 import { clearSessionCookieHeader, sessionCookie, sessionCookieHeader } from '@/lib/session';
 
@@ -106,6 +106,25 @@ async function cabinsAct(
   return { to: back, err: errorMap[code] ?? code };
 }
 
+/** Runs a hotel conventions call and returns to the conventions page with the result. */
+async function dealsAct(request: Request, form: Form, lang: Locale, path: string, method: string, body: unknown, errorMap: Record<string, string> = {}): Promise<Outcome> {
+  const beach = form('beach');
+  if (!slugPattern.test(beach)) return bad();
+  const result = await apiCall<unknown>(method, `/v1/manage/beaches/${beach}/conventions${path}`, { body, token: cookieToken(request) });
+  const back = manageDealsPath(lang, beach);
+  if (result.ok) return { to: back, ok: '1' };
+  if (result.status === 401) return { to: accountPath(lang, 'signIn') };
+  const code = result.status === 0 ? 'unavailable' : result.code;
+  return { to: back, err: errorMap[code] ?? code };
+}
+
+/** A percentage with up to two decimals, as basis points; -1 so the API refuses what is not one. */
+function percentBps(text: string): number {
+  const match = /^(\d{1,3})(?:[.,](\d{1,2}))?$/.exec(text.trim());
+  if (!match) return -1;
+  return Number(match[1]) * 100 + Number((match[2] ?? '').padEnd(2, '0'));
+}
+
 /** The tools of the drawing grid, as the query string spells them. */
 const drawTools = ['passerella-orizzontale', 'passerella-verticale', 'struttura', 'blocco-cabine', 'gomma'] as const;
 
@@ -211,8 +230,16 @@ const actions: Record<string, (request: Request, form: Form, lang: Locale) => Pr
     manage(request, form, lang, `/contracts/${encodeURIComponent(form('contract'))}/status`, 'POST', { status: form('status') }),
   'banco-prenota': async (request, form, lang) => {
     const { getDictionary, config } = await import('@ombre/shared');
-    return manage(request, form, lang, '/desk-bookings', 'POST', { spotId: form('spot'), day: form('day'), guestName: form('name') }, (data) =>
-      getDictionary(lang, config.brandName).account.deskDone((data as { code: string }).code),
+    // An optional convention, picked from the list of the day; never a typed code (spec §4.1).
+    const convention = form('convention');
+    return manage(
+      request,
+      form,
+      lang,
+      '/desk-bookings',
+      'POST',
+      { spotId: form('spot'), day: form('day'), guestName: form('name'), ...(uuidPattern.test(convention) ? { conventionId: convention } : {}) },
+      (data) => getDictionary(lang, config.brandName).account.deskDone((data as { code: string }).code),
     );
   },
   'banco-sposta': (request, form, lang) =>
@@ -589,6 +616,50 @@ const actions: Record<string, (request: Request, form: Form, lang: Locale) => Pr
       to: withQuery(back, keep),
       ok: o.bulkOutcome(op === 'block', result.data.done, refusals('held'), refusals('occupied'), refusals('not_published'), refusals('not_blocked')),
     };
+  },
+
+  // Hotel conventions (spec §4.1): one form for creation and edit, status and deletion.
+  async 'convenzione-salva'(request, form, lang) {
+    const beach = form('beach');
+    if (!slugPattern.test(beach)) return bad();
+    const conventionId = form('convention');
+    const editing = uuidPattern.test(conventionId);
+    // A refusal comes back next to the form, keeping the edit open when there was one.
+    const backTo = (merr: string): Outcome => ({
+      to: `${withQuery(manageDealsPath(lang, beach), { ...(editing ? { modifica: conventionId } : {}), merr })}#modulo-convenzione`,
+    });
+    const percent = form('percent').trim();
+    const fixed = form('fixed').trim();
+    // Exactly one of the two prices, as the register demands: a clear message otherwise.
+    if ((percent === '') === (fixed === '')) return backTo('convention_pricing');
+    const payload = {
+      partnerName: form('partner').trim(),
+      code: form('code').trim(),
+      percentBps: percent === '' ? null : percentBps(percent),
+      fixedPriceCents: fixed === '' ? null : (parseEuro(fixed) ?? -1),
+      validFrom: form('from').trim() || null,
+      validTo: form('to').trim() || null,
+      notes: annotation(form('notes')),
+    };
+    const result = await apiCall(editing ? 'PUT' : 'POST', `/v1/manage/beaches/${beach}/conventions${editing ? `/${encodeURIComponent(conventionId)}` : ''}`, {
+      body: payload,
+      token: cookieToken(request),
+    });
+    if (result.ok) return { to: manageDealsPath(lang, beach), ok: '1' };
+    if (result.status === 401) return { to: accountPath(lang, 'signIn') };
+    const code = result.status === 0 ? 'unavailable' : result.code === 'invalid_state' ? 'invalid_request' : result.code;
+    return backTo(code);
+  },
+  'convenzione-stato': (request, form, lang) => {
+    const conventionId = form('convention');
+    if (!uuidPattern.test(conventionId)) return Promise.resolve(bad());
+    return dealsAct(request, form, lang, `/${encodeURIComponent(conventionId)}/status`, 'POST', { active: form('active') === 'yes' });
+  },
+  'convenzione-elimina': (request, form, lang) => {
+    const conventionId = form('convention');
+    if (!uuidPattern.test(conventionId)) return Promise.resolve(bad());
+    // A used convention cannot be deleted: the message points at suspension instead.
+    return dealsAct(request, form, lang, `/${encodeURIComponent(conventionId)}`, 'DELETE', undefined, { invalid_state: 'convention_used' });
   },
 
   'reception-accesso': (request, form, lang) =>

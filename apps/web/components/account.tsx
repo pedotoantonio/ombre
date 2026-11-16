@@ -17,6 +17,8 @@ import {
   locales,
   manageCabinsPath,
   manageCabinsSegment,
+  manageDealsPath,
+  manageDealsSegment,
   manageStatsPath,
   manageStatsSegment,
   manageTodayPath,
@@ -29,6 +31,7 @@ import {
 import { api, apiCall, dayPattern, formatDate, formatDay, formatPeriod, slugPattern, uuidPattern } from '@/lib/api';
 import { BeachLayoutView } from './beach-layout';
 import { CabinHolderView, CabinsManageView, CabinsTodayPanel } from './cabins';
+import { ConventionsView, dealPriceText } from './conventions';
 import { OperationsView } from './operations';
 import { StatisticsView } from './statistics';
 import { privateMetadata } from '@/lib/seo';
@@ -99,7 +102,9 @@ export async function accountMetadata(locale: Locale, segments: string[]): Promi
             ? t.ops.short
             : segments[2] === manageStatsSegment[locale]
               ? t.stats.short
-              : null;
+              : segments[2] === manageDealsSegment[locale]
+                ? t.deals.short
+                : null;
     if (subTitle !== null) {
       const beachSession = await signedIn();
       const club = beachSession?.me.memberships.find((entry) => entry.beachSlug === id)?.beachName;
@@ -336,6 +341,14 @@ interface Report {
   byParty: Record<'season_holder' | 'beach_club' | 'platform', { expected: number; accrued: number }>;
   refundsDueCents: number;
 }
+/** A convention the desk may pick for the day: chosen from a list, never typed (spec §4.1). */
+interface DeskConvention {
+  conventionId: string;
+  partnerName: string;
+  code: string;
+  percentBps: number | null;
+  fixedPriceCents: number | null;
+}
 
 async function ManageView({ locale, beachSlug, query }: { locale: Locale; beachSlug: string; query: Query }) {
   if (!slugPattern.test(beachSlug)) notFound();
@@ -352,7 +365,7 @@ async function ManageView({ locale, beachSlug, query }: { locale: Locale; beachS
   const month = `${day.slice(0, 8)}01`;
   const monthEnd = new Date(Date.UTC(Number(day.slice(0, 4)), Number(day.slice(5, 7)), 0)).toISOString().slice(0, 10);
 
-  const [inventory, bookings, proposals, settings, contracts, report, beachCard] = await Promise.all([
+  const [inventory, bookings, proposals, settings, contracts, report, beachCard, deskDeals] = await Promise.all([
     can(role, 'inventory.read') ? apiCall<{ spots: InventoryRow[] }>('GET', `${base}/inventory?day=${day}`, { token }) : null,
     can(role, 'bookings.read') ? apiCall<{ bookings: BookingRow[] }>('GET', `${base}/bookings?day=${day}`, { token }) : null,
     can(role, 'sharing.manage') ? apiCall<{ proposals: Proposal[] }>('GET', `${base}/proposals?status=proposed`, { token }) : null,
@@ -361,8 +374,11 @@ async function ManageView({ locale, beachSlug, query }: { locale: Locale; beachS
     can(role, 'reports.read') ? apiCall<Report>('GET', `${base}/reports/summary?from=${month}&to=${monthEnd}`, { token }) : null,
     // The coordinates of the club come from its public card: the position is public by nature.
     can(role, 'layout.edit') ? api.beach(beachSlug) : null,
+    // The conventions the desk may pick for the day, active and valid on it (spec §4.1).
+    can(role, 'bookings.create') ? apiCall<{ conventions: DeskConvention[] }>('GET', `${base}/desk-conventions?day=${day}`, { token }) : null,
   ]);
   const position = beachCard?.ok ? { latitude: beachCard.data.beach.latitude, longitude: beachCard.data.beach.longitude } : null;
+  const deskConventions = deskDeals?.ok ? deskDeals.data.conventions : [];
   // Optional party size: with it the desk list carries the recommended spot (spec §3.3).
   const guestsAsked = first(query.guests);
   const guests = guestsAsked && /^\d{1,2}$/.test(guestsAsked) && Number(guestsAsked) >= 1 && Number(guestsAsked) <= 20 ? Number(guestsAsked) : undefined;
@@ -414,6 +430,11 @@ async function ManageView({ locale, beachSlug, query }: { locale: Locale; beachS
             {can(role, 'reports.read') ? (
               <Link className="button button--secondary" href={manageStatsPath(locale, beachSlug)}>
                 {t.openStats}
+              </Link>
+            ) : null}
+            {can(role, 'promotions.manage') ? (
+              <Link className="button button--secondary" href={manageDealsPath(locale, beachSlug)}>
+                {t.openDeals}
               </Link>
             ) : null}
           </p>
@@ -512,6 +533,20 @@ async function ManageView({ locale, beachSlug, query }: { locale: Locale; beachS
                         <label htmlFor="banco-ospite">{t.deskGuest}</label>
                         <input id="banco-ospite" name="name" maxLength={120} required />
                       </div>
+                      {deskConventions.length > 0 ? (
+                        <div className="field">
+                          <label htmlFor="banco-convenzione">{t.deskConvention}</label>
+                          <select id="banco-convenzione" name="convention" defaultValue="" aria-describedby="banco-convenzione-nota">
+                            <option value="">{t.deskConventionNone}</option>
+                            {deskConventions.map((deal) => (
+                              <option key={deal.conventionId} value={deal.conventionId}>
+                                {`${deal.partnerName} · ${deal.code} · ${dealPriceText(deal, locale)}`}
+                              </option>
+                            ))}
+                          </select>
+                          <p className="field__hint" id="banco-convenzione-nota">{t.deskConventionHint}</p>
+                        </div>
+                      ) : null}
                       <button className="button button--secondary" type="submit">{t.deskBook}</button>
                     </form>
                   )}
@@ -852,6 +887,8 @@ export async function AccountRoute({ locale, segments, query }: { locale: Locale
     return <OperationsView locale={locale} beachSlug={segments[1]!} query={query} />;
   if (segments.length === 3 && page === 'manage' && segments[2] === manageStatsSegment[locale])
     return <StatisticsView locale={locale} beachSlug={segments[1]!} query={query} />;
+  if (segments.length === 3 && page === 'manage' && segments[2] === manageDealsSegment[locale])
+    return <ConventionsView locale={locale} beachSlug={segments[1]!} query={query} />;
   if (segments.length === 2 && page === 'season') return <SeasonView locale={locale} contractId={segments[1]!} query={query} />;
   if (segments.length === 2 && page === 'site') return <SiteEditorView locale={locale} beachSlug={segments[1]!} query={query} />;
   notFound();

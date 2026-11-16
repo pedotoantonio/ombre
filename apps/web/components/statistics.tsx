@@ -49,6 +49,8 @@ interface StatisticsData {
   averageCents: number | null;
   occupancy: { soldDays: number; publishedDays: number; rateBps: number | null };
   byChannel: { source: string; bookings: number; grossCents: number }[];
+  /** The convention is a dimension, never a channel (spec §4.1): counted apart. */
+  byConvention: { conventionId: string; partnerName: string; bookings: number; grossCents: number }[];
   byPaymentStatus: { status: string; bookings: number }[];
   arrivals: { arrived: number; notArrived: number };
   byType: { typeId: string; name: string; mark: SpotMarkKind; soldDays: number; grossCents: number }[];
@@ -296,6 +298,38 @@ export async function StatisticsView({ locale, beachSlug, query }: { locale: Loc
                       ))}
                     </DataTable>
                   </div>
+
+                  {/* By convention, only when the period has any: a dimension, not a channel. */}
+                  {data.byConvention.length > 0 ? (
+                    <div className="panel">
+                      <h2>{s.byConventionTitle}</h2>
+                      <p className="prose">{s.byConventionNote}</p>
+                      <Bars
+                        rows={data.byConvention.map((row) => ({
+                          key: row.conventionId,
+                          label: row.partnerName,
+                          value: row.bookings,
+                          text: String(row.bookings),
+                        }))}
+                      />
+                      <DataTable
+                        label={s.byConventionTitle}
+                        columns={[{ label: s.conventionPartner }, { label: t.account.bookingsCount, numeric: true }, { label: s.colGross, numeric: true }]}
+                      >
+                        {data.byConvention.map((row) => (
+                          <Row key={row.conventionId}>
+                            <RowHead>{row.partnerName}</RowHead>
+                            <Cell label={t.account.bookingsCount} numeric>
+                              {row.bookings}
+                            </Cell>
+                            <Cell label={s.colGross} numeric>
+                              {formatMoney(row.grossCents, locale)}
+                            </Cell>
+                          </Row>
+                        ))}
+                      </DataTable>
+                    </div>
+                  ) : null}
 
                   {/* By payment status. */}
                   <div className="panel">
