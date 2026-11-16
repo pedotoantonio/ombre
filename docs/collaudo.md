@@ -1,5 +1,65 @@
 # Collaudo
 
+## Collaudo del 16/11/2026 — ondata A: console operativa, statistiche, postazione consigliata
+
+Collaudo dell'ondata A della [specifica del confronto gestionale](specifica-confronto-gestionale.md)
+(commit `f2e62da` backend, `3935566` frontend), eseguito su uno stack Docker dedicato
+ricostruito da zero (progetto `ombre-collaudo`, volume ricreato, seed dimostrativi e
+vetrina) con `pnpm check`, `pnpm test:db`, i sette collaudi fumo e la verifica HTTP dei
+criteri 0–3 del §6, nei panni di gestore, reception e contabilità e di un ospite, con
+`curl` e moduli GET/POST, **senza eseguire alcuno script** (come prescrive il criterio 1).
+
+### Test e collaudi fumo
+
+| Parte | Controlli | Esito |
+|---|---|---|
+| Lint, tipi e build (`pnpm check`) | tutto il codice, contratto OpenAPI a **72 rotte** | Superati |
+| Test con PostgreSQL vero (`pnpm test:db`) | 147 (34 shared, 2 comms, 25 db, 80 api, 6 worker) | Superati |
+| Pagine pubbliche (`smoke`) | 272 | Superati |
+| Ricerca, planimetria e riserva (`smoke:flow`) | 69 | Superati |
+| Aree riservate (`smoke:areas`) | 67 | Superati |
+| Sito dello stabilimento (`smoke:site`) | 24 | Superati |
+| Prenotazione e ruoli sull'API (`smoke:booking`) | 15 | Superati |
+| Acquisti simultanei sull'API (`smoke:api`) | 13 | Superati |
+| Verifica in due passaggi (`smoke:2fa`) | 11 | Superati |
+| Criteri 0–3 da HTTP | 140 | Superati |
+
+I collaudi fumo sono stati eseguiti nell'ordine di `scripts/collaudo.sh` sullo stack
+appena seminato, con `OMBRE_SITE_URL=http://localhost:3210` (il valore cotto
+nell'immagine del sito) e gli indirizzi reali `127.0.0.1:3232/3231`.
+
+### Criteri di accettazione della specifica (§6, ondata A)
+
+| # | Criterio | Esito |
+|---|---|---|
+| 0 | Tutte le suite del collaudo precedente verdi sullo stack nuovo; la disponibilità pubblica **senza** `guests` ha esattamente le chiavi di prima (`beach, currency, day, elements, gaps, layout, seaSide, spots`); nessuna risposta pubblica (elenco, scheda, disponibilità, `/dati/mappa`) espone cognomi, codici prenotazione, incassi, statistiche o campi gestionali — verificato sul JSON vivo | Superato |
+| 1 | Console «Oggi sulla spiaggia» di Lido Aurora: 53 tessere con gli stati giusti, contati uno a uno contro l'API (libere, riservata da un hold pubblico creato apposta su E08, attese/presenti/uscita dal seed, A08 bloccata, mai pubblicate); cognome con `title`, dotazione breve `1O+2L`, distintivi R/B/S con termine per esteso nascosto (S contato sul giorno con offerte condivise); legenda e tabella equivalente; le tre viste e la selezione da query string (53 caselle, l'intera tessera è la casella); ricerca per cognome, codice postazione e codice prenotazione con evidenza su scena e tabella e conteggio; navigazione per data ancorata a Europe/Rome (predefinito, frecce, «Oggi» con `aria-current`); blocco in blocco di M03+M04+1 occupata → «2 postazioni bloccate. Rifiutate: 1 occupate.», hold vivo rifiutato come riservata, sblocco con «1 non bloccate», nessuna selezione → esito dedicato; incasso solo al gestore (`revenueCents` nullo per la reception anche sull'API); la reception vede console e selezione ma non l'incasso; la contabilità riceve 404 sulla console (e 403 sull'API) e vede le statistiche; **l'intero giro è a script spenti** (solo HTTP); ogni blocco/sblocco in `audit_event` con `bulk: true` e nota, una voce per postazione davvero cambiata | Superato |
+| 2 | Su dati creati dal collaudo (Bagno delle Dune, oggi: 8 giornate pubblicate a 30 €, una vendita online con MARE10 a 27 € con ingresso registrato, una al banco a 30 € senza ingresso, una al banco annullata, una postazione bloccata) le statistiche tornano con i conti a mano: 2 vendute, incasso 57,00 €, carrello medio 28,50 €, occupazione 2/8 = 25% (bloccata e annullata nel denominatore, dichiarato in pagina), canali online 1/27 € e banco 1/30 €, arrivi 1 e 1 da `access_event`, 1 annullata da 30 € a parte, un tipo con 2/57 €; heatmap e tabella con gli stessi numeri (vendute 100%, bloccata 0% ma pubblicata); fuso `Europe/Rome` nella risposta e nel periodo predefinito (ultimi 30 giorni); periodo invertito e oltre 366 giorni → 400 e avviso in pagina; periodo vuoto detto chiaramente; nessun dato dell'ospite nel JSON né in pagina | Superato |
+| 3 | Sui dati vivi di Lido Aurora la consigliata coincide con l'euristica applicata a mano per 1–4 ospiti: con 2 ospiti vince C01 (surplus minimo batte il prezzo di D ed E), con 1 ospite vince M01 (prezzo 12 € batte zona e fila della riva a 15 €), con 5 nessuna (`suggestedSpotId: null`); tre richieste identiche danno la stessa consigliata; senza ospiti nessuna chiave in risposta e nessuna evidenza in pagina; `guests` 0/21/`abc` → 400; in scheda pubblica una sola «Consigliata» in lista e un solo badge in planimetria; al banco la stessa C01 è marcata «consigliata» e preselezionata | Superato |
+
+### Difetti trovati e correzioni
+
+- Nessun difetto nel codice dell'applicazione: tutte le verifiche dei criteri sono
+  passate alla prima esecuzione completa. (I primi passaggi dello script di verifica
+  hanno corretto solo attese dello script stesso: conteggi raddoppiati dal payload RSC
+  di Next, spazi stretti nei prezzi, `+` negli esiti in query string.)
+
+### Limiti residui e note
+
+- La suite `smoke:2fa` lascia la verifica in due passaggi **attiva** sull'account
+  dimostrativo della contabilità: per le prove di ruolo il collaudo l'ha spenta a
+  database (`totp_enabled = false`). Chi rilancia le suite in ordine su un database
+  appena seminato non ne è toccato; da valutare se la suite debba ripulirsi da sola.
+- I collaudi fumo non percorrono ancora le sezioni nuove (console, statistiche,
+  consigliata): la loro verifica resta quella dei criteri da HTTP di questo collaudo.
+- L'ambiente `ombre-collaudo` resta acceso con i dati del collaudo (le due vendite,
+  l'annullata e la bloccata di oggi sul Bagno delle Dune; su Lido Aurora M03/M04 sono
+  state sbloccate e l'hold su E08 scade da solo).
+- Le schermate di fine iterazione non sono di quest'ondata: si fanno alla chiusura
+  dell'iterazione, dopo l'ondata B.
+- Come prima: esclusi pagamenti reali, posta, carico, prove con persone e lettore di
+  schermo.
+
 ## Collaudo del 15/11/2026 (sera) — editor del disegno, tipi di postazione, cabine del mare
 
 Collaudo della [specifica editor, tipi e cabine](specifica-editor-tipi-cabine.md)
