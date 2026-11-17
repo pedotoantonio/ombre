@@ -17,8 +17,14 @@ iniziano con «Ombrè: …», mai push.
   `POST /v1/manage/beaches/:slug/layout/rows/bulk`, azione web
   `spiaggia-file`, modulo «Aggiungi più file» in `beach-layout.tsx`.
 
+- **C4 — Repertorio dalle tavole** (specifica §4bis, D35): decorazioni del
+  disegno e segni a noleggio, ridisegnati in vettoriale; dopo il frontend di
+  C1–C3, perché tocca gli stessi file della scena e dell'editor.
+
 Ogni incremento è consegnabile da solo. Contratto delle rotte: 93 → 94 (C1)
-→ 95 (C2) → 96 (C3), con OpenAPI aggiornato a ogni passo.
+→ 95 (C2) → 96 (C3), con OpenAPI aggiornato a ogni passo (C4 può
+aggiungerne per le decorazioni: aggiornare contratto e OpenAPI di
+conseguenza).
 
 ## Regole per gli agenti
 
