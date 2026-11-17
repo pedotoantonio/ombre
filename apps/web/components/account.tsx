@@ -25,6 +25,8 @@ import {
   manageDealsSegment,
   manageExtrasPath,
   manageExtrasSegment,
+  managePlannerPath,
+  managePlannerSegment,
   manageStatsPath,
   manageStatsSegment,
   manageTodayPath,
@@ -43,6 +45,7 @@ import { CommsView } from './comms';
 import { ConventionsView, dealPriceText } from './conventions';
 import { ExtrasView } from './extras';
 import { OperationsView } from './operations';
+import { PlannerView } from './planner';
 import { StatisticsView } from './statistics';
 import { privateMetadata } from '@/lib/seo';
 import { signedIn, type Me } from '@/lib/session';
@@ -110,7 +113,9 @@ export async function accountMetadata(locale: Locale, segments: string[]): Promi
           ? t.cabins.short
           : segments[2] === manageTodaySegment[locale]
             ? t.ops.short
-            : segments[2] === manageStatsSegment[locale]
+            : segments[2] === managePlannerSegment[locale]
+              ? t.planner.short
+              : segments[2] === manageStatsSegment[locale]
               ? t.stats.short
               : segments[2] === manageDealsSegment[locale]
                 ? t.deals.short
@@ -454,6 +459,11 @@ async function ManageView({ locale, beachSlug, query }: { locale: Locale; beachS
             {can(role, 'inventory.read') ? (
               <Link className="button button--secondary" href={`${manageTodayPath(locale, beachSlug)}?day=${day}`}>
                 {t.openToday}
+              </Link>
+            ) : null}
+            {can(role, 'inventory.read') ? (
+              <Link className="button button--secondary" href={`${managePlannerPath(locale, beachSlug)}?da=${day}`}>
+                {t.openPlanner}
               </Link>
             ) : null}
             {can(role, 'reports.read') ? (
@@ -967,6 +977,8 @@ export async function AccountRoute({ locale, segments, query }: { locale: Locale
     return <CabinsManageView locale={locale} beachSlug={segments[1]!} query={query} />;
   if (segments.length === 3 && page === 'manage' && segments[2] === manageTodaySegment[locale])
     return <OperationsView locale={locale} beachSlug={segments[1]!} query={query} />;
+  if (segments.length === 3 && page === 'manage' && segments[2] === managePlannerSegment[locale])
+    return <PlannerView locale={locale} beachSlug={segments[1]!} query={query} />;
   if (segments.length === 3 && page === 'manage' && segments[2] === manageStatsSegment[locale])
     return <StatisticsView locale={locale} beachSlug={segments[1]!} query={query} />;
   if (segments.length === 3 && page === 'manage' && segments[2] === manageDealsSegment[locale])

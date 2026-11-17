@@ -1894,6 +1894,108 @@ a.ops-tile:active {
   }
 }
 
+/* ---- Planner (§3, D33): griglia postazioni per giorni, servita dal server ----
+   Prima colonna fissa con position: sticky; ogni cella porta testo oltre al colore (D20). */
+.planner__window {
+  font-size: var(--testo-titolo-3);
+}
+
+.planner__scroll {
+  overflow: auto;
+  max-height: min(75vh, 55rem);
+  overscroll-behavior: contain;
+  border: 1px solid var(--bordo);
+  border-radius: var(--raggio);
+  background: var(--carta);
+}
+
+.planner {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.planner th,
+.planner td {
+  padding: var(--spazio-1) var(--spazio-2);
+  border-block-end: 1px solid var(--bordo);
+  border-inline-end: 1px solid var(--bordo);
+  font-size: var(--testo-minimo);
+  text-align: center;
+  white-space: nowrap;
+}
+
+.planner thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--spuma);
+  color: var(--abisso);
+}
+
+.planner tbody th {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--carta);
+  text-align: start;
+}
+
+.planner thead .planner__corner {
+  left: 0;
+  z-index: 3;
+  text-align: start;
+}
+
+.planner__spot {
+  display: flex;
+  align-items: center;
+  gap: var(--spazio-1);
+  font-weight: 700;
+}
+
+.planner__spot .plan-mark {
+  flex: none;
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.planner-cell {
+  min-width: 2.75rem;
+  font-weight: 700;
+}
+
+.planner-cell a {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+}
+
+.planner-cell a:hover,
+.planner-cell a:focus-visible {
+  text-decoration: underline;
+}
+
+/* Colori di stato sui gettoni della palette: tinte tenui, il testo resta in abisso. */
+.planner-cell--free { background: color-mix(in srgb, var(--libero) 18%, var(--carta)); }
+.planner-cell--booked { background: color-mix(in srgb, var(--condiviso) 16%, var(--carta)); }
+.planner-cell--blocked { background: color-mix(in srgb, var(--occupato) 22%, var(--carta)); }
+.planner-cell--not_for_sale { background: color-mix(in srgb, var(--bordo) 45%, var(--carta)); }
+.planner-cell--not_published { color: var(--testo-secondario); }
+
+.planner-legend .planner-swatch {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.75rem;
+  height: 1.75rem;
+  padding-inline: 0.25rem;
+  border: 1px solid var(--bordo-campo);
+  border-radius: var(--raggio-piccolo);
+  font-size: var(--testo-minimo);
+  font-weight: 700;
+}
+
 /* ---- Statistiche (§3.2): indicatori, barre solo CSS, heatmap ---- */
 .stat-grid {
   display: grid;
@@ -2068,6 +2170,22 @@ a.ops-tile:active {
   /* Anche dalla vista Numeri la stampa torna alla Dotazioni: la dotazione si vede, i nomi no. */
   .section--ops:not(.ops-view-completa) .ops-tile__kit {
     display: block !important;
+  }
+
+  /* Il planner stampa la griglia per intero: niente scorrimento né colonne appiccicate. */
+  .planner-filters {
+    display: none !important;
+  }
+
+  .planner__scroll {
+    max-height: none;
+    overflow: visible;
+    border: none;
+  }
+
+  .planner th,
+  .planner td {
+    position: static !important;
   }
 }
 

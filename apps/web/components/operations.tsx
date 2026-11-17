@@ -9,6 +9,7 @@ import {
   getDictionary,
   locales,
   manageCollectPath,
+  managePlannerPath,
   manageStatsPath,
   manageTodayPath,
   type Locale,
@@ -573,6 +574,9 @@ export async function OperationsView({ locale, beachSlug, query }: { locale: Loc
               </Link>
               <Link className="button button--secondary" href={manageHref}>
                 {o.toManage}
+              </Link>
+              <Link className="button button--secondary" href={`${managePlannerPath(locale, beachSlug)}?da=${day}`}>
+                {t.planner.short}
               </Link>
               {can(role, 'reports.read') ? (
                 <Link className="button button--secondary" href={manageStatsPath(locale, beachSlug)}>

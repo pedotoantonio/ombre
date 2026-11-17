@@ -108,6 +108,14 @@ export function manageTodayPath(locale: Locale, beachSlug: string): string {
   return `${accountPath(locale, 'manage', beachSlug)}/${manageTodaySegment[locale]}`;
 }
 
+/** Last segment of the planner page (spec §3, D33), under the management page of a beach club. */
+export const managePlannerSegment: Record<Locale, string> = { it: 'planner', en: 'planner' };
+
+/** Address of the planner page of a beach club, inside the reserved area. */
+export function managePlannerPath(locale: Locale, beachSlug: string): string {
+  return `${accountPath(locale, 'manage', beachSlug)}/${managePlannerSegment[locale]}`;
+}
+
 /** Last segment of the statistics page, under the management page of a beach club. */
 export const manageStatsSegment: Record<Locale, string> = { it: 'statistiche', en: 'statistics' };
 
@@ -149,7 +157,7 @@ export function manageCollectPath(locale: Locale, beachSlug: string): string {
 }
 
 /** The pages one level under the management page of a beach club: the depth whitelist. */
-const manageSubPages: Record<Locale, string>[] = [beachLayoutSegment, manageCabinsSegment, manageTodaySegment, manageStatsSegment, manageDealsSegment, manageExtrasSegment, manageCommsSegment, manageCollectSegment];
+const manageSubPages: Record<Locale, string>[] = [beachLayoutSegment, manageCabinsSegment, manageTodaySegment, managePlannerSegment, manageStatsSegment, manageDealsSegment, manageExtrasSegment, manageCommsSegment, manageCollectSegment];
 
 /**
  * The temporary public payment page /paga/{token} (spec §4.3): a new first-level
