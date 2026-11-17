@@ -781,6 +781,10 @@ const actions: Record<string, (request: Request, form: Form, lang: Locale) => Pr
       vista: form('vista') || undefined,
       selezione: form('selezione') === '1' ? '1' : undefined,
       q: form('q') || undefined,
+      // The filters and the scale of the console (D37) come back as they were.
+      zona: /^(riva|ombrelloni|monte)$/.test(form('zona')) ? form('zona') : undefined,
+      stato: /^(free|reserved|expected|present|departed|blocked|not_for_sale)$/.test(form('stato')) ? form('stato') : undefined,
+      scala: /^(compatta|ampia|adatta)$/.test(form('scala')) ? form('scala') : undefined,
       postazione: form('postazione') || undefined,
     };
     const back = manageTodayPath(lang, beach);

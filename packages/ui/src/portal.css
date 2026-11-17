@@ -2474,10 +2474,60 @@ body:has(.manage-app) .site-header {
   }
 }
 
-/* In stampa la cornice sparisce come il resto dell'intelaiatura. */
+/* ---- Console: sintesi sempre visibile, filtri e scala (§4ter, D37) ----
+   Un rigo compatto coi sei numeri dell'intero giorno, agganciato sotto la barra
+   dell'applicazione; i filtri e la scala sono gruppi di collegamenti come le viste. */
+.ops-strip {
+  position: sticky;
+  top: 0;
+  z-index: 15;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spazio-1) var(--spazio-4);
+  margin: 0;
+  padding: var(--spazio-2) var(--spazio-3);
+  list-style: none;
+  background: var(--carta);
+  border: 1px solid var(--bordo);
+  border-radius: var(--raggio-piccolo);
+  box-shadow: 0 0.25rem 0.75rem color-mix(in srgb, var(--abisso) 8%, transparent);
+  font-size: var(--testo-piccolo);
+}
+
+.ops-strip li {
+  color: var(--testo-secondario);
+  white-space: nowrap;
+}
+
+.ops-strip strong {
+  color: var(--abisso);
+}
+
+/* Sotto la barra fissa della gestione, quando c'è; altrimenti al bordo alto. */
+@media (min-width: 48rem) {
+  .manage-app .ops-strip {
+    top: calc(var(--barra-gestione) + var(--spazio-2));
+  }
+}
+
+.ops-filters {
+  row-gap: var(--spazio-2);
+}
+
+.ops-filter__name {
+  align-self: center;
+  color: var(--testo-secondario);
+  font-size: var(--testo-piccolo);
+  font-weight: var(--peso-forte);
+}
+
+/* In stampa la cornice sparisce come il resto dell'intelaiatura; la sintesi e i
+   selettori nuovi seguono la stessa regola, così la stampa resta quella di prima. */
 @media print {
   .manage-top,
-  .manage-nav {
+  .manage-nav,
+  .ops-strip,
+  .ops-filters {
     display: none !important;
   }
 }

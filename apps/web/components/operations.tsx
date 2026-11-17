@@ -12,6 +12,7 @@ import {
   managePlannerPath,
   manageStatsPath,
   manageTodayPath,
+  spotZones,
   type Locale,
   type MembershipRole,
   type SeaSide,
@@ -20,7 +21,7 @@ import {
 } from '@ombre/shared';
 import { api, apiCall, dayPattern, formatDay, slugPattern, today, type ApiLayoutElement, type ApiResult, type ApiZoneGaps } from '@/lib/api';
 import { Hidden, Notice, requireMe } from './account';
-import { PlanCanvas, planSize, SpotMark } from './beach';
+import { PlanCanvas, planGapRem, planLaneRem, planSize, SpotMark } from './beach';
 import { ManageShell } from './manage-shell';
 import { PageHead } from './PageShell';
 import { Cell, DataTable, Row, RowHead } from './table';
@@ -116,6 +117,26 @@ function readView(value: string | undefined): ViewId | null {
 
 /** Cards are wider than the public map cells: at least 88 px, so the full view stays readable. */
 const opsCellRem = 5.5;
+
+/** The stepped scale of the scene (D37): the server sets the cell width from the query string. */
+const scaleIds = ['compatta', 'normale', 'ampia', 'adatta'] as const;
+type ScaleId = (typeof scaleIds)[number];
+
+function readScale(value: string | undefined): ScaleId {
+  return (scaleIds as readonly string[]).includes(value ?? '') ? (value as ScaleId) : 'normale';
+}
+
+const scaleCellRem: Record<Exclude<ScaleId, 'adatta'>, number> = { compatta: 4, normale: opsCellRem, ampia: 7 };
+
+/**
+ * «Adatta»: the cell width that lets the whole drawing fit a typical screen, computed by
+ * the server from the columns and lanes of the drawing, clamped to a readable minimum.
+ */
+function fitCellRem(cols: number, lanes: number): number {
+  // The typical room of the scene: the container minus side navigation, paddings and row labels.
+  const room = 58 - 4.5 - lanes * (planLaneRem + planGapRem) - (cols - 1) * planGapRem;
+  return Math.max(3, Math.min(scaleCellRem.ampia, Math.floor((room / cols) * 4) / 4));
+}
 
 function withQuery(path: string, values: Record<string, string | undefined>): string {
   const query = Object.entries(values).filter((entry): entry is [string, string] => Boolean(entry[1]));
@@ -249,6 +270,7 @@ function SpotCardPanel({
   manageHref,
   view,
   search,
+  keep,
 }: {
   locale: Locale;
   role: MembershipRole;
@@ -260,6 +282,8 @@ function SpotCardPanel({
   manageHref: string;
   view: ViewId | null;
   search: string;
+  /** The filter and scale parameters of the page (D37), to come back as they were. */
+  keep: Record<string, string>;
 }) {
   const t = getDictionary(locale, config.brandName);
   const o = t.ops;
@@ -283,7 +307,7 @@ function SpotCardPanel({
   }
   const card = result.data;
   const booking = card.booking;
-  const hidden = { ...common, ...(view ? { vista: view } : {}), ...(search ? { q: search } : {}), postazione: card.code };
+  const hidden = { ...common, ...(view ? { vista: view } : {}), ...(search ? { q: search } : {}), ...keep, postazione: card.code };
   const canDesk = card.state === 'free' && can(role, 'bookings.create');
   const canBlockForm = (card.state === 'free' || card.state === 'blocked') && can(role, 'inventory.block');
   const canCollect = booking !== null && booking.remainingCents > 0 && can(role, 'bookings.create');
@@ -483,6 +507,13 @@ export async function OperationsView({ locale, beachSlug, query }: { locale: Loc
   const view = readView(first(query.vista));
   const selecting = first(query.selezione) === '1' && can(role, 'inventory.block');
   const search = (first(query.q) ?? '').trim().slice(0, 80);
+  // The GET filters by zone and operational state (D37): they restrict the cards of the
+  // scene and the rows of the table, never the counts of the summary.
+  const zoneAsked = first(query.zona);
+  const zone = (spotZones as readonly string[]).includes(zoneAsked ?? '') ? (zoneAsked as SpotZone) : undefined;
+  const stateAsked = first(query.stato);
+  const stateFilter = (operationalStates as readonly string[]).includes(stateAsked ?? '') ? (stateAsked as OperationalState) : undefined;
+  const scale = readScale(first(query.scala));
   // The open spot card (spec §2, D32): a code in the query string, rendered by the server.
   const cardAsked = (first(query.postazione) ?? '').trim().toUpperCase();
   const cardCode = spotCodePattern.test(cardAsked) ? cardAsked : undefined;
@@ -497,7 +528,22 @@ export async function OperationsView({ locale, beachSlug, query }: { locale: Loc
   const gaps: ApiZoneGaps = { shoreGapRows: canvas.shoreGapRows, landGapRows: canvas.landGapRows };
 
   const base = manageTodayPath(locale, beachSlug);
-  const state = { day, vista: view ?? undefined, selezione: selecting ? '1' : undefined, q: search || undefined, postazione: cardCode };
+  const state = {
+    day,
+    vista: view ?? undefined,
+    selezione: selecting ? '1' : undefined,
+    q: search || undefined,
+    zona: zone,
+    stato: stateFilter,
+    scala: scale === 'normale' ? undefined : scale,
+    postazione: cardCode,
+  };
+  /** The new parameters, ready to ride along inside the GET forms of the page. */
+  const keep = {
+    ...(zone ? { zona: zone } : {}),
+    ...(stateFilter ? { stato: stateFilter } : {}),
+    ...(scale !== 'normale' ? { scala: scale } : {}),
+  };
   const href = (over: Partial<typeof state>) => withQuery(base, { ...state, ...over });
   const alternate = withQuery(manageTodayPath(other, beachSlug), state);
   /** The address that opens the card of one spot, keeping day, view and search. */
@@ -511,19 +557,26 @@ export async function OperationsView({ locale, beachSlug, query }: { locale: Loc
     (spot.code.toLowerCase().includes(needle) ||
       (spot.guestName?.toLowerCase().includes(needle) ?? false) ||
       (spot.bookingCode?.toLowerCase().includes(needle) ?? false));
-  const hits = spots.filter(matches).length;
+  // The filtered set feeds the scene and the table; sizes and summary stay on the whole day.
+  const shown = spots.filter((spot) => (zone === undefined || spot.zone === zone) && (stateFilter === undefined || spot.state === stateFilter));
+  const hits = shown.filter(matches).length;
   const size = planSize(spots, canvas.elements);
+  const cellRem = scale === 'adatta' ? fitCellRem(size.cols, size.lanes) : scaleCellRem[scale];
   const common = { lang: locale, beach: beachSlug, day };
   const manageHref = `${accountPath(locale, 'manage', beachSlug)}?day=${day}`;
   // The free spots of the day feed the «Sposta» dropdown of the card: no extra query.
   const freeSpots = spots.filter((spot) => spot.state === 'free');
+  // Occupancy of the whole day (spec §2): occupied over sellable, reused by strip and summary.
+  const occupied = summary ? summary.counts.reserved + summary.counts.expected + summary.counts.present + summary.counts.departed : 0;
+  const sellable = summary ? spots.length - summary.counts.blocked - summary.counts.not_for_sale : 0;
+  const occupancyPct = summary !== null && sellable > 0 ? Math.round((occupied / sellable) * 100) : null;
 
   const scene = (
     <div
       className={`plan ops ops--${view ?? 'auto'}${selecting ? ' ops--selecting' : ''}`}
       role="group"
       aria-labelledby="scena-titolo"
-      style={{ '--plan-cols': size.cols, '--plan-lanes': size.lanes, '--plan-cell': `${opsCellRem}rem` } as CSSProperties}
+      style={{ '--plan-cols': size.cols, '--plan-lanes': size.lanes, '--plan-cell': `${cellRem}rem` } as CSSProperties}
     >
       <div className="plan__head">
         <h2 id="scena-titolo">{o.sceneTitle}</h2>
@@ -535,9 +588,9 @@ export async function OperationsView({ locale, beachSlug, query }: { locale: Loc
         gaps={gaps}
         seaSide={canvas.seaSide}
         elements={canvas.elements}
-        spots={spots}
+        spots={shown}
         idPrefix="scena"
-        cellRem={opsCellRem}
+        cellRem={cellRem}
         renderSpot={(spot) => <OpsTile locale={locale} spot={spot} selecting={selecting} hit={matches(spot)} cardHref={cardHrefOf(spot.code)} />}
       />
     </div>
@@ -567,7 +620,7 @@ export async function OperationsView({ locale, beachSlug, query }: { locale: Loc
           {/* The top bar: search of the day, the way to the desk and the nearby pages. */}
           <div className="ops-bar">
             <form className="ops-bar__search" method="get" action={base}>
-              <Hidden values={{ day, ...(view ? { vista: view } : {}), ...(selecting ? { selezione: '1' } : {}) }} />
+              <Hidden values={{ day, ...(view ? { vista: view } : {}), ...(selecting ? { selezione: '1' } : {}), ...keep }} />
               <div className="field">
                 <label htmlFor="ricerca">{o.searchLabel}</label>
                 <input id="ricerca" name="q" defaultValue={search} maxLength={80} autoComplete="off" aria-describedby="ricerca-aiuto" />
@@ -606,6 +659,13 @@ export async function OperationsView({ locale, beachSlug, query }: { locale: Loc
             </p>
           ) : null}
 
+          {/* The active filters in words (D37): the summary of the day stays whole. */}
+          {zone || stateFilter ? (
+            <p className="alert alert--info" role="status">
+              {o.filterSummary(shown.length, spots.length)} <a href={href({ zona: undefined, stato: undefined })}>{o.clearFilters}</a>
+            </p>
+          ) : null}
+
           {/* Date navigation, anchored to the beach club's time zone. */}
           <nav className="ops-nav" aria-label={t.account.day}>
             <a className="button button--secondary ops-nav__arrow" href={href({ day: shiftDay(day, -1) })}>
@@ -621,7 +681,7 @@ export async function OperationsView({ locale, beachSlug, query }: { locale: Loc
               {o.todayButton}
             </a>
             <form className="ops-nav__form" method="get" action={base}>
-              <Hidden values={{ ...(view ? { vista: view } : {}), ...(selecting ? { selezione: '1' } : {}), ...(search ? { q: search } : {}) }} />
+              <Hidden values={{ ...(view ? { vista: view } : {}), ...(selecting ? { selezione: '1' } : {}), ...(search ? { q: search } : {}), ...keep }} />
               <label className="visually-hidden" htmlFor="giorno">
                 {t.account.day}
               </label>
@@ -654,6 +714,63 @@ export async function OperationsView({ locale, beachSlug, query }: { locale: Loc
               </p>
             ) : null}
           </div>
+
+          {/* Filters by zone and state and the stepped scale (D37): link groups like the views. */}
+          <div className="ops-tools ops-filters">
+            <p className="ops-views" role="group" aria-label={o.zoneFilterLabel}>
+              <span className="ops-filter__name" aria-hidden="true">{o.zoneFilterLabel}:</span>
+              <a
+                className={zone === undefined ? 'button button--small' : 'button button--secondary button--small'}
+                href={href({ zona: undefined })}
+                aria-current={zone === undefined ? 'true' : undefined}
+              >
+                {o.allZones}
+              </a>
+              {spotZones.map((candidate) => (
+                <a
+                  key={candidate}
+                  className={zone === candidate ? 'button button--small' : 'button button--secondary button--small'}
+                  href={href({ zona: candidate })}
+                  aria-current={zone === candidate ? 'true' : undefined}
+                >
+                  {t.booking.zones[candidate]}
+                </a>
+              ))}
+            </p>
+            <p className="ops-views" role="group" aria-label={o.stateFilterLabel}>
+              <span className="ops-filter__name" aria-hidden="true">{o.stateFilterLabel}:</span>
+              <a
+                className={stateFilter === undefined ? 'button button--small' : 'button button--secondary button--small'}
+                href={href({ stato: undefined })}
+                aria-current={stateFilter === undefined ? 'true' : undefined}
+              >
+                {o.allStates}
+              </a>
+              {operationalStates.map((candidate) => (
+                <a
+                  key={candidate}
+                  className={stateFilter === candidate ? 'button button--small' : 'button button--secondary button--small'}
+                  href={href({ stato: candidate })}
+                  aria-current={stateFilter === candidate ? 'true' : undefined}
+                >
+                  {o.states[candidate]}
+                </a>
+              ))}
+            </p>
+            <p className="ops-views" role="group" aria-label={o.scaleLabel}>
+              <span className="ops-filter__name" aria-hidden="true">{o.scaleLabel}:</span>
+              {scaleIds.map((candidate) => (
+                <a
+                  key={candidate}
+                  className={scale === candidate ? 'button button--small' : 'button button--secondary button--small'}
+                  href={href({ scala: candidate === 'normale' ? undefined : candidate })}
+                  aria-current={scale === candidate ? 'true' : undefined}
+                >
+                  {o.scales[candidate]}
+                </a>
+              ))}
+            </p>
+          </div>
           {view === null ? <p className="prose ops-note">{o.autoViewNote}</p> : null}
           <p className="prose ops-note ops-note--print">{o.printNote}</p>
 
@@ -664,9 +781,34 @@ export async function OperationsView({ locale, beachSlug, query }: { locale: Loc
             </div>
           ) : (
             <>
+              {/* The always visible one-line summary (D37): whole-day numbers, never filtered. */}
+              {summary ? (
+                <ul className="ops-strip" aria-label={o.stripLabel}>
+                  <li>
+                    {o.stripTotal} <strong>{spots.length}</strong>
+                  </li>
+                  <li>
+                    {o.stripFree} <strong>{summary.counts.free}</strong>
+                  </li>
+                  <li>
+                    {o.stripOccupied} <strong>{occupied}</strong>
+                  </li>
+                  <li>
+                    {o.stripArrivals} <strong>{summary.counts.expected}</strong>
+                  </li>
+                  <li>
+                    {o.stripDepartures} <strong>{summary.counts.present}</strong>
+                  </li>
+                  {occupancyPct === null ? null : (
+                    <li>
+                      {o.occupancy} <strong>{`${occupancyPct}%`}</strong>
+                    </li>
+                  )}
+                </ul>
+              ) : null}
               {selecting ? (
                 <form method="post" action="/azioni/console-blocco" id="selezione">
-                  <Hidden values={{ ...common, selezione: '1', ...(view ? { vista: view } : {}), ...(search ? { q: search } : {}), ...(cardCode ? { postazione: cardCode } : {}) }} />
+                  <Hidden values={{ ...common, selezione: '1', ...(view ? { vista: view } : {}), ...(search ? { q: search } : {}), ...keep, ...(cardCode ? { postazione: cardCode } : {}) }} />
                   <div className="ops-actions">
                     <div className="field">
                       <label htmlFor="nota-blocco">{o.noteLabel}</label>
@@ -700,6 +842,7 @@ export async function OperationsView({ locale, beachSlug, query }: { locale: Loc
                   manageHref={manageHref}
                   view={view}
                   search={search}
+                  keep={keep}
                 />
               ) : null}
 
@@ -723,17 +866,12 @@ export async function OperationsView({ locale, beachSlug, query }: { locale: Loc
                       <dd>{summary.presentGuests}</dd>
                     </div>
                     {/* Occupancy (spec §2): occupied over sellable, omitted when nothing is sellable. */}
-                    {(() => {
-                      const occupied = summary.counts.reserved + summary.counts.expected + summary.counts.present + summary.counts.departed;
-                      const sellable = spots.length - summary.counts.blocked - summary.counts.not_for_sale;
-                      if (sellable <= 0) return null;
-                      return (
-                        <div>
-                          <dt>{o.occupancy}</dt>
-                          <dd>{`${Math.round((occupied / sellable) * 100)}%`}</dd>
-                        </div>
-                      );
-                    })()}
+                    {occupancyPct === null ? null : (
+                      <div>
+                        <dt>{o.occupancy}</dt>
+                        <dd>{`${occupancyPct}%`}</dd>
+                      </div>
+                    )}
                     {summary.revenueCents === null ? null : (
                       <div className="ops-summary__revenue">
                         <dt>{o.revenue}</dt>
@@ -761,7 +899,7 @@ export async function OperationsView({ locale, beachSlug, query }: { locale: Loc
                     { label: t.account.actions },
                   ]}
                 >
-                  {spots.map((spot) => (
+                  {shown.map((spot) => (
                     <Row key={spot.spotId} id={`riga-${spot.code}`} className={matches(spot) ? 'is-hit' : undefined}>
                       <RowHead>
                         {spot.code}
