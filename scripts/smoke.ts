@@ -101,8 +101,9 @@ async function expectStatus(path: string, status: number, location?: string) {
   const response = await fetch(base + path, { redirect: 'manual' });
   check(response.status === status, `${path}: status ${response.status}, expected ${status}`);
   if (location) {
+    // A relative Location is legal and equivalent: both sides are resolved before comparing.
     const target = response.headers.get('location');
-    check(target === location, `${path}: redirects to ${target}, expected ${location}`);
+    check(target !== null && new URL(target, base).href === new URL(location, base).href, `${path}: redirects to ${target}, expected ${location}`);
   }
 }
 
