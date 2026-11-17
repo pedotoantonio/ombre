@@ -27,9 +27,11 @@ import {
   api,
   dayPattern,
   formatDay,
+  formatPeriod,
   formatTime,
   isDay,
   localName,
+  periodDays,
   slugPattern,
   uuidPattern,
   type ApiBeach,
@@ -118,9 +120,9 @@ export async function stepMetadata(lang: string, section: string, slug: string, 
 /** Where the day picker and the map start: the target of the button under the lead. */
 const pickerAnchor = 'disponibilita';
 
-function SpotCard({ locale, beach, spot, day, selected, suggested }: { locale: Locale; beach: ApiBeach; spot: ApiSpot; day: string; selected: boolean; suggested: boolean }) {
+function SpotCard({ locale, beach, spot, day, to, selected, suggested }: { locale: Locale; beach: ApiBeach; spot: ApiSpot; day: string; to?: string; selected: boolean; suggested: boolean }) {
   const t = getDictionary(locale, config.brandName).booking;
-  const href = `${bookPath(locale, beach.slug)}?spot=${spot.spotId}&day=${day}`;
+  const href = `${bookPath(locale, beach.slug)}?spot=${spot.spotId}&day=${day}${to ? `&to=${to}` : ''}`;
   return (
     <li className={selected ? 'spot plan-chosen' : 'spot'} aria-current={selected ? 'true' : undefined}>
       <span className="spot__code">{spot.code}</span>
@@ -431,6 +433,7 @@ function MapSpot({
   beach,
   spot,
   day,
+  to,
   selected,
   suggested,
   guests,
@@ -439,6 +442,7 @@ function MapSpot({
   beach: ApiBeach;
   spot: ApiMapSpot;
   day: string;
+  to?: string;
   selected: boolean;
   suggested: boolean;
   guests?: number;
@@ -471,7 +475,7 @@ function MapSpot({
     <li id={`postazione-${spot.code}`}>
       <Link
         className={`plan-spot plan-spot--${spot.status}${selected ? ' plan-spot--selected' : ''}${suggested ? ' plan-spot--suggested' : ''}`}
-        href={`${beachPath(locale, beach.slug)}?day=${day}${guests ? `&guests=${guests}` : ''}&spot=${spot.spotId}#postazione-${spot.code}`}
+        href={`${beachPath(locale, beach.slug)}?day=${day}${to ? `&to=${to}` : ''}${guests ? `&guests=${guests}` : ''}&spot=${spot.spotId}#postazione-${spot.code}`}
         prefetch={false}
         aria-current={selected ? 'true' : undefined}
       >
@@ -796,6 +800,7 @@ function BeachMap({
   seaSide,
   elements,
   day,
+  to,
   selected,
   suggested,
   guests,
@@ -807,6 +812,7 @@ function BeachMap({
   seaSide: SeaSide;
   elements: ApiLayoutElement[];
   day: string;
+  to?: string;
   selected: ApiMapSpot | undefined;
   suggested: ApiMapSpot | undefined;
   guests?: number;
@@ -874,6 +880,7 @@ function BeachMap({
             beach={beach}
             spot={spot}
             day={day}
+            to={to}
             selected={spot.spotId === selected?.spotId}
             suggested={spot.spotId === suggested?.spotId}
             guests={guests}
@@ -885,7 +892,7 @@ function BeachMap({
 }
 
 /** Bottom bar with the chosen spot and the one step forward. It stays in the flow of the page, so it never hides its end. */
-function SelectionBar({ locale, beach, spot, day }: { locale: Locale; beach: ApiBeach; spot: ApiMapSpot & { priceCents: number }; day: string }) {
+function SelectionBar({ locale, beach, spot, day, to }: { locale: Locale; beach: ApiBeach; spot: ApiMapSpot & { priceCents: number }; day: string; to?: string }) {
   const t = getDictionary(locale, config.brandName).booking;
   return (
     <aside className="plan-bar" id="scelta" aria-label={t.barLabel}>
@@ -895,9 +902,11 @@ function SelectionBar({ locale, beach, spot, day }: { locale: Locale; beach: Api
         </p>
         <p className="plan-bar__price">{formatMoney(spot.priceCents, locale)}</p>
         <p className="plan-bar__detail">
+          {/* Con un periodo il prezzo della barra è il totale dal–al (D39). */}
+          {to ? `${t.periodValue(formatPeriod(day, to, locale), periodDays(day, to))}. ` : ''}
           {t.equipment(spot.umbrellas, spot.sunbeds)}. {t.guests(spot.maxGuests)}.{spot.status === 'shared' ? ` ${t.sharedDay}.` : ''}
         </p>
-        <Link className="button plan-bar__go" href={`${bookPath(locale, beach.slug)}?spot=${spot.spotId}&day=${day}`}>
+        <Link className="button plan-bar__go" href={`${bookPath(locale, beach.slug)}?spot=${spot.spotId}&day=${day}${to ? `&to=${to}` : ''}`}>
           {t.barContinue}
         </Link>
       </div>
@@ -911,10 +920,20 @@ export async function BeachView({ lang, section, slug, query }: { lang: string; 
   const texts = site ? site.content[locale] : null;
   const asked = first(query.day);
   const day = isDay(asked) ? asked : nextDay;
+  // «Al» facoltativo (D39): vuoto o uguale a «dal», la pagina resta di una giornata.
+  // Un periodo al rovescio o oltre le 31 giornate arriva all'API, che risponde 409: in parole sotto.
+  const toAsked = first(query.to);
+  const to = day && isDay(toAsked) && toAsked !== day ? toAsked : undefined;
   // Guests are optional: with them the answer carries the recommended spot (spec §3.3).
   const guestsAsked = first(query.guests);
   const guests = guestsAsked && /^\d{1,2}$/.test(guestsAsked) && Number(guestsAsked) >= 1 && Number(guestsAsked) <= 20 ? Number(guestsAsked) : undefined;
-  const availability = day ? await api.availability(beach.slug, day, guests) : null;
+  const availability = day ? await api.availability(beach.slug, day, guests, to) : null;
+  const periodError =
+    availability !== null && !availability.ok && availability.status === 409
+      ? availability.code === 'cap_reached'
+        ? t.periodTooLong
+        : t.periodBackwards
+      : null;
   const spots = availability?.ok ? availability.data.spots : [];
   const layout = availability?.ok ? availability.data.layout : [];
   const gaps = availability?.ok ? availability.data.gaps : { shoreGapRows: 1, landGapRows: 1 };
@@ -929,7 +948,7 @@ export async function BeachView({ lang, section, slug, query }: { lang: string; 
   const selected = picked && picked.priceCents !== null ? { ...picked, priceCents: picked.priceCents } : undefined;
   const suggestedId = availability?.ok ? (availability.data.suggestedSpotId ?? null) : null;
   const suggested = suggestedId ? layout.find((spot) => spot.spotId === suggestedId) : undefined;
-  const alternateQuery = isDay(asked) ? `?day=${asked}${guests ? `&guests=${guests}` : ''}${selected ? `&spot=${selected.spotId}` : ''}` : '';
+  const alternateQuery = isDay(asked) ? `?day=${asked}${to ? `&to=${to}` : ''}${guests ? `&guests=${guests}` : ''}${selected ? `&spot=${selected.spotId}` : ''}` : '';
 
   return (
     <PageShell locale={locale} page="search" alternatePath={beachPath(otherLocale(locale), beach.slug) + alternateQuery} crumbs={crumbsFor(locale, beach)}>
@@ -953,7 +972,7 @@ export async function BeachView({ lang, section, slug, query }: { lang: string; 
       ) : null}
       <section className="section" id={pickerAnchor}>
         <div className="container">
-          {first(query.taken) ? <p className="alert" role="alert">{t.takenNotice}</p> : null}
+          {first(query.taken) ? <p className="alert" role="alert">{to ? t.takenPeriodNotice : t.takenNotice}</p> : null}
           {picked && !selected ? <p className="alert" role="alert">{t.selectionGone}</p> : null}
           {!day ? (
             <div className="empty">
@@ -964,8 +983,13 @@ export async function BeachView({ lang, section, slug, query }: { lang: string; 
             <div className="stack">
               <form className="form-row" method="get" action={beachPath(locale, beach.slug)}>
                 <div className="field">
-                  <label htmlFor="giorno">{t.dayLabel}</label>
+                  <label htmlFor="giorno">{t.dayFromLabel}</label>
                   <input id="giorno" type="date" name="day" defaultValue={day} required />
+                </div>
+                {/* «Al» facoltativo (D39): vuoto, la pagina resta di una sola giornata. */}
+                <div className="field">
+                  <label htmlFor="giorno-al">{t.dayToLabel}</label>
+                  <input id="giorno-al" type="date" name="to" defaultValue={to ?? ''} />
                 </div>
                 <div className="field">
                   <label htmlFor="ospiti">{t.guestsOptional}</label>
@@ -987,13 +1011,18 @@ export async function BeachView({ lang, section, slug, query }: { lang: string; 
                   {t.showDay}
                 </button>
               </form>
-              <h2>{t.freeTitle(formatDay(day, locale))}</h2>
+              <h2>{to && availability?.ok ? t.freePeriodTitle(formatPeriod(day, to, locale)) : t.freeTitle(formatDay(day, locale))}</h2>
+              {to && availability?.ok ? <p className="prose">{t.periodLead(periodDays(day, to))}</p> : null}
               {guests && suggested ? (
                 <p className="plan__notice">
                   <strong>{t.suggestedNotice(suggested.code, guests)}</strong>
                 </p>
               ) : null}
-              {!availability?.ok ? (
+              {periodError ? (
+                <p className="alert" role="alert">
+                  {periodError}
+                </p>
+              ) : !availability?.ok ? (
                 <div className="empty">
                   <h3>{t.unavailableTitle}</h3>
                   <p>{t.unavailableText}</p>
@@ -1009,6 +1038,7 @@ export async function BeachView({ lang, section, slug, query }: { lang: string; 
                       seaSide={seaSide}
                       elements={elements}
                       day={day}
+                      to={to}
                       selected={selected}
                       suggested={suggested}
                       guests={guests}
@@ -1035,6 +1065,7 @@ export async function BeachView({ lang, section, slug, query }: { lang: string; 
                                     beach={beach}
                                     spot={spot}
                                     day={day}
+                                    to={to}
                                     selected={spot.spotId === selected?.spotId}
                                     suggested={spot.spotId === suggestedId}
                                   />
@@ -1053,7 +1084,7 @@ export async function BeachView({ lang, section, slug, query }: { lang: string; 
           )}
         </div>
       </section>
-      {selected && day ? <SelectionBar locale={locale} beach={beach} spot={selected} day={day} /> : null}
+      {selected && day ? <SelectionBar locale={locale} beach={beach} spot={selected} day={day} to={to} /> : null}
     </PageShell>
   );
 }
@@ -1062,10 +1093,13 @@ export function PriceSummary({
   locale,
   rows,
   quote,
+  days,
 }: {
   locale: Locale;
   rows: [string, string][];
   quote: { listPriceCents: number; discountCents: number; extrasCents: number; totalCents: number; promoCode: string | null; extras: ApiExtraLine[] };
+  /** The days of a dal–al period (D39), one priced line each. Listed only beyond one day. */
+  days?: { day: string; totalCents: number }[];
 }) {
   const t = getDictionary(locale, config.brandName).booking;
   return (
@@ -1076,6 +1110,15 @@ export function PriceSummary({
           <dd>{value}</dd>
         </div>
       ))}
+      {/* Le giornate del periodo, una riga col suo prezzo (sconto per giornata già applicato). */}
+      {days && days.length > 1
+        ? days.map((entry) => (
+            <div key={entry.day}>
+              <dt>{formatDay(entry.day, locale)}</dt>
+              <dd>{formatMoney(entry.totalCents, locale)}</dd>
+            </div>
+          ))
+        : null}
       <div>
         <dt>{t.listPrice}</dt>
         <dd>{formatMoney(quote.listPriceCents, locale)}</dd>
@@ -1179,6 +1222,10 @@ export async function BookView({ lang, section, slug, step, query }: { lang: str
   const spotId = first(query.spot) ?? '';
   const day = first(query.day) ?? '';
   if (!uuidPattern.test(spotId) || !dayPattern.test(day)) notFound();
+  // «Al» del periodo (D39): assente o uguale a «dal», il riepilogo resta di una giornata.
+  const toAsked = first(query.to);
+  if (toAsked !== undefined && !dayPattern.test(toAsked)) notFound();
+  const to = toAsked && toAsked !== day ? toAsked : undefined;
 
   // The extras of the club, public only inside this flow (spec §4.2), and the asked quantities.
   const catalogueResult = await api.extras(beach.slug);
@@ -1186,7 +1233,7 @@ export async function BookView({ lang, section, slug, step, query }: { lang: str
   let chosen = readExtrasQuery(query, catalogue);
 
   const promoAsked = first(query.promo)?.trim().slice(0, 40) || undefined;
-  const request = { beachSlug: beach.slug, spotId, day };
+  const request = { beachSlug: beach.slug, spotId, day, ...(to ? { to } : {}) };
   const withExtras = () => (chosen.length > 0 ? { extras: chosen } : {});
   let quote = await api.quote({ ...request, ...withExtras(), promoCode: promoAsked });
   let promoRefused = Boolean(first(query.promoError));
@@ -1207,11 +1254,14 @@ export async function BookView({ lang, section, slug, step, query }: { lang: str
       quote = await api.quote(request);
     }
   }
-  const availability = await api.availability(beach.slug, day);
+  const availability = await api.availability(beach.slug, day, undefined, to);
   const spot = availability.ok ? availability.data.spots.find((candidate) => candidate.spotId === spotId) : undefined;
-  const backHref = `${beachPath(locale, beach.slug)}?day=${day}`;
+  // Un periodo rifiutato dall'API (oltre 31 giornate, al rovescio) è spiegato in parole.
+  const periodError = quote.ok ? null : quote.code === 'cap_reached' ? t.periodTooLong : quote.code === 'invalid_state' ? t.periodBackwards : null;
+  const toQuery = to ? `&to=${to}` : '';
+  const backHref = `${beachPath(locale, beach.slug)}?day=${day}${toQuery}`;
   const selfHref = bookPath(locale, beach.slug);
-  const alternate = `${bookPath(otherLocale(locale), beach.slug)}?spot=${spotId}&day=${day}`;
+  const alternate = `${bookPath(otherLocale(locale), beach.slug)}?spot=${spotId}&day=${day}${toQuery}`;
 
   return (
     <PageShell locale={locale} page="search" alternatePath={alternate} crumbs={crumbsFor(locale, beach, t.summaryTitle)}>
@@ -1221,8 +1271,8 @@ export async function BookView({ lang, section, slug, step, query }: { lang: str
         <div className="container">
           {!quote.ok || !spot ? (
             <div className="empty">
-              <h2>{quote.ok || quote.code === 'inventory_conflict' ? t.notAvailableTitle : t.unavailableTitle}</h2>
-              <p>{quote.ok || quote.code === 'inventory_conflict' ? t.notAvailableText : t.unavailableText}</p>
+              <h2>{periodError ? t.periodErrorTitle : quote.ok || quote.code === 'inventory_conflict' ? t.notAvailableTitle : t.unavailableTitle}</h2>
+              <p>{periodError ?? (quote.ok || quote.code === 'inventory_conflict' ? t.notAvailableText : t.unavailableText)}</p>
               <Link className="button button--secondary" href={backHref}>
                 {t.backToBeach}
               </Link>
@@ -1235,8 +1285,12 @@ export async function BookView({ lang, section, slug, step, query }: { lang: str
               <PriceSummary
                 locale={locale}
                 quote={quote.data}
+                days={quote.data.days}
                 rows={[
-                  [t.dayRow, formatDay(day, locale)],
+                  // Il periodo in testa (D39): dal–al e numero di giornate; una giornata resta «Giorno».
+                  to
+                    ? [t.periodRow, t.periodValue(formatPeriod(day, to, locale), periodDays(day, to))]
+                    : [t.dayRow, formatDay(day, locale)],
                   [t.spotRow, `${spot.code}, ${t.row(spot.rowNumber)}`],
                   [t.equipmentRow, t.equipment(spot.umbrellas, spot.sunbeds)],
                 ]}
@@ -1245,10 +1299,12 @@ export async function BookView({ lang, section, slug, step, query }: { lang: str
               {catalogue.length > 0 ? (
                 <div className="panel">
                   <h3>{t.extrasTitle}</h3>
-                  <p className="prose">{t.extrasLead}</p>
+                  {/* Gli extra di un periodo si scelgono una volta e valgono per il periodo (D38). */}
+                  <p className="prose">{to ? t.extrasPeriodLead : t.extrasLead}</p>
                   <form className="form-row" method="get" action={selfHref}>
                     <input type="hidden" name="spot" value={spotId} />
                     <input type="hidden" name="day" value={day} />
+                    {to ? <input type="hidden" name="to" value={to} /> : null}
                     {quote.data.promoCode ? <input type="hidden" name="promo" value={quote.data.promoCode} /> : null}
                     <ExtraQuantityFields locale={locale} idPrefix="extra" catalogue={catalogue} chosen={chosen} />
                     <button className="button button--secondary" type="submit">
@@ -1260,6 +1316,7 @@ export async function BookView({ lang, section, slug, step, query }: { lang: str
               <form className="form-row" method="get" action={selfHref}>
                 <input type="hidden" name="spot" value={spotId} />
                 <input type="hidden" name="day" value={day} />
+                {to ? <input type="hidden" name="to" value={to} /> : null}
                 <ExtrasHidden chosen={chosen} />
                 <div className="field">
                   <label htmlFor="promo">{t.promoLabel}</label>
@@ -1278,6 +1335,7 @@ export async function BookView({ lang, section, slug, step, query }: { lang: str
                 <input type="hidden" name="beach" value={beach.slug} />
                 <input type="hidden" name="spot" value={spotId} />
                 <input type="hidden" name="day" value={day} />
+                {to ? <input type="hidden" name="to" value={to} /> : null}
                 <input type="hidden" name="promo" value={quote.data.promoCode ?? ''} />
                 <ExtrasHidden chosen={chosen} />
                 <input type="hidden" name="key" value={`web-${crypto.randomUUID()}`} />
@@ -1321,8 +1379,12 @@ export async function HoldView({ lang, section, slug, step, holdId }: { lang: st
               <PriceSummary
                 locale={locale}
                 quote={held}
+                days={held.days}
                 rows={[
-                  [t.dayRow, formatDay(held.day, locale)],
+                  // Il periodo della riserva (D39): una giornata resta «Giorno», come oggi.
+                  held.to !== held.from
+                    ? [t.periodRow, t.periodValue(formatPeriod(held.from, held.to, locale), periodDays(held.from, held.to))]
+                    : [t.dayRow, formatDay(held.day, locale)],
                   [t.spotRow, `${held.spot.code}, ${t.row(held.spot.rowNumber)}`],
                   [t.equipmentRow, t.equipment(held.spot.umbrellas, held.spot.sunbeds)],
                 ]}
@@ -1345,7 +1407,7 @@ export async function HoldView({ lang, section, slug, step, holdId }: { lang: st
               </form>
             </>
           ) : null}
-          <Link className="button button--secondary" href={`${beachPath(locale, beach.slug)}?day=${held.day}`}>
+          <Link className="button button--secondary" href={`${beachPath(locale, beach.slug)}?day=${held.day}${held.to !== held.from ? `&to=${held.to}` : ''}`}>
             {t.backToBeach}
           </Link>
         </div>

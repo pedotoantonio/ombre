@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { connection } from 'next/server';
 import { accountPath, beachPath, config, formatMoney, getDictionary, pathFor, type InnerPageId, type Locale } from '@ombre/shared';
-import { api, formatDay, isDay, today, type ApiBeachOffer } from '@/lib/api';
+import { api, formatDay, formatPeriod, isDay, periodDays, today, type ApiBeachOffer } from '@/lib/api';
 import { FeatureIcon, type FeatureIconName } from '@ombre/ui';
 import { breadcrumbData, JsonLd, pageUrl } from '@/lib/seo';
 import { Contact, NextStep, PageHead } from './PageShell';
@@ -23,6 +23,9 @@ const maxGuests = 20;
 export interface ExploreSearch {
   place: string;
   day: string | null;
+  /** Last day of the dal–al period (D39): null means the one day. A backwards or too
+   * long period is kept and the refusal of the API is rendered in words. */
+  to: string | null;
   guests: number;
   sharedOnly: boolean;
 }
@@ -30,10 +33,12 @@ export interface ExploreSearch {
 /** Reads a search from the address. What is not valid is left out, never refused. */
 export function readSearch(query: Query): ExploreSearch {
   const day = first(query.day);
+  const to = first(query.to);
   const guests = Number(first(query.guests));
   return {
     place: (first(query.place) ?? '').trim().slice(0, 80),
     day: isDay(day) ? day : null,
+    to: isDay(day) && isDay(to) && to !== day ? to : null,
     guests: Number.isInteger(guests) && guests >= 1 && guests <= maxGuests ? guests : defaultGuests,
     sharedOnly: first(query.shared) === '1',
   };
@@ -44,6 +49,7 @@ export function searchQuery(search: ExploreSearch): string {
   const query = new URLSearchParams();
   if (search.place) query.set('place', search.place);
   if (search.day) query.set('day', search.day);
+  if (search.day && search.to) query.set('to', search.to);
   if (search.day || search.guests !== defaultGuests) query.set('guests', String(search.guests));
   if (search.sharedOnly) query.set('shared', '1');
   const text = query.toString();
@@ -91,8 +97,13 @@ function SearchForm({ locale, search, minDay }: { locale: Locale; search: Explor
         <input id="cerca-luogo" name="place" type="text" maxLength={80} defaultValue={search.place} autoComplete="off" enterKeyHint="search" />
       </div>
       <div className="field">
-        <label htmlFor="cerca-giorno">{t.day}</label>
+        <label htmlFor="cerca-giorno">{t.dayFrom}</label>
         <input id="cerca-giorno" name="day" type="date" min={minDay} defaultValue={search.day ?? ''} />
+      </div>
+      {/* «Al» facoltativo (D39): vuoto, la ricerca resta di una sola giornata. */}
+      <div className="field">
+        <label htmlFor="cerca-al">{t.dayTo}</label>
+        <input id="cerca-al" name="to" type="date" min={minDay} defaultValue={search.to ?? ''} />
       </div>
       <div className="field">
         <label htmlFor="cerca-ospiti">{t.guests}</label>
@@ -183,7 +194,7 @@ export function HomePage({ locale }: PageProps) {
                 </li>
               </ul>
             </nav>
-            <SearchForm locale={locale} search={{ place: '', day: null, guests: defaultGuests, sharedOnly: false }} />
+            <SearchForm locale={locale} search={{ place: '', day: null, to: null, guests: defaultGuests, sharedOnly: false }} />
           </div>
         </div>
       </section>
@@ -247,9 +258,10 @@ export function HomePage({ locale }: PageProps) {
   );
 }
 
-function BeachCard({ locale, beach, day }: { locale: Locale; beach: ApiBeachOffer; day: string | null }) {
+function BeachCard({ locale, beach, day, to }: { locale: Locale; beach: ApiBeachOffer; day: string | null; to: string | null }) {
   const t = getDictionary(locale, config.brandName);
   const copy = t.pages.search;
+  const query = day ? `?day=${day}${to ? `&to=${to}` : ''}` : '';
   return (
     <li className="card portal-club">
       {beach.cover ? (
@@ -265,7 +277,7 @@ function BeachCard({ locale, beach, day }: { locale: Locale; beach: ApiBeachOffe
           {typeof beach.priceFromCents === 'number' ? (
             <span className="portal-club__price">
               {copy.priceFrom(formatMoney(beach.priceFromCents, locale))}
-              <span className="portal-club__price-note">{copy.priceNote}</span>
+              <span className="portal-club__price-note">{to ? copy.priceNotePeriod : copy.priceNote}</span>
             </span>
           ) : null}
         </p>
@@ -275,7 +287,7 @@ function BeachCard({ locale, beach, day }: { locale: Locale; beach: ApiBeachOffe
           <span className="badge badge--demo">{t.booking.demoBadgeShort}</span>
         </p>
       ) : null}
-      <Link className="card__link" href={`${beachPath(locale, beach.slug)}${day ? `?day=${day}` : ''}`}>
+      <Link className="card__link" href={`${beachPath(locale, beach.slug)}${query}`}>
         {copy.viewBeach}
         <span className="visually-hidden">: {beach.name}</span>
       </Link>
@@ -290,13 +302,22 @@ async function SearchPage({ locale, query = {} }: PageProps & { query?: Query })
   const copy = t.pages.search;
   const asked = readSearch(query);
   const dayPast = asked.day !== null && asked.day < today();
-  const search = { ...asked, day: dayPast ? null : asked.day };
-  const result = await api.beaches({ locality: search.place || undefined, day: search.day ?? undefined, guests: search.guests, sharedOnly: search.sharedOnly });
+  const search = { ...asked, day: dayPast ? null : asked.day, to: dayPast ? null : asked.to };
+  const result = await api.beaches({
+    locality: search.place || undefined,
+    day: search.day ?? undefined,
+    to: search.to ?? undefined,
+    guests: search.guests,
+    sharedOnly: search.sharedOnly,
+  });
+  // A refused period (D39) comes back in words: over 31 days, or written backwards.
+  const periodError = !result.ok && result.status === 409 ? (result.code === 'cap_reached' ? t.booking.periodTooLong : t.booking.periodBackwards) : null;
   const beaches = result.ok ? result.data.beaches : [];
   // With a day, a beach club is a result only if it has something to sell for this search.
   const open = search.day ? beaches.filter((beach) => (beach.freeSpots ?? 0) > 0) : beaches;
   const full = search.day ? beaches.filter((beach) => (beach.freeSpots ?? 0) === 0) : [];
   const notes = search.day ? [copy.resultsFor(search.guests), ...(search.sharedOnly ? [copy.sharedOnlyNote] : [])] : [copy.needDay];
+  if (result.ok && search.day && search.to) notes.unshift(copy.periodNote(periodDays(search.day, search.to)));
   if (search.place) notes.push(copy.placeNote(search.place));
 
   // The same selection as the list, as pins: a club without coordinates stays in the list only.
@@ -311,7 +332,7 @@ async function SearchPage({ locale, query = {} }: PageProps & { query?: Query })
             locality: beach.locality,
             latitude: beach.latitude,
             longitude: beach.longitude,
-            href: `${beachPath(locale, beach.slug)}${search.day ? `?day=${search.day}` : ''}`,
+            href: `${beachPath(locale, beach.slug)}${search.day ? `?day=${search.day}${search.to ? `&to=${search.to}` : ''}` : ''}`,
             ...(search.day && typeof beach.priceFromCents === 'number'
               ? { priceFromText: copy.priceFrom(formatMoney(beach.priceFromCents, locale)) }
               : {}),
@@ -333,7 +354,11 @@ async function SearchPage({ locale, query = {} }: PageProps & { query?: Query })
                 {copy.pastDay}
               </p>
             ) : null}
-            {!result.ok ? (
+            {periodError ? (
+              <p className="alert" role="alert">
+                {periodError}
+              </p>
+            ) : !result.ok ? (
               <div className="empty">
                 <h2>{copy.unavailableTitle}</h2>
                 <p>{copy.unavailableText}</p>
@@ -364,7 +389,13 @@ async function SearchPage({ locale, query = {} }: PageProps & { query?: Query })
                   </div>
                 ) : null}
                 <div className="portal-results__head">
-                  <h2>{search.day ? copy.resultsTitle(formatDay(search.day, locale)) : copy.listTitle}</h2>
+                  <h2>
+                    {search.day && search.to
+                      ? copy.resultsPeriodTitle(formatPeriod(search.day, search.to, locale))
+                      : search.day
+                        ? copy.resultsTitle(formatDay(search.day, locale))
+                        : copy.listTitle}
+                  </h2>
                   <p>{notes.join(' ')}</p>
                 </div>
                 {open.length === 0 ? (
@@ -378,7 +409,7 @@ async function SearchPage({ locale, query = {} }: PageProps & { query?: Query })
                 ) : (
                   <ul className="cards">
                     {open.map((beach) => (
-                      <BeachCard key={beach.slug} locale={locale} beach={beach} day={search.day} />
+                      <BeachCard key={beach.slug} locale={locale} beach={beach} day={search.day} to={search.to} />
                     ))}
                   </ul>
                 )}

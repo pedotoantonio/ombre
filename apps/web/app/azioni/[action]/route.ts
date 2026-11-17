@@ -194,17 +194,23 @@ const actions: Record<string, (request: Request, form: Form, lang: Locale) => Pr
     const beach = form('beach');
     const spotId = form('spot');
     const day = form('day');
+    // «Al» del periodo (D39): assente o uguale a «dal», la riserva resta di una giornata.
+    const toAsked = form('to');
     const key = form('key');
     const promo = form('promo').trim();
     const extras = chosenExtras(form);
     if (!slugPattern.test(beach) || !uuidPattern.test(spotId) || !dayPattern.test(day) || !/^web-[0-9a-f-]{36}$/.test(key)) return bad();
-    const result = await api.hold({ beachSlug: beach, spotId, day, ...(promo ? { promoCode: promo } : {}), ...(extras.length > 0 ? { extras } : {}) }, key);
+    if (toAsked !== '' && !dayPattern.test(toAsked)) return bad();
+    const to = toAsked !== '' && toAsked !== day ? toAsked : undefined;
+    const toQuery = to ? `&to=${to}` : '';
+    const result = await api.hold({ beachSlug: beach, spotId, day, ...(to ? { to } : {}), ...(promo ? { promoCode: promo } : {}), ...(extras.length > 0 ? { extras } : {}) }, key);
     if (result.ok) return { to: holdPath(lang, beach, result.data.holdId) };
     // The chosen quantities come back in the address, next to the message that explains the refusal.
     const extrasQuery = extras.map((entry) => `&extra-${entry.serviceId}=${entry.quantity}`).join('');
-    if (result.code === 'promo_not_applicable') return { to: `${bookPath(lang, beach)}?spot=${spotId}&day=${day}${extrasQuery}&promoError=1` };
-    if (result.code === 'extra_not_available') return { to: `${bookPath(lang, beach)}?spot=${spotId}&day=${day}${promo ? `&promo=${encodeURIComponent(promo)}` : ''}&extrasError=1` };
-    if (result.code === 'inventory_conflict') return { to: `${beachPath(lang, beach)}?day=${day}&taken=1` };
+    if (result.code === 'promo_not_applicable') return { to: `${bookPath(lang, beach)}?spot=${spotId}&day=${day}${toQuery}${extrasQuery}&promoError=1` };
+    if (result.code === 'extra_not_available') return { to: `${bookPath(lang, beach)}?spot=${spotId}&day=${day}${toQuery}${promo ? `&promo=${encodeURIComponent(promo)}` : ''}&extrasError=1` };
+    // La riserva è tutta o niente (D39): una giornata presa nel mezzo riporta alla pagina del periodo.
+    if (result.code === 'inventory_conflict') return { to: `${beachPath(lang, beach)}?day=${day}${toQuery}&taken=1` };
     if (result.status === 404) return new Response('Not found', { status: 404 });
     return new Response('Service unavailable', { status: 503 });
   },

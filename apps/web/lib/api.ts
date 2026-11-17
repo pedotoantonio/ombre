@@ -25,6 +25,8 @@ export interface BeachSearch {
   locality?: string;
   /** Guests and shared days are only counted on a given day. */
   day?: string;
+  /** Last day of a dal–al period (D39): needs day; left out, the search is for one day. */
+  to?: string;
   guests?: number;
   sharedOnly?: boolean;
 }
@@ -117,6 +119,14 @@ export interface ApiExtraRequest {
   quantity: number;
 }
 
+/** One day of a dal–al quote (D39): the spot money of that day, discount applied per day. */
+export interface ApiQuoteDay {
+  day: string;
+  listPriceCents: number;
+  discountCents: number;
+  totalCents: number;
+}
+
 export interface ApiQuote {
   /** Price and discount mean the spot alone; the extras are separate and the total is comprehensive. */
   listPriceCents: number;
@@ -125,6 +135,8 @@ export interface ApiQuote {
   totalCents: number;
   promoCode: string | null;
   extras: ApiExtraLine[];
+  /** The days of a dal–al period (D39), one entry each; a single entry for one day. */
+  days?: ApiQuoteDay[];
 }
 
 export interface ApiHold extends ApiQuote {
@@ -133,6 +145,9 @@ export interface ApiHold extends ApiQuote {
   expiresAt: string;
   beach: ApiBeach;
   day: string;
+  /** The whole dal–al period of the hold (D39); from = to = day for a single day. */
+  from: string;
+  to: string;
   spot: { code: string; rowNumber: number; umbrellas: number; sunbeds: number };
 }
 
@@ -183,6 +198,8 @@ export interface DayRequest {
   beachSlug: string;
   spotId: string;
   day: string;
+  /** Last day of a dal–al period (D39): left out, the request is for the one day. */
+  to?: string;
   promoCode?: string;
   extras?: ApiExtraRequest[];
 }
@@ -192,6 +209,7 @@ function searchQuery(search: BeachSearch): string {
   if (search.locality) query.set('locality', search.locality);
   if (search.day) {
     query.set('day', search.day);
+    if (search.to && search.to !== search.day) query.set('to', search.to);
     if (search.guests) query.set('guests', String(search.guests));
     if (search.sharedOnly) query.set('sharedOnly', 'true');
   }
@@ -204,9 +222,10 @@ export const api = {
   beach: (slug: string) =>
     call<{ beach: ApiBeach; nextAvailableDay: string | null; site: { template: SiteTemplate; content: SiteContent } | null }>(`/v1/beaches/${encodeURIComponent(slug)}`),
   // With guests the answer also carries the recommended spot for that party (spec §3.3).
-  availability: (slug: string, day: string, guests?: number) =>
+  // With `to` the spots are the ones free on EVERY day of the dal–al period, priced as its total (D39).
+  availability: (slug: string, day: string, guests?: number, to?: string) =>
     call<{ spots: ApiSpot[]; layout: ApiMapSpot[]; gaps: ApiZoneGaps; seaSide: SeaSide; elements: ApiLayoutElement[]; guests?: number; suggestedSpotId?: string | null }>(
-      `/v1/beaches/${encodeURIComponent(slug)}/availability?day=${encodeURIComponent(day)}${guests ? `&guests=${guests}` : ''}`,
+      `/v1/beaches/${encodeURIComponent(slug)}/availability?day=${encodeURIComponent(day)}${to && to !== day ? `&to=${encodeURIComponent(to)}` : ''}${guests ? `&guests=${guests}` : ''}`,
     ),
   // The active extra services of one club: public only here, inside its booking flow (spec §4.2).
   extras: (slug: string) => call<{ beach: ApiBeach; currency: string; extras: ApiExtraService[] }>(`/v1/beaches/${encodeURIComponent(slug)}/extras`),
@@ -292,6 +311,11 @@ function dayParts(day: string, locale: 'it' | 'en'): DayParts {
 /** Two days as one period, in lower case: "dal 1º al 30 novembre 2026", "from 1 to 30 November 2026". */
 export function formatPeriod(from: string, to: string, locale: 'it' | 'en'): string {
   return getDictionary(locale, config.brandName).dates.period(dayParts(from, locale), dayParts(to, locale));
+}
+
+/** Number of calendar days of a dal–al period, boundaries included. */
+export function periodDays(from: string, to: string): number {
+  return Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000) + 1;
 }
 
 export function formatTime(instant: string, locale: 'it' | 'en', timeZone: string): string {
