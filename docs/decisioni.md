@@ -353,3 +353,45 @@ percentuale di occupazione; nel modello una prenotazione dura un giorno) e
 la scala della scena a scatti via query string, con «adatta» calcolata dal
 server sulla larghezza del disegno. Nessuno script: la deroga D28 resta
 confinata agli arricchimenti già esistenti.
+
+## D38 — Gruppo di prenotazione per il periodo — accettata (17/11/2026)
+
+La prenotazione resta una postazione per una giornata; il periodo dal–al è
+un gruppo (`booking_group`) di giornate consecutive sulla stessa postazione
+— al massimo 31 — con un codice, un pass e un totale. Ogni prenotazione
+esistente diventa un gruppo di un giorno col suo stesso codice (il codice
+vive sul gruppo); pagamenti e richieste D31 passano al gruppo; gli extra
+valgono una volta per periodo e maturano con la prima giornata; la verifica
+del pass risolve la giornata corrente. Carrello multi postazione rimandato.
+
+## D39 — Ricerca e riserva per periodo — accettata (17/11/2026)
+
+La ricerca chiede dal e al («al» predefinito = «dal»); una postazione è nei
+risultati solo se libera ogni giornata del periodo, col totale «da»; le
+condivise contano se coprono la giornata; la riserva prende tutte le
+giornate in una transazione, tutta o niente, con scadenza unica. Al banco
+si prenota per periodo come online, «da incassare» compresa.
+
+## D40 — Annullamento del periodo intero — accettata (17/11/2026)
+
+L'annullamento del gestore tratta il gruppo: tutte le giornate non mature,
+con gli storni compensativi e il rimborso degli extra se nessuna giornata è
+maturata. Annullare singole giornate di un gruppo è rimandato e scritto.
+
+## D41 — Sito pubblico a tre ruoli — accettata (17/11/2026)
+
+Prima pagina a tre tasti di pari peso (Ospite, Stagionale, Gestore
+stabilimento) sopra la ricerca; barra pubblica fissa; menu a bottoni con
+cinque voci e nessuna voce mappa; «Esplora» diventa «Ricerca ombrellone»
+(`ricerca-ombrellone` / `umbrella-search`) con 301 dai vecchi indirizzi;
+«Come funziona» si sdoppia in tre per ruolo e le pagine «Per gli
+stabilimenti» e «Per gli stagionali» vi confluiscono con 301; la pagina del
+Gestore mostra le schermate vere e porta all'accesso: due tocchi dal sito.
+
+## D42 — I tre nomi con controllo automatico — accettata (17/11/2026)
+
+Ovunque solo Ospite / Stagionale / Gestore stabilimento (Guest / Season
+holder / Beach manager): un test sui dizionari it/en e un controllo fumo
+sulle pagine rese vietano le vecchie formule («Per gli stabilimenti», «Per
+gli stagionali», «condividi giornate» come etichetta e varianti). Titolare
+di cabina e contabilità restano nomi interni dell'area riservata.
