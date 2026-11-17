@@ -12,7 +12,7 @@ export function makeIt(brand: string) {
     meta: {
       pageTitle: (page: string) => `${page} | ${brand}`,
       beachPageTitle: (page: string, club: string) => `${page} · ${club} | ${brand}`,
-      siteDescription: `${brand} è un servizio per prenotare online una giornata in uno stabilimento balneare e per permettere agli abbonati stagionali di condividere le giornate in cui non usano la postazione, con l'autorizzazione del gestore.`,
+      siteDescription: `${brand} è un servizio per prenotare online una giornata in uno stabilimento balneare e per permettere agli Stagionali di affittare le giornate in cui non usano la postazione, con l'autorizzazione del Gestore stabilimento.`,
     },
     nav: {
       label: 'Navigazione principale',
@@ -66,7 +66,7 @@ export function makeIt(brand: string) {
       day: 'Giorno',
       guests: 'Ospiti',
       sharedOnly: 'Solo giornate condivise',
-      sharedHint: "Sono le giornate offerte da chi ha un abbonamento stagionale, con l'autorizzazione del gestore.",
+      sharedHint: "Sono le giornate offerte dagli Stagionali, con l'autorizzazione del Gestore stabilimento.",
       submit: 'Cerca',
     },
     map: {
@@ -206,7 +206,7 @@ export function makeIt(brand: string) {
     },
     account: {
       signInTitle: 'Accedi',
-      signInLead: 'Area riservata a stabilimenti, reception e stagionali.',
+      signInLead: 'Area riservata al Gestore stabilimento, alla reception e agli Stagionali.',
       email: 'Email',
       password: 'Password',
       signInButton: 'Accedi',
@@ -218,7 +218,7 @@ export function makeIt(brand: string) {
       beachesTitle: 'Stabilimenti',
       contractsTitle: 'Abbonamenti stagionali',
       nothingHere: 'Non hai ancora stabilimenti o abbonamenti collegati a questo accesso.',
-      roles: { manager: 'Gestore', reception: 'Reception', accounting: 'Contabilità', cabin_holder: 'Titolare di cabina' },
+      roles: { manager: 'Gestore stabilimento', reception: 'Reception', accounting: 'Contabilità', cabin_holder: 'Titolare di cabina' },
       open: 'Apri',
       saved: 'Fatto.',
       errors: {
@@ -1098,8 +1098,8 @@ export function makeIt(brand: string) {
           { title: 'Ricerca postazione', text: 'Per località, giorno e numero di ospiti.' },
           { title: 'Mappa spiaggia', text: 'Scegli la postazione sulla planimetria.' },
           { title: 'Il tuo pass QR', text: 'Lo mostri alla reception quando arrivi.' },
-          { title: 'Condividi giornate', text: 'Se hai un abbonamento stagionale.' },
-          { title: 'Area gestore', text: 'Sito, prenotazioni e reception.' },
+          { title: 'Giornate condivise', text: 'Se sei uno Stagionale con abbonamento.' },
+          { title: 'Gestore stabilimento', text: 'Sito, prenotazioni e reception.' },
         ],
         stepsTitle: 'Tre passi, dal telefono',
         steps: [
@@ -1117,22 +1117,22 @@ export function makeIt(brand: string) {
           },
         ],
         ideaTitle: 'Da dove arrivano le giornate disponibili',
-        ideaText: `Molte postazioni restano vuote nei giorni in cui chi ha l'abbonamento stagionale non va al mare. Con ${brand} lo stagionale propone quelle giornate, il gestore le autorizza e un ospite le prenota.`,
+        ideaText: `Molte postazioni restano vuote nei giorni in cui chi ha l'abbonamento stagionale non va al mare. Con ${brand} lo Stagionale propone quelle giornate, il Gestore stabilimento le autorizza e un Ospite le prenota.`,
         audiencesTitle: 'Per chi è',
         audiences: [
           {
-            title: 'Ospiti',
+            title: 'Ospite',
             text: 'Una giornata al mare con il posto riservato e il prezzo chiaro prima di pagare.',
             link: 'Come si prenota',
           },
           {
-            title: 'Stagionali',
-            text: 'Hai un abbonamento? Puoi proporre le giornate in cui non usi la postazione, se il tuo stabilimento aderisce.',
-            link: 'Come si condivide',
+            title: 'Stagionale',
+            text: 'Hai un abbonamento? Puoi affittare la postazione nelle giornate in cui non la usi, se il tuo stabilimento aderisce.',
+            link: 'Come funziona per te',
           },
           {
-            title: 'Stabilimenti',
-            text: 'Sito, prenotazioni dirette e reception sullo stesso inventario. Prezzi, posti e regole li decide il gestore.',
+            title: 'Gestore stabilimento',
+            text: 'Sito, prenotazioni dirette e reception sullo stesso inventario. Prezzi, posti e regole li decidi tu.',
             link: 'Cosa comprende',
           },
         ],

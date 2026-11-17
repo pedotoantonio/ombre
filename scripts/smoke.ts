@@ -214,6 +214,30 @@ check(robots.status === 200 && robotsText.includes(`Sitemap: ${siteUrl}/sitemap.
 check(robotsText.includes('Disallow: /area') && robotsText.includes('Disallow: /en/account'), 'robots.txt: reserved areas not listed');
 check(robotsText.includes('Disallow: /paga') && robotsText.includes('Disallow: /en/pay'), 'robots.txt: the temporary payment links are not excluded');
 
+// The three role names and nothing else (spec §5, D42): the banished formulas must not
+// appear in the rendered HTML of the main pages — home, the search, the three «come
+// funziona» and the sign-in — in either language. Same census as the dictionary test
+// (packages/shared/tests/names.test.ts); matches ignore case.
+const banishedNames = [
+  'per gli stabilimenti',
+  'per gli stagionali',
+  'condividi giornate',
+  'condividi le giornate',
+  'area gestore',
+  'for beach clubs',
+  'for season holders',
+  'share days',
+  'share your days',
+  'manager area',
+];
+const namePages = ['/', '/en', '/ricerca-ombrellone', '/en/umbrella-search', '/come-funziona', '/en/how-it-works', '/stagionale', '/en/season-holder', '/gestore-stabilimento', '/en/beach-manager', '/area/accesso', '/en/account/sign-in'];
+for (const path of namePages) {
+  const html = (await (await fetch(base + path, { redirect: 'manual' })).text()).toLowerCase();
+  for (const formula of banishedNames) {
+    check(!html.includes(formula), `${path}: the banished formula "${formula}" is still in the page`);
+  }
+}
+
 const sitemap = await fetch(`${base}/sitemap.xml`);
 const sitemapText = await sitemap.text();
 const listed = (sitemapText.match(/<loc>/g) ?? []).length;

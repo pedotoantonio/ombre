@@ -5,7 +5,7 @@ export function makeEn(brand: string): Dictionary {
     meta: {
       pageTitle: (page: string) => `${page} | ${brand}`,
       beachPageTitle: (page: string, club: string) => `${page} · ${club} | ${brand}`,
-      siteDescription: `${brand} is a service for booking a day at a beach club online, and for letting season pass holders share the days they do not use their spot, with the manager's approval.`,
+      siteDescription: `${brand} is a service for booking a day at a beach club online, and for letting Season holders rent out the days they do not use their spot, with the Beach manager's approval.`,
     },
     nav: {
       label: 'Main navigation',
@@ -54,7 +54,7 @@ export function makeEn(brand: string): Dictionary {
       day: 'Day',
       guests: 'Guests',
       sharedOnly: 'Shared days only',
-      sharedHint: "Days offered by season pass holders, with the manager's approval.",
+      sharedHint: "Days offered by the Season holders, with the Beach manager's approval.",
       submit: 'Search',
     },
     map: {
@@ -194,7 +194,7 @@ export function makeEn(brand: string): Dictionary {
     },
     account: {
       signInTitle: 'Sign in',
-      signInLead: 'Reserved area for beach clubs, front desk staff and season holders.',
+      signInLead: 'Reserved area for the Beach manager, the front desk and the Season holders.',
       email: 'Email',
       password: 'Password',
       signInButton: 'Sign in',
@@ -206,7 +206,7 @@ export function makeEn(brand: string): Dictionary {
       beachesTitle: 'Beach clubs',
       contractsTitle: 'Season passes',
       nothingHere: 'No beach clubs or season passes are linked to this sign-in yet.',
-      roles: { manager: 'Manager', reception: 'Front desk', accounting: 'Accounting', cabin_holder: 'Cabin holder' },
+      roles: { manager: 'Beach manager', reception: 'Front desk', accounting: 'Accounting', cabin_holder: 'Cabin holder' },
       open: 'Open',
       saved: 'Done.',
       errors: {
@@ -1086,8 +1086,8 @@ export function makeEn(brand: string): Dictionary {
           { title: 'Find a spot', text: 'By place, day and number of guests.' },
           { title: 'Beach map', text: 'Pick your spot on the map.' },
           { title: 'Your QR pass', text: 'Show it at the front desk on arrival.' },
-          { title: 'Share your days', text: 'If you have a season pass.' },
-          { title: 'Manager area', text: 'Website, bookings and front desk.' },
+          { title: 'Shared days', text: 'If you are a Season holder with a pass.' },
+          { title: 'Beach manager', text: 'Website, bookings and front desk.' },
         ],
         stepsTitle: 'Three steps, from your phone',
         steps: [
@@ -1105,22 +1105,22 @@ export function makeEn(brand: string): Dictionary {
           },
         ],
         ideaTitle: 'Where the available days come from',
-        ideaText: `Many spots stay empty on the days their season pass holders do not go to the beach. With ${brand} the season holder offers those days, the manager approves them and a guest books them.`,
+        ideaText: `Many spots stay empty on the days their season pass holders do not go to the beach. With ${brand} the Season holder offers those days, the Beach manager approves them and a Guest books them.`,
         audiencesTitle: 'Who it is for',
         audiences: [
           {
-            title: 'Guests',
+            title: 'Guest',
             text: 'A day at the beach with a reserved spot and a clear price before you pay.',
             link: 'How booking works',
           },
           {
-            title: 'Season holders',
-            text: 'Have a season pass? You can offer the days you do not use your spot, if your beach club takes part.',
-            link: 'How sharing works',
+            title: 'Season holder',
+            text: 'Have a season pass? You can rent out your spot on the days you do not use it, if your beach club takes part.',
+            link: 'How it works for you',
           },
           {
-            title: 'Beach clubs',
-            text: 'Website, direct bookings and front desk on the same inventory. The manager decides prices, spots and rules.',
+            title: 'Beach manager',
+            text: 'Website, direct bookings and front desk on the same inventory. Prices, spots and rules are decided by you.',
             link: 'What is included',
           },
         ],
