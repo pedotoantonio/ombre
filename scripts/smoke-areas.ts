@@ -116,7 +116,11 @@ const sold = await manager.get(`/area/gestione/${beach}?day=${day}`);
 check(sold.html.includes(code) && sold.html.includes('Venduta') && sold.html.includes('Ospite di Prova'), 'management: the confirmed booking is not shown');
 check(sold.html.includes('Riepilogo economico') && sold.html.includes('Stagionali'), 'management: the financial summary is missing');
 check(titleOf(sold.html) === `Gestione · Bagno delle Dune | ${brand}`, `management: the title is "${titleOf(sold.html)}"`);
-check(sold.html.includes('class="account-bar"'), 'management: no bar with who is signed in');
+// The management area wears the application frame (D36): the top bar says who is
+// signed in and offers the way out, in place of the account bar of the other pages.
+const manageBar = /<div class="manage-top"[^]*?<\/div>\s*<\/div>/.exec(sold.html)?.[0] ?? '';
+check(manageBar.includes('Gestore dimostrativo') && manageBar.includes('action="/azioni/uscita"'), 'management: no bar with who is signed in and the way out');
+check(sold.html.includes('class="manage-nav"') && sold.html.includes('aria-current="page"'), 'management: no side navigation with the active voice');
 // Tables turn into cards on phones: every cell carries the name of its column, and the wrapper is a labelled region.
 const tables = sold.html.match(/<div class="table-wrap"[^>]*>/g) ?? [];
 check(tables.length >= 4 && tables.every((tag) => /role="region"/.test(tag) && /aria-label="[^"]+"/.test(tag) && /tabindex="0"/i.test(tag)), 'management: a table is not inside a labelled, focusable region');

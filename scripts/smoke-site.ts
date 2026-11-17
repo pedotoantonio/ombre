@@ -64,7 +64,9 @@ check(opened.includes('Nessuna bozza in corso'), 'editor: does not open empty');
 check((/<title>([^<]*)<\/title>/.exec(opened)?.[1] ?? '') === `Sito dello stabilimento · Bagno delle Dune | ${brand}`, 'editor: the page has no title naming the beach club');
 check(opened.includes('<legend>Testi in inglese</legend>') && opened.includes('Facoltativi: se li lasci vuoti'), 'editor: the English group has a long legend, or its note is missing');
 check((opened.match(/<img class="checks__thumb" src="\/demo\/[a-z]+\.svg"/g) ?? []).length === (opened.match(/name="gallery"/g) ?? []).length && opened.includes('name="gallery"'), 'editor: a gallery option has no thumbnail');
-check(opened.includes('class="account-bar"'), 'editor: no bar with who is signed in');
+// The editor lives in the application frame of the management area (D36): the top bar
+// says who is signed in and offers the way out.
+check(opened.includes('class="manage-top"') && opened.includes('Gestore dimostrativo') && opened.includes('action="/azioni/uscita"'), 'editor: no bar with who is signed in');
 const fields = { lang: 'it', beach, template: 'riviera', ...italian, ...blankEnglish };
 check((await manager.post('sito-salva', { ...fields, version: '' })).includes('ok=1'), 'editor: the first draft was not saved');
 
