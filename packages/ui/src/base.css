@@ -9,8 +9,16 @@
 html {
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
-  scroll-padding-top: 5.5rem;
+  /* The public bar is fixed on every width: anchors and focused fields land below it.
+     Narrow screens carry the two-row header, wide ones the single row. */
+  scroll-padding-top: 7.5rem;
   background: var(--avorio);
+}
+
+@media (min-width: 72rem) {
+  html {
+    scroll-padding-top: 5.5rem;
+  }
 }
 
 body {
@@ -167,11 +175,16 @@ svg {
 }
 
 /* Header: brand and tools on the first row, links on a second row that scrolls sideways.
-   From 72rem everything sits on one row. */
+   From 72rem everything sits on one row. The bar stays put while the page scrolls (D41),
+   on phones and computers alike; the pages of the management area put it back in the
+   flow, because they carry their own fixed bar (D36). */
 .site-header {
-  position: relative;
+  position: sticky;
+  top: 0;
   z-index: 10;
-  background: var(--carta);
+  background: rgb(255 255 255 / 0.82);
+  -webkit-backdrop-filter: saturate(180%) blur(18px);
+  backdrop-filter: saturate(180%) blur(18px);
   border-bottom: 1px solid var(--bordo);
 }
 
@@ -416,14 +429,6 @@ svg {
 }
 
 @media (min-width: 72rem) {
-  .site-header {
-    position: sticky;
-    top: 0;
-    background: rgb(255 255 255 / 0.82);
-    -webkit-backdrop-filter: saturate(180%) blur(18px);
-    backdrop-filter: saturate(180%) blur(18px);
-  }
-
   .site-header__inner {
     grid-template-columns: auto 1fr auto;
     grid-template-areas: 'brand nav tools';

@@ -1075,8 +1075,12 @@ export function makeEn(brand: string): Dictionary {
         description: `With ${brand} you book a day at an Italian beach club online: a specific spot, the final price before you pay, a pass to show on arrival.`,
         h1: 'Your place in the sun, even for a single day',
         lead: `With ${brand} you book a day at a beach club online. Pick your spot, see the final price before you pay and get a pass to show on arrival.`,
-        ctaHowItWorks: 'See how it works',
-        ctaBeachClubs: 'For beach clubs',
+        rolesLabel: 'The three paths',
+        roles: {
+          search: "I'm looking for an umbrella",
+          season: 'I rent out my umbrella',
+          manager: 'I manage a beach club',
+        },
         featuresTitle: 'Everything in one place',
         features: [
           { title: 'Find a spot', text: 'By place, day and number of guests.' },

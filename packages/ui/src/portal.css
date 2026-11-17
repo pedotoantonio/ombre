@@ -54,18 +54,45 @@
   margin-top: var(--spazio-4);
 }
 
-.portal-hero__links {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0 var(--spazio-6);
-  margin-top: var(--spazio-3);
+/* ---- I tre tasti di ruolo, pari peso, sopra la ricerca (D41) ---- */
+.portal-roles {
+  margin-top: var(--spazio-5);
 }
 
-.portal-hero__links a {
-  display: inline-flex;
+.portal-roles ul {
+  display: grid;
+  gap: var(--spazio-3);
+}
+
+.portal-role {
+  display: flex;
   align-items: center;
-  min-height: var(--tocco);
-  font-weight: 700;
+  justify-content: center;
+  min-height: 3.25rem;
+  padding: var(--spazio-3) var(--spazio-4);
+  border: 2px solid var(--oceano);
+  border-radius: var(--raggio);
+  background: var(--carta);
+  color: var(--oceano);
+  font-weight: var(--peso-forte);
+  text-align: center;
+  text-decoration: none;
+  transition: transform var(--rapido) ease-out;
+}
+
+.portal-role:hover {
+  background: var(--spuma);
+  color: var(--oceano);
+}
+
+.portal-role:active {
+  transform: scale(0.98);
+}
+
+@media (min-width: 48rem) {
+  .portal-roles ul {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
 @media (min-width: 48rem) {

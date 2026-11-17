@@ -163,13 +163,27 @@ export function HomePage({ locale }: PageProps) {
           <div className="portal-hero__panel">
             <h1>{copy.h1}</h1>
             <p className="lead">{copy.lead}</p>
+            {/* The three role doors, equal in weight, before the search (spec §3, D41). */}
+            <nav className="portal-roles" aria-label={copy.rolesLabel}>
+              <ul>
+                <li>
+                  <Link className="portal-role" href={pathFor('explore', locale)}>
+                    {copy.roles.search}
+                  </Link>
+                </li>
+                <li>
+                  <Link className="portal-role" href={pathFor('forSeasonHolders', locale)}>
+                    {copy.roles.season}
+                  </Link>
+                </li>
+                <li>
+                  <Link className="portal-role" href={pathFor('forBeachClubs', locale)}>
+                    {copy.roles.manager}
+                  </Link>
+                </li>
+              </ul>
+            </nav>
             <SearchForm locale={locale} search={{ place: '', day: null, guests: defaultGuests, sharedOnly: false }} />
-            {/* The list way in comes before the map box in the reading order: search form, then Explore. */}
-            <p className="portal-hero__links">
-              <Link href={pathFor('explore', locale)}>{t.nav.explore}</Link>
-              <Link href={pathFor('howItWorks', locale)}>{copy.ctaHowItWorks}</Link>
-              <Link href={pathFor('forBeachClubs', locale)}>{copy.ctaBeachClubs}</Link>
-            </p>
           </div>
         </div>
       </section>
