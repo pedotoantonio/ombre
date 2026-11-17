@@ -287,3 +287,35 @@ pagamento derivato (saldata/parziale/da incassare). Le richieste di pagamento
 hanno token firmato, scadenza entro il giorno prenotato e link pubblico
 `/paga/{token}` col fornitore di prova; la tabella `notification` si estende a
 coda di messaggi pronti per il fornitore vero.
+
+## D32 — Scheda della postazione nella console — accettata (17/11/2026)
+
+La tessera della console apre una scheda servita dal server
+(`?postazione=CODICE`, pannello con ancora `#scheda`): dati del giorno,
+prenotazione con totale/incassato/residuo dal modello D31, azioni solo se
+compatibili con stato e permessi (prenota al banco, incassa, sposta,
+blocca/sblocca, reception). Niente pannello flottante in JavaScript: la
+scheda è parte della pagina e funziona senza script, coerente con D28. Lo
+storico per postazione è rinviato alla fase successiva.
+
+## D33 — Planner a griglia giorno per giorno — accettata (17/11/2026)
+
+Il planner è una pagina di sola lettura nell'area di gestione: righe le
+postazioni del disegno, colonne i giorni di una finestra di 7, 14 o 31 giorni
+(mai oltre 31 per richiesta), celle lo stato della coppia postazione-giorno
+con testo oltre al colore (D20). Nel modello una prenotazione è una
+postazione per un giorno, quindi la griglia è la rappresentazione fedele, non
+una semplificazione. Le modifiche si fanno dove già esistono (banco,
+reception, console): niente trascinamento, che richiederebbe script
+obbligatori. Le celle sono collegamenti alla console del giorno.
+
+## D34 — Generazione in blocco delle file — accettata (17/11/2026)
+
+L'editor guadagna «Aggiungi più file»: fino a 10 file per 50 postazioni l'una,
+tetto di 200 postazioni per operazione, numerazione progressiva con un solo
+prefisso attraverso le file (A01–A10, A11–A20, …), transazione unica che
+fallisce intera in caso di collisione di codici, evento nel registro coi
+conteggi. Il trascinamento libero, la rotazione e il ridimensionamento
+proposti dall'analisi esterna restano fuori: l'editor è a celle per scelta
+(D25). Le altre proposte rifiutate o rinviate sono motivate nella
+[specifica](specifica-console-planner.md) §1.
