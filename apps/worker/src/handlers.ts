@@ -1,4 +1,4 @@
-import { bookingConfirmedMail, formatLongDay, type MailProvider } from '@ombre/comms';
+import { bookingConfirmedMail, formatLongPeriod, periodDayCount, type MailProvider } from '@ombre/comms';
 import { bookingAccessToken, bookingMailData, recordNotification, type Database, type OutboxHandler } from '@ombre/db';
 import { bookingPath } from '@ombre/shared';
 
@@ -27,7 +27,9 @@ export function createHandler({ db, brand, siteUrl, signingSecret, mail }: Handl
       locale: data.locale,
       guestName: data.guestName,
       beachName: data.beachName,
-      day: formatLongDay(data.day, data.locale),
+      // The whole dal–al period of the group (D38), written out; one day reads as before.
+      period: formatLongPeriod(data.from, data.to, data.locale),
+      days: periodDayCount(data.from, data.to),
       spotCode: data.spotCode,
       code: data.code,
       totalCents: data.totalCents,

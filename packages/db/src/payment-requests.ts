@@ -1,6 +1,6 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { and, asc, desc, eq, sql } from 'drizzle-orm';
-import { lockGroup, paidCentsOfGroup, paymentStateOf, type PaymentState } from './bookings';
+import { groupTotalsByGroup, lockGroup, paidCentsOfGroup, paymentStateOf, type PaymentState } from './bookings';
 import { withActor, withBeach, type Database, type Transaction } from './client';
 import { DomainError } from './inventory';
 import type { Actor } from './manage';
@@ -68,6 +68,8 @@ export interface PayRequestMessageData {
   beachName: string;
   /** First booked day, YYYY-MM-DD, plus the beach club's time zone to write the deadline. */
   day: string;
+  /** Last booked day of the group (D38): the message writes the whole dal–al period. */
+  to: string;
   timezone: string;
   spotCode: string;
   bookingCode: string;
@@ -152,6 +154,7 @@ export function createPaymentRequest(
       guestName: reserved.guestName,
       beachName: detail.lead.beachName,
       day: detail.from,
+      to: detail.to,
       timezone: detail.lead.timezone,
       spotCode: detail.lead.spotCode,
       bookingCode: reserved.code,
@@ -302,6 +305,9 @@ export interface PublicPayRequest {
   beach: { slug: string; name: string };
   /** First booked day of the group. */
   day: string;
+  /** The whole dal–al period of the group (D38), so /paga can write it; from = to for one day. */
+  from: string;
+  to: string;
   spotCode: string;
   amountCents: number;
   expiresAt: Date;
@@ -329,10 +335,14 @@ export async function readPayRequest(db: Database, token: string, secret: string
       .innerJoin(beach, eq(beach.id, paymentRequest.beachId))
       .where(eq(paymentRequest.id, requestId));
     if (!row || row.request.status !== 'pending' || !row.alive) throw unavailable();
+    // The period of the group (D38): the page writes the whole dal–al, not only the first day.
+    const totals = (await groupTotalsByGroup(tx, [row.request.groupId])).get(row.request.groupId);
     return {
       status: 'pending',
       beach: { slug: row.beachSlug, name: row.beachName },
       day: row.day,
+      from: totals?.from ?? row.day,
+      to: totals?.to ?? row.day,
       spotCode: row.spotCode,
       amountCents: row.request.amountCents,
       expiresAt: row.request.expiresAt,

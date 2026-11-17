@@ -2,7 +2,7 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 import { Hono, type Context } from 'hono';
 import { sql } from 'drizzle-orm';
 import { z } from 'zod';
-import { formatDeadline, formatLongDay, paymentRequestMessage } from '@ombre/comms';
+import { formatDeadline, formatLongPeriod, paymentRequestMessage } from '@ombre/comms';
 import {
   acquireHold,
   addElement,
@@ -498,7 +498,8 @@ export function createApp(options: AppOptions): Hono {
       locale: data.locale,
       guestName: data.guestName,
       beachName: data.beachName,
-      day: formatLongDay(data.day, data.locale),
+      // The whole dal–al period of the group (D38), written out; one day reads as before.
+      period: formatLongPeriod(data.day, data.to, data.locale),
       spotCode: data.spotCode,
       bookingCode: data.bookingCode,
       amountCents: data.amountCents,
@@ -637,7 +638,7 @@ export function createApp(options: AppOptions): Hono {
     return c.json({ currency: 'EUR', ...(await listDayOperations(db, actor, day)) });
   });
 
-  route({ method: 'get', path: '/v1/manage/beaches/:slug/operations/spot', summary: 'Card of one spot on a day: state with its reason, price, and the booking with its balance', tag: 'Beach club', auth: 'session', query: { day: 'YYYY-MM-DD', code: 'Spot code' }, success: 200, errors: [400, 401, 403, 404] }, async (c) => {
+  route({ method: 'get', path: '/v1/manage/beaches/:slug/operations/spot', summary: 'Card of one spot on a day: state with its reason, the price of the day, and the booking with the dal–al period and the balance of its group', tag: 'Beach club', auth: 'session', query: { day: 'YYYY-MM-DD', code: 'Spot code' }, success: 200, errors: [400, 401, 403, 404] }, async (c) => {
     // The card needs what the console needs; the booking inside is nulled without bookings.read.
     const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'inventory.read');
     const day = parse(daySchema, c.req.query('day'), 'day');
@@ -744,7 +745,7 @@ export function createApp(options: AppOptions): Hono {
     return c.body(null, 204);
   });
 
-  route({ method: 'get', path: '/v1/manage/beaches/:slug/bookings', summary: 'Bookings of a day for the front desk', tag: 'Beach club', auth: 'session', query: { day: 'YYYY-MM-DD' }, success: 200, errors: [400, 401, 403] }, async (c) => {
+  route({ method: 'get', path: '/v1/manage/beaches/:slug/bookings', summary: 'Bookings of a day for the front desk, each row with the dal–al period and the totals of its group', tag: 'Beach club', auth: 'session', query: { day: 'YYYY-MM-DD' }, success: 200, errors: [400, 401, 403] }, async (c) => {
     const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'bookings.read');
     const day = parse(daySchema, c.req.query('day'), 'day');
     return c.json({ day, currency: 'EUR', bookings: await listBookings(db, actor, day) });
@@ -800,6 +801,7 @@ export function createApp(options: AppOptions): Hono {
         guestName: detail.guestName,
         beachName: detail.beachName,
         day: detail.day,
+        to: detail.to,
         timezone: detail.timezone,
         spotCode: detail.spotCode,
         bookingCode: detail.bookingCode,
@@ -826,7 +828,7 @@ export function createApp(options: AppOptions): Hono {
 
   // The public payment page. Any unusable token — malformed, unknown, expired,
   // cancelled or already paid — answers the SAME polite refusal (spec §4.3).
-  route({ method: 'get', path: '/v1/pay-requests/:token', summary: 'The essential summary behind a /paga/{token} link', tag: 'Booking', auth: 'none', success: 200, errors: [404, 429] }, async (c) => {
+  route({ method: 'get', path: '/v1/pay-requests/:token', summary: 'The essential summary behind a /paga/{token} link, with the dal–al period of the group', tag: 'Booking', auth: 'none', success: 200, errors: [404, 429] }, async (c) => {
     const summary = await readPayRequest(db, parse(payTokenSchema, c.req.param('token'), 'token'), signingSecret);
     return c.json({ currency: 'EUR', ...summary, expiresAt: summary.expiresAt.toISOString() });
   });

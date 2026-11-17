@@ -27,8 +27,11 @@ export interface BookingMail {
   locale: Locale;
   guestName: string;
   beachName: string;
-  /** Already written for the reader, for example "giovedì 17 giugno 2027". */
-  day: string;
+  /** Already written for the reader: the day, or the whole dal–al period written out
+   * by formatLongPeriod, for example "da giovedì 17 giugno 2027 a sabato 19 giugno 2027". */
+  period: string;
+  /** Days of the period: beyond one, the mail speaks of the period and says the count. */
+  days: number;
   spotCode: string;
   code: string;
   totalCents: number;
@@ -43,13 +46,30 @@ export function formatLongDay(day: string, locale: Locale): string {
   );
 }
 
+/**
+ * A dal–al period written out in full (D38): the one day as before, or both ends with
+ * their weekday — "da giovedì 17 giugno 2027 a sabato 19 giugno 2027",
+ * "from Thursday 17 June 2027 to Saturday 19 June 2027".
+ */
+export function formatLongPeriod(from: string, to: string, locale: Locale): string {
+  if (from === to) return formatLongDay(from, locale);
+  if (locale === 'en') return `from ${formatLongDay(from, 'en')} to ${formatLongDay(to, 'en')}`;
+  return `da ${formatLongDay(from, 'it')} a ${formatLongDay(to, 'it')}`;
+}
+
+/** Days of a dal–al period, boundaries included: what the mails write next to the period. */
+export function periodDayCount(from: string, to: string): number {
+  return Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000) + 1;
+}
+
 export interface PaymentRequestMessage {
   brand: string;
   locale: Locale;
   guestName: string;
   beachName: string;
-  /** Already written for the reader, for example "giovedì 17 giugno 2027". */
-  day: string;
+  /** Already written for the reader: the day, or the whole dal–al period from
+   * formatLongPeriod — the request always names the full stay, never the first day alone. */
+  period: string;
   spotCode: string;
   bookingCode: string;
   amountCents: number;
@@ -73,7 +93,7 @@ export function paymentRequestMessage(data: PaymentRequestMessage): { subject: s
       text: [
         `Hello ${data.guestName},`,
         '',
-        `${data.beachName} asks you for a payment of ${amount} for your booking ${data.bookingCode} (${data.day}, spot ${data.spotCode}).`,
+        `${data.beachName} asks you for a payment of ${amount} for your booking ${data.bookingCode} (${data.period}, spot ${data.spotCode}).`,
         '',
         'You can pay securely on this page:',
         data.payUrl,
@@ -87,7 +107,7 @@ export function paymentRequestMessage(data: PaymentRequestMessage): { subject: s
     text: [
       `Ciao ${data.guestName},`,
       '',
-      `${data.beachName} ti chiede un pagamento di ${amount} per la tua prenotazione ${data.bookingCode} (${data.day}, postazione ${data.spotCode}).`,
+      `${data.beachName} ti chiede un pagamento di ${amount} per la tua prenotazione ${data.bookingCode} (${data.period}, postazione ${data.spotCode}).`,
       '',
       'Puoi pagare in modo sicuro da questa pagina:',
       data.payUrl,
@@ -104,6 +124,9 @@ export function formatDeadline(instant: Date, locale: Locale, timezone: string):
 
 export function bookingConfirmedMail(to: string, data: BookingMail): Mail {
   const total = formatMoney(data.totalCents, data.locale);
+  // Beyond one day the mail names the whole dal–al period (D38), with the count of days,
+  // and says that the one pass is valid on every day of the stay.
+  const period = data.days > 1;
   if (data.locale === 'en') {
     return {
       to,
@@ -113,12 +136,14 @@ export function bookingConfirmedMail(to: string, data: BookingMail): Mail {
         '',
         `your booking at ${data.beachName} is confirmed.`,
         '',
-        `Day: ${data.day}`,
+        period ? `Period: ${data.period} (${data.days} days)` : `Day: ${data.period}`,
         `Spot: ${data.spotCode}`,
         `Booking code: ${data.code}`,
         `Total paid: ${total}`,
         '',
-        'Your pass, with the QR code to show at the front desk, is on this page:',
+        period
+          ? 'Your pass, one for the whole stay and valid on every day, with the QR code to show at the front desk, is on this page:'
+          : 'Your pass, with the QR code to show at the front desk, is on this page:',
         data.bookingUrl,
         '',
         'Keep this link to yourself: anyone who has it can see the pass.',
@@ -133,12 +158,14 @@ export function bookingConfirmedMail(to: string, data: BookingMail): Mail {
       '',
       `la tua prenotazione presso ${data.beachName} è confermata.`,
       '',
-      `Giorno: ${data.day}`,
+      period ? `Periodo: ${data.period} (${data.days} giornate)` : `Giorno: ${data.period}`,
       `Postazione: ${data.spotCode}`,
       `Codice prenotazione: ${data.code}`,
       `Totale pagato: ${total}`,
       '',
-      'Il tuo pass, con il codice QR da mostrare alla reception, è in questa pagina:',
+      period
+        ? 'Il tuo pass, unico per tutto il soggiorno e valido ogni giornata, con il codice QR da mostrare alla reception, è in questa pagina:'
+        : 'Il tuo pass, con il codice QR da mostrare alla reception, è in questa pagina:',
       data.bookingUrl,
       '',
       'Non condividere questo collegamento: chi lo possiede può vedere il pass.',

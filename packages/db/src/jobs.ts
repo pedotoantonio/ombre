@@ -88,6 +88,9 @@ export interface BookingMailData {
   guestEmail: string | null;
   totalCents: number;
   day: string;
+  /** The whole dal–al period of the group (D38), so the mail can write it out in full. */
+  from: string;
+  to: string;
   spotCode: string;
   beachSlug: string;
   beachName: string;
@@ -95,11 +98,13 @@ export interface BookingMailData {
 
 export function bookingMailData(db: Database, beachId: string, bookingId: string): Promise<BookingMailData | null> {
   return withBeach(db, beachId, async (tx) => {
-    // The mail speaks for the whole group (D38): one code, the first day and the
+    // The mail speaks for the whole group (D38): one code, the dal–al period and the
     // total over the days that still stand.
     const groupTotal = sql<number>`coalesce((select sum(b2.total_cents) from booking b2 where b2.group_id = ${booking.groupId} and b2.status <> 'cancelled'), ${booking.totalCents})::int`;
+    const groupFrom = sql<string>`coalesce((select min(d2.day)::text from booking b2 join inventory_day d2 on d2.id = b2.inventory_day_id where b2.group_id = ${booking.groupId} and b2.status <> 'cancelled'), ${inventoryDay.day}::text)`;
+    const groupTo = sql<string>`coalesce((select max(d2.day)::text from booking b2 join inventory_day d2 on d2.id = b2.inventory_day_id where b2.group_id = ${booking.groupId} and b2.status <> 'cancelled'), ${inventoryDay.day}::text)`;
     const [row] = await tx
-      .select({ bookingId: booking.id, code: booking.code, locale: sql<'it' | 'en'>`${booking.locale}`, guestName: booking.guestName, guestEmail: booking.guestEmail, totalCents: groupTotal, day: inventoryDay.day, spotCode: spot.code, beachSlug: beach.slug, beachName: beach.name })
+      .select({ bookingId: booking.id, code: booking.code, locale: sql<'it' | 'en'>`${booking.locale}`, guestName: booking.guestName, guestEmail: booking.guestEmail, totalCents: groupTotal, day: inventoryDay.day, from: groupFrom, to: groupTo, spotCode: spot.code, beachSlug: beach.slug, beachName: beach.name })
       .from(booking)
       .innerJoin(inventoryDay, eq(inventoryDay.id, booking.inventoryDayId))
       .innerJoin(spot, eq(spot.id, inventoryDay.spotId))
