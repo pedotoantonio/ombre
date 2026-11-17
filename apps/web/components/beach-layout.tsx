@@ -6,6 +6,7 @@ import {
   beachLayoutPath,
   can,
   config,
+  decorationSigns,
   elementLabelMaxLength,
   formatMoney,
   getDictionary,
@@ -26,6 +27,7 @@ import {
 import { apiCall, formatPeriod, slugPattern, type ApiLayoutElement } from '@/lib/api';
 import { Hidden, Notice, requireMe, SectionNotice } from './account';
 import { MarkLegendItems, PlanCanvas, planSize, SpotMark, zoneRows } from './beach';
+import { DecorationMark } from './decorations';
 import { PageHead, PageShell } from './PageShell';
 
 // The "Spiaggia" page of the reserved area: the preview of the beach map with its zones on
@@ -97,7 +99,7 @@ const rentalListId = 'tipi-affitto';
 // ---- The drawing editor ----
 
 /** The tools of the drawing, as they travel in the query string. */
-const toolIds = ['passerella-orizzontale', 'passerella-verticale', 'struttura', 'blocco-cabine', 'gomma'] as const;
+const toolIds = ['passerella-orizzontale', 'passerella-verticale', 'struttura', 'blocco-cabine', 'decorazione', 'gomma'] as const;
 type Tool = (typeof toolIds)[number];
 
 function readTool(value: string | undefined): Tool | null {
@@ -145,6 +147,7 @@ function placeOf(locale: Locale, element: ApiLayoutElement): string {
     const where = (element.rowAfter ?? 0) === 0 ? l.beforeRow1 : l.afterRow(element.rowAfter ?? 0);
     return `${zone}, ${where}, ${l.columnsRange(element.colStart ?? 1, element.colEnd ?? element.colStart ?? 1)}`;
   }
+  // A decoration has no colEnd: its single cell reads as one column.
   return `${zone}, ${t.booking.row(element.rowNumber ?? 1).toLowerCase()}, ${l.columnsRange(element.colStart ?? 1, element.colEnd ?? element.colStart ?? 1)}`;
 }
 
@@ -230,6 +233,7 @@ function DrawGrid({
   // One growth column, so a new element can land right past the current drawing.
   const cols = Math.min(size.cols + 1, maxColumns);
   const rectTool = tool === 'struttura' || tool === 'blocco-cabine';
+  const decorating = tool === 'decorazione';
   const eraser = tool === 'gomma';
   const flip = seaSide === 'bottom' ? ' draw-rows--flip' : '';
   const zones = spotZones.filter((zone) => spots.some((spot) => spot.zone === zone) || elements.some((element) => element.zone === zone && element.orientation !== 'vertical'));
@@ -239,11 +243,13 @@ function DrawGrid({
       ? l.toolNone
       : tool === 'gomma'
         ? l.stepEraser
-        : tool === 'passerella-verticale'
-          ? `${l.stepSingle} ${l.verticalAllZones}`
-          : step
-            ? l.stepEnd(`${t.booking.zones[step.zone]}, ${step.row}, ${step.col}`)
-            : l.stepStart;
+        : tool === 'decorazione'
+          ? l.stepDecoration
+          : tool === 'passerella-verticale'
+            ? `${l.stepSingle} ${l.verticalAllZones}`
+            : step
+              ? l.stepEnd(`${t.booking.zones[step.zone]}, ${step.row}, ${step.col}`)
+              : l.stepStart;
 
   return (
     <form method="post" action="/azioni/spiaggia-disegno" className="draw">
@@ -257,7 +263,19 @@ function DrawGrid({
           </>
         ) : null}
       </p>
-      {rectTool ? (
+      {decorating ? (
+        <div className="field draw__label-field">
+          <label htmlFor="disegno-soggetto">{l.signField}</label>
+          <select id="disegno-soggetto" name="segno" required>
+            {decorationSigns.map((sign) => (
+              <option key={sign} value={sign}>
+                {t.booking.decorations[sign]}
+              </option>
+            ))}
+          </select>
+        </div>
+      ) : null}
+      {rectTool || decorating ? (
         <div className="field draw__label-field">
           <label htmlFor="disegno-etichetta">{l.labelField}</label>
           <input id="disegno-etichetta" name="etichetta" maxLength={elementLabelMaxLength} autoComplete="off" defaultValue={label} aria-describedby="disegno-etichetta-aiuto" />
@@ -288,7 +306,7 @@ function DrawGrid({
           </p>
           {zones.map((zone) => {
             const inZone = spots.filter((spot) => spot.zone === zone);
-            const rects = elements.filter((element) => element.zone === zone && (element.kind === 'structure' || element.kind === 'cabin_block'));
+            const rects = elements.filter((element) => element.zone === zone && (element.kind === 'structure' || element.kind === 'cabin_block' || element.kind === 'decoration'));
             const walkways = elements.filter((element) => element.zone === zone && element.kind === 'walkway' && element.orientation === 'horizontal');
             const rows = [...new Set([...inZone.map((spot) => spot.rowNumber), ...rects.map((rect) => rect.rowNumber ?? 1)])].sort((a, b) => a - b);
             const horizontalActive = (rowAfter: number) =>
@@ -308,14 +326,31 @@ function DrawGrid({
                   {rows.map((row) => {
                     const bySpotCol = new Map(inZone.filter((spot) => spot.rowNumber === row).map((spot) => [spot.col, spot]));
                     const byRectStart = new Map(rects.filter((rect) => rect.rowNumber === row).map((rect) => [rect.colStart ?? 1, rect]));
-                    const cellActive = rectTool && (step === null || (step.zone === zone && step.row === row));
+                    const cellActive = decorating || (rectTool && (step === null || (step.zone === zone && step.row === row)));
                     const cells: ReactNode[] = [];
                     let col = 1;
                     while (col <= cols) {
                       const rect = byRectStart.get(col);
                       const spot = bySpotCol.get(col);
                       const last = rect ? (rect.colEnd ?? col) : col;
-                      if (rect) {
+                      if (rect && rect.kind === 'decoration') {
+                        cells.push(
+                          <li key={`deco-${col}`}>
+                            <DrawElement locale={locale} element={rect} eraser={eraser} className="draw-cell draw-deco">
+                              {rect.sign ? <DecorationMark sign={rect.sign} /> : null}
+                              <span className="visually-hidden">
+                                {t.booking.decorationKind}: {rect.sign ? t.booking.decorations[rect.sign] : ''}
+                                {rect.label ? `, ${rect.label}` : ''}
+                              </span>
+                              {rect.label ? (
+                                <span className="draw-deco__label" aria-hidden="true">
+                                  {rect.label}
+                                </span>
+                              ) : null}
+                            </DrawElement>
+                          </li>,
+                        );
+                      } else if (rect) {
                         cells.push(
                           <li key={`box-${col}`}>
                             <DrawElement
@@ -813,7 +848,21 @@ export async function BeachLayoutView({ locale, beachSlug, query }: { locale: Lo
                         <option value="passerella-verticale">{l.tools['passerella-verticale']}</option>
                         <option value="struttura">{l.tools.struttura}</option>
                         <option value="blocco-cabine">{l.tools['blocco-cabine']}</option>
+                        <option value="decorazione">{l.tools.decorazione}</option>
                       </select>
+                    </div>
+                    <div className="field">
+                      <label htmlFor="modulo-soggetto">{l.signField}</label>
+                      <select id="modulo-soggetto" name="sign" aria-describedby="modulo-soggetto-aiuto">
+                        {decorationSigns.map((sign) => (
+                          <option key={sign} value={sign}>
+                            {t.booking.decorations[sign]}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="field__hint" id="modulo-soggetto-aiuto">
+                        {l.signHint}
+                      </p>
                     </div>
                     <ZoneSelect locale={locale} id="modulo-zona" allZones />
                     <div className="field">
@@ -848,6 +897,7 @@ export async function BeachLayoutView({ locale, beachSlug, query }: { locale: Lo
                         <li className="layout-spot layout-spot--element" key={element.elementId}>
                           <p className="layout-spot__head">
                             <strong>{l.elementKinds[element.kind]}</strong>
+                            {element.sign ? <span className="badge">{t.booking.decorations[element.sign]}</span> : null}
                             {element.label ? <span className="badge">{element.label}</span> : null}
                           </p>
                           <p className="layout-spot__contract">{placeOf(locale, element)}</p>

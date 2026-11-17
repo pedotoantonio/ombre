@@ -1,5 +1,5 @@
 import { and, asc, eq, sql } from 'drizzle-orm';
-import { maxColumns, maxGapRows, rentalNotesMaxLength, rentalTypeMaxLength, type SeaSide, type SpotMark, type WalkwayOrientation } from '@ombre/shared';
+import { decorationSigns, maxColumns, maxGapRows, rentalNotesMaxLength, rentalTypeMaxLength, type DecorationSign, type SeaSide, type SpotMark, type WalkwayOrientation } from '@ombre/shared';
 import { withActor, type Database, type Transaction } from './client';
 import { DomainError, zoneOrder, type SpotZone } from './inventory';
 import type { Actor } from './manage';
@@ -466,6 +466,8 @@ export interface LayoutElementView {
   rowNumber: number | null;
   colStart: number | null;
   colEnd: number | null;
+  /** Only a decoration has a sign; null elsewhere. */
+  sign: DecorationSign | null;
 }
 
 const elementColumns = {
@@ -478,6 +480,7 @@ const elementColumns = {
   rowNumber: layoutElement.rowNumber,
   colStart: layoutElement.colStart,
   colEnd: layoutElement.colEnd,
+  sign: layoutElement.sign,
 };
 
 /** Elements of the current beach club, in a stable drawing order. */
@@ -503,10 +506,12 @@ export interface NewElement {
   zone?: SpotZone | null;
   /** Horizontal walkway: its own lane after this row of the zone; 0 = before row 1. */
   rowAfter?: number;
-  /** Structure or cabin block: the row of the rectangle. */
+  /** Structure, cabin block or decoration: the row of the cell(s). */
   rowNumber?: number;
   colStart?: number;
   colEnd?: number;
+  /** Only for a decoration, from the fixed repertoire (D35). */
+  sign?: DecorationSign;
 }
 
 function assertColumns(colStart: number | undefined, colEnd: number | null | undefined): void {
@@ -541,27 +546,38 @@ async function assertFreeCells(tx: Transaction, input: NewElement): Promise<void
     if (taken) throw new DomainError('invalid_state', 'Another walkway already runs between those columns');
     return;
   }
-  // Structure or cabin block: a rectangle of cells free of spots (retired included) and of other rectangles.
+  // Structure, cabin block or decoration: cells free of spots (retired included) and
+  // of other rectangles. A decoration occupies its single cell.
+  const colEnd = input.colEnd ?? input.colStart!;
   const occupying = elements.some(
     (other) =>
-      (other.kind === 'structure' || other.kind === 'cabin_block') && other.zone === input.zone && other.rowNumber === input.rowNumber &&
-      rangesTouch(input.colStart!, input.colEnd!, other.colStart!, other.colEnd!),
+      (other.kind === 'structure' || other.kind === 'cabin_block' || other.kind === 'decoration') && other.zone === input.zone && other.rowNumber === input.rowNumber &&
+      rangesTouch(input.colStart!, colEnd, other.colStart!, other.colEnd ?? other.colStart!),
   );
   if (occupying) throw new DomainError('invalid_state', 'Another element already occupies those cells');
   const [taken] = await tx
     .select({ code: spot.code })
     .from(spot)
-    .where(and(eq(spot.zone, input.zone!), eq(spot.rowNumber, input.rowNumber!), sql`${spot.col} between ${input.colStart} and ${input.colEnd}`))
+    .where(and(eq(spot.zone, input.zone!), eq(spot.rowNumber, input.rowNumber!), sql`${spot.col} between ${input.colStart} and ${colEnd}`))
     .limit(1);
   if (taken) throw new DomainError('invalid_state', `Spot ${taken.code} already occupies one of those cells: a retired spot keeps its cell in the editor`);
 }
 
-/** Draws a walkway, a structure or a cabin block on the grid. */
+/** Draws a walkway, a structure, a cabin block or a decoration on the grid. */
 export function addElement(db: Database, actor: Actor, input: NewElement): Promise<{ elementId: string }> {
   const label = input.label?.trim() || null;
   if (label !== null && label.length > 40) throw new RangeError('label must have 1 to 40 characters');
   if (input.kind === 'structure' && label === null) throw new RangeError('a structure needs its label');
-  if (input.kind === 'walkway') {
+  if (input.kind !== 'decoration' && input.sign !== undefined) throw new RangeError('only a decoration has a sign');
+  if (input.kind === 'decoration') {
+    // One cell with its sign from the repertoire: no orientation, no colEnd (D35).
+    if (!input.sign || !decorationSigns.includes(input.sign)) throw new RangeError('a decoration needs its sign from the repertoire');
+    if (input.orientation !== undefined) throw new RangeError('only a walkway has an orientation');
+    if (!input.zone) throw new RangeError('this element needs its zone');
+    if (input.rowNumber === undefined || !Number.isInteger(input.rowNumber) || input.rowNumber < 1) throw new RangeError('rowNumber must be a whole number from 1');
+    assertColumns(input.colStart, null);
+    if (input.colEnd != null || input.rowAfter !== undefined) throw new RangeError('a decoration takes zone, rowNumber and colStart only');
+  } else if (input.kind === 'walkway') {
     if (input.orientation === 'horizontal') {
       if (!input.zone) throw new RangeError('a horizontal walkway needs its zone');
       if (input.rowAfter === undefined || !Number.isInteger(input.rowAfter) || input.rowAfter < 0) throw new RangeError('rowAfter must be a whole number from 0');
@@ -593,11 +609,12 @@ export function addElement(db: Database, actor: Actor, input: NewElement): Promi
         rowAfter: input.kind === 'walkway' && input.orientation === 'horizontal' ? input.rowAfter : null,
         rowNumber: input.kind === 'walkway' ? null : input.rowNumber,
         colStart: input.colStart,
-        colEnd: input.kind === 'walkway' && input.orientation === 'vertical' ? null : input.colEnd,
+        colEnd: input.kind === 'decoration' || (input.kind === 'walkway' && input.orientation === 'vertical') ? null : input.colEnd,
+        sign: input.kind === 'decoration' ? input.sign : null,
       })
       .returning({ id: layoutElement.id });
     if (!created) throw new Error('element was not created');
-    await audit(tx, actor, 'layout.element-add', created.id, { kind: input.kind, label, orientation: input.orientation ?? null, zone: input.zone ?? null, rowAfter: input.rowAfter ?? null, rowNumber: input.rowNumber ?? null, colStart: input.colStart, colEnd: input.colEnd ?? null });
+    await audit(tx, actor, 'layout.element-add', created.id, { kind: input.kind, label, orientation: input.orientation ?? null, zone: input.zone ?? null, rowAfter: input.rowAfter ?? null, rowNumber: input.rowNumber ?? null, colStart: input.colStart, colEnd: input.colEnd ?? null, sign: input.sign ?? null });
     return { elementId: created.id };
   });
 }

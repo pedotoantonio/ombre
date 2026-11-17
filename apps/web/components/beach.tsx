@@ -42,6 +42,7 @@ import {
   type ApiZoneGaps,
 } from '@/lib/api';
 import { JsonLd, privateMetadata } from '@/lib/seo';
+import { DecorationMark } from './decorations';
 import { PageHead, PageShell, type Crumb } from './PageShell';
 import { BeachSite, localBusinessData } from './site-view';
 
@@ -276,12 +277,134 @@ function DaybedMark({ status, selected = false, suggested = false }: { status: A
   );
 }
 
+/** A deck chair seen from above: side rails and the head bar, wider than the single sunbed. */
+function DeckchairMark({ status, selected = false, suggested = false }: { status: ApiMapSpot['status']; selected?: boolean; suggested?: boolean }) {
+  return (
+    <svg className={`plan-mark plan-mark--${status}`} viewBox="0 0 48 48" aria-hidden="true" focusable="false">
+      <rect className="plan-mark__canopy" x="12" y="7" width="24" height="34" rx="3" />
+      {status === 'shared' ? <path className="plan-mark__bands" d="M14 22h20M14 30h20" /> : null}
+      {status === 'unavailable' ? (
+        <path className="plan-mark__cross" d="M18 18l12 12M30 18L18 30" />
+      ) : (
+        <>
+          <path className="plan-mark__ribs" d="M16 10v28M32 10v28" />
+          <path className="plan-mark__pillow" d="M19 14h10" />
+        </>
+      )}
+      {selected ? <SelectedBadge /> : null}
+      {suggested ? <SuggestedBadge /> : null}
+    </svg>
+  );
+}
+
+/** A canvas gazebo seen from above: a billowing sail, its seams in a cross, nothing like the rigid square. */
+function CanopyMark({ status, selected = false, suggested = false }: { status: ApiMapSpot['status']; selected?: boolean; suggested?: boolean }) {
+  const sail = 'M10 10C19 5.5 29 5.5 38 10C42.5 19 42.5 29 38 38C29 42.5 19 42.5 10 38C5.5 29 5.5 19 10 10Z';
+  return (
+    <svg className={`plan-mark plan-mark--${status}`} viewBox="0 0 48 48" aria-hidden="true" focusable="false">
+      <path className="plan-mark__canopy" d={sail} />
+      {status === 'shared' ? (
+        <>
+          <path className="plan-mark__stripes" d="M24 24L10 10C19 5.5 29 5.5 38 10ZM24 24L10 38C19 42.5 29 42.5 38 38Z" />
+          <path className="plan-mark__outline" d={sail} />
+        </>
+      ) : null}
+      {status === 'unavailable' ? (
+        <path className="plan-mark__cross" d="M16 16l16 16M32 16L16 32" />
+      ) : (
+        <>
+          <path className="plan-mark__ribs" d="M24 8v32M8 24h32" />
+          <circle className="plan-mark__top" cx="24" cy="24" r="3" />
+        </>
+      )}
+      {selected ? <SelectedBadge /> : null}
+      {suggested ? <SuggestedBadge /> : null}
+    </svg>
+  );
+}
+
+/** A canoe seen from above: a pointed hull with its two thwarts. */
+function CanoeMark({ status, selected = false, suggested = false }: { status: ApiMapSpot['status']; selected?: boolean; suggested?: boolean }) {
+  return (
+    <svg className={`plan-mark plan-mark--${status}`} viewBox="0 0 48 48" aria-hidden="true" focusable="false">
+      <path className="plan-mark__canopy" d="M24 3C29.5 10 29.5 38 24 45C18.5 38 18.5 10 24 3Z" />
+      {status === 'shared' ? <path className="plan-mark__bands" d="M20 20h8M20 28h8" /> : null}
+      {status === 'unavailable' ? (
+        <path className="plan-mark__cross" d="M19 19l10 10M29 19L19 29" />
+      ) : (
+        <path className="plan-mark__pillow" d="M21 15h6M21 33h6" />
+      )}
+      {selected ? <SelectedBadge /> : null}
+      {suggested ? <SuggestedBadge /> : null}
+    </svg>
+  );
+}
+
+/** A SUP board seen from above: narrow, rounded at both ends, with its long centre line. */
+function SupMark({ status, selected = false, suggested = false }: { status: ApiMapSpot['status']; selected?: boolean; suggested?: boolean }) {
+  return (
+    <svg className={`plan-mark plan-mark--${status}`} viewBox="0 0 48 48" aria-hidden="true" focusable="false">
+      <rect className="plan-mark__canopy" x="17" y="4" width="14" height="40" rx="7" />
+      {status === 'shared' ? <path className="plan-mark__bands" d="M19 20h10M19 28h10" /> : null}
+      {status === 'unavailable' ? <path className="plan-mark__cross" d="M19 19l10 10M29 19L19 29" /> : <path className="plan-mark__pillow" d="M24 12v24" />}
+      {selected ? <SelectedBadge /> : null}
+      {suggested ? <SuggestedBadge /> : null}
+    </svg>
+  );
+}
+
+/** A pedal boat seen from above: a wide deck with its two seats and the paddle wheel bar. */
+function PedaloMark({ status, selected = false, suggested = false }: { status: ApiMapSpot['status']; selected?: boolean; suggested?: boolean }) {
+  return (
+    <svg className={`plan-mark plan-mark--${status}`} viewBox="0 0 48 48" aria-hidden="true" focusable="false">
+      <path className="plan-mark__canopy" d="M9 16C9 9 15 6 24 6C33 6 39 9 39 16V34C39 40 33 43 24 43C15 43 9 40 9 34Z" />
+      {status === 'shared' ? <path className="plan-mark__bands" d="M14 20h20M14 29h20" /> : null}
+      {status === 'unavailable' ? (
+        <path className="plan-mark__cross" d="M17 18l14 14M31 18L17 32" />
+      ) : (
+        <>
+          <path className="plan-mark__ribs" d="M12 15h24" />
+          <path className="plan-mark__stripes" d="M14 24h8v9h-8ZM26 24h8v9h-8Z" />
+        </>
+      )}
+      {selected ? <SelectedBadge /> : null}
+      {suggested ? <SuggestedBadge /> : null}
+    </svg>
+  );
+}
+
+/** A jet ski seen from above: a teardrop hull with handlebar and saddle. */
+function JetskiMark({ status, selected = false, suggested = false }: { status: ApiMapSpot['status']; selected?: boolean; suggested?: boolean }) {
+  return (
+    <svg className={`plan-mark plan-mark--${status}`} viewBox="0 0 48 48" aria-hidden="true" focusable="false">
+      <path className="plan-mark__canopy" d="M24 4C33 10 36 19 36 29C36 38.5 31 44 24 44C17 44 12 38.5 12 29C12 19 15 10 24 4Z" />
+      {status === 'shared' ? <path className="plan-mark__bands" d="M17 24h14M17 32h14" /> : null}
+      {status === 'unavailable' ? (
+        <path className="plan-mark__cross" d="M18 19l12 12M30 19L18 31" />
+      ) : (
+        <>
+          <path className="plan-mark__ribs" d="M15 16C21 13 27 13 33 16" />
+          <path className="plan-mark__pillow" d="M24 23v15" />
+        </>
+      )}
+      {selected ? <SelectedBadge /> : null}
+      {suggested ? <SuggestedBadge /> : null}
+    </svg>
+  );
+}
+
 const markComponents: Record<SpotMarkKind, (props: { status: ApiMapSpot['status']; selected?: boolean; suggested?: boolean }) => ReactNode> = {
   umbrella: UmbrellaMark,
   sunbed: SunbedMark,
   gazebo: GazeboMark,
   tent: TentMark,
   daybed: DaybedMark,
+  deckchair: DeckchairMark,
+  canopy: CanopyMark,
+  canoe: CanoeMark,
+  sup: SupMark,
+  pedalo: PedaloMark,
+  jetski: JetskiMark,
 };
 
 
@@ -393,7 +516,8 @@ export function planSize(spots: PlanPlace[], elements: ApiLayoutElement[]): { co
   const cols = Math.max(
     1,
     ...spots.map((spot) => spot.col),
-    ...elements.map((element) => element.colEnd ?? (element.colStart === null ? 1 : element.colStart + 1)),
+    // A decoration sits on its single cell; a vertical walkway runs after its column.
+    ...elements.map((element) => element.colEnd ?? (element.colStart === null ? 1 : element.kind === 'decoration' ? element.colStart : element.colStart + 1)),
   );
   return { cols, lanes: elements.filter((element) => element.kind === 'walkway' && element.orientation === 'vertical').length };
 }
@@ -423,6 +547,30 @@ function VerticalLane({ locale, lane, zone }: { locale: Locale; lane: ApiLayoutE
   return (
     <li className="plan-vlane">
       <span className="plan-vlane__label">{t.walkway}{lane.label ? ` · ${lane.label}` : ''}</span>
+    </li>
+  );
+}
+
+/**
+ * A decoration on its cell (D35): the sign hidden from the reading, the subject name
+ * as text, the optional label visible. No state, nothing to press: it can never be
+ * mistaken for a spot.
+ */
+export function PlanDecoration({ locale, element }: { locale: Locale; element: ApiLayoutElement }) {
+  const t = getDictionary(locale, config.brandName).booking;
+  const name = element.sign ? t.decorations[element.sign] : t.decorationKind;
+  return (
+    <li className="plan-deco">
+      {element.sign ? <DecorationMark sign={element.sign} /> : null}
+      <span className="visually-hidden">
+        {t.decorationKind}: {name}
+        {element.label ? `, ${element.label}` : ''}
+      </span>
+      {element.label ? (
+        <span className="plan-deco__label" aria-hidden="true">
+          {element.label}
+        </span>
+      ) : null}
     </li>
   );
 }
@@ -467,7 +615,8 @@ function PlanRowCells<T extends PlanPlace>({
     const rect = byRectStart.get(col);
     const spot = bySpotCol.get(col);
     const last = rect ? (rect.colEnd ?? col) : col;
-    if (rect) cells.push(<PlanBox key={`box-${col}`} locale={locale} element={rect} lanes={lanes} cellRem={cellRem} />);
+    if (rect && rect.kind === 'decoration') cells.push(<PlanDecoration key={`deco-${col}`} locale={locale} element={rect} />);
+    else if (rect) cells.push(<PlanBox key={`box-${col}`} locale={locale} element={rect} lanes={lanes} cellRem={cellRem} />);
     else if (spot) cells.push(<Fragment key={`spot-${col}`}>{renderSpot(spot)}</Fragment>);
     else cells.push(<li key={`hole-${col}`} className="plan-hole" aria-hidden="true" />);
     // A lane right after this cell; lanes crossed by a box are already inside its width.
@@ -552,7 +701,7 @@ export function PlanCanvas<T extends PlanPlace>({
           </p>
           {zones.map((zone, index) => {
             const inZone = spots.filter((spot) => spot.zone === zone);
-            const rects = elements.filter((element) => element.zone === zone && (element.kind === 'structure' || element.kind === 'cabin_block'));
+            const rects = elements.filter((element) => element.zone === zone && (element.kind === 'structure' || element.kind === 'cabin_block' || element.kind === 'decoration'));
             const walkways = elements
               .filter((element) => element.zone === zone && element.kind === 'walkway' && element.orientation === 'horizontal')
               .sort((a, b) => (a.rowAfter ?? 0) - (b.rowAfter ?? 0));
@@ -614,7 +763,18 @@ export function PlanCanvas<T extends PlanPlace>({
 /** Legend names of the marks that are not the umbrella. Only the marks in play are listed. */
 export function MarkLegendItems({ locale, marks }: { locale: Locale; marks: SpotMarkKind[] }) {
   const t = getDictionary(locale, config.brandName).booking;
-  const names: Record<Exclude<SpotMarkKind, 'umbrella'>, string> = { sunbed: t.sunbedMark, gazebo: t.gazeboMark, tent: t.tentMark, daybed: t.daybedMark };
+  const names: Record<Exclude<SpotMarkKind, 'umbrella'>, string> = {
+    sunbed: t.sunbedMark,
+    gazebo: t.gazeboMark,
+    tent: t.tentMark,
+    daybed: t.daybedMark,
+    deckchair: t.deckchairMark,
+    canopy: t.canopyMark,
+    canoe: t.canoeMark,
+    sup: t.supMark,
+    pedalo: t.pedaloMark,
+    jetski: t.jetskiMark,
+  };
   const present = ([...new Set(marks)] as SpotMarkKind[]).filter((mark): mark is Exclude<SpotMarkKind, 'umbrella'> => mark !== 'umbrella');
   return (
     <>

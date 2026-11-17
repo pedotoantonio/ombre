@@ -1207,6 +1207,37 @@ html:has(.plan-bar) {
   border-radius: var(--raggio-piccolo);
 }
 
+/* Decorazione (D35): una cella con segno dal repertorio ed etichetta facoltativa.
+   Mai confondibile con una postazione: niente stato, niente codice, nessun bersaglio.
+   Fondo sabbia come i buchi, così il soggetto si legge come scena, non come offerta. */
+.plan-deco {
+  display: grid;
+  place-content: center;
+  gap: 0.125rem;
+  width: var(--plan-cell, 4.25rem);
+  min-height: 5rem;
+  border-radius: var(--raggio);
+  background: color-mix(in srgb, var(--ambra) 8%, var(--carta));
+  text-align: center;
+}
+
+.deco-mark {
+  width: 2rem;
+  height: 2rem;
+  margin-inline: auto;
+}
+
+.plan-deco__label {
+  max-width: calc(var(--plan-cell, 4.25rem) - 0.5rem);
+  overflow: hidden;
+  color: var(--testo-secondario);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
 /* ---- La griglia dell'editor del disegno: ogni bersaglio misura almeno 44 px ---- */
 .draw {
   display: grid;
@@ -1433,6 +1464,28 @@ button.draw-cell--vertical:hover {
   background:
     repeating-linear-gradient(90deg, transparent 0 1.25rem, color-mix(in srgb, var(--abisso) 18%, transparent) 1.25rem calc(1.25rem + 1px)),
     color-mix(in srgb, var(--oceano) 10%, var(--carta));
+}
+
+/* Una decorazione nella griglia dell'editor: la sua cella col segno, mai un bersaglio
+   se non sotto la gomma, dove DrawElement la trasforma in pulsante di rimozione. */
+.draw-deco {
+  border: 1px solid var(--bordo);
+  background: color-mix(in srgb, var(--ambra) 8%, var(--carta));
+}
+
+.draw-deco .deco-mark {
+  width: 1.75rem;
+  height: 1.75rem;
+}
+
+.draw-deco__label {
+  max-width: 3.75rem;
+  overflow: hidden;
+  color: var(--testo-secondario);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .draw-vlane {

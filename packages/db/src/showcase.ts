@@ -217,6 +217,12 @@ export async function seedShowcase(adminUrl: string, signingSecret: string): Pro
     await addElement(db, manager, { kind: 'walkway', orientation: 'horizontal', zone: 'ombrelloni', rowAfter: 3, colStart: 1, colEnd: 8 });
     await addElement(db, manager, { kind: 'structure', label: 'Bar', zone: 'monte', rowNumber: 1, colStart: 6, colEnd: 7 });
     const block = await addElement(db, manager, { kind: 'cabin_block', label: 'Cabine', zone: 'monte', rowNumber: 2, colStart: 1, colEnd: 4 });
+    // Decorations from the client's boards (D35): the scene the demo and the screenshots show.
+    await addElement(db, manager, { kind: 'decoration', sign: 'palma', zone: 'monte', rowNumber: 1, colStart: 8 });
+    await addElement(db, manager, { kind: 'decoration', sign: 'doccia', label: 'Docce', zone: 'monte', rowNumber: 2, colStart: 5 });
+    await addElement(db, manager, { kind: 'decoration', sign: 'giochi', label: 'Area giochi', zone: 'monte', rowNumber: 2, colStart: 7 });
+    await addElement(db, manager, { kind: 'decoration', sign: 'salvagente', zone: 'riva', rowNumber: 1, colStart: 7 });
+    await addElement(db, manager, { kind: 'decoration', sign: 'bandiera', zone: 'riva', rowNumber: 1, colStart: 8 });
 
     // Spot types: the builtin Gazebo gains a higher default price, and a custom
     // type with its mark from the fixed repertoire gets one spot.

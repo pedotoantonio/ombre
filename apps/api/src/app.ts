@@ -122,6 +122,7 @@ import {
   base32Encode,
   cabinCodeMaxLength,
   cabinNotesMaxLength,
+  decorationSigns,
   elementLabelMaxLength,
   expandRecurrence,
   holderContactMaxLength,
@@ -366,12 +367,14 @@ const addSpotSchema = z.object({
 const seaSideSchema = z.object({ seaSide: z.enum(seaSides) });
 const elementLabelSchema = z.string().trim().min(1).max(elementLabelMaxLength);
 // A horizontal walkway is its own lane after a row (0 = before row 1); a vertical
-// one runs in the gap after a column; structures and cabin blocks occupy free cells.
+// one runs in the gap after a column; structures and cabin blocks occupy free cells;
+// a decoration is one free cell with its sign from the repertoire (D35).
 const elementSchema = z.union([
   z.object({ kind: z.literal('walkway'), orientation: z.literal('horizontal'), zone: zoneSchema, rowAfter: z.number().int().min(0).max(200), colStart: colSchema, colEnd: colSchema, label: elementLabelSchema.optional() }),
   z.object({ kind: z.literal('walkway'), orientation: z.literal('vertical'), zone: zoneSchema.nullable().optional(), colStart: colSchema, label: elementLabelSchema.optional() }),
   z.object({ kind: z.literal('structure'), zone: zoneSchema, rowNumber: z.number().int().min(1).max(200), colStart: colSchema, colEnd: colSchema, label: elementLabelSchema }),
   z.object({ kind: z.literal('cabin_block'), zone: zoneSchema, rowNumber: z.number().int().min(1).max(200), colStart: colSchema, colEnd: colSchema, label: elementLabelSchema.optional() }),
+  z.object({ kind: z.literal('decoration'), zone: zoneSchema, rowNumber: z.number().int().min(1).max(200), colStart: colSchema, sign: z.enum(decorationSigns), label: elementLabelSchema.optional() }),
 ]);
 // ---- Spot types ----
 const spotTypeFields = {
@@ -1132,7 +1135,7 @@ export function createApp(options: AppOptions): Hono {
     return c.body(null, 204);
   });
 
-  route({ method: 'post', path: '/v1/manage/beaches/:slug/layout/elements', summary: 'Draw a walkway, a structure or a cabin block on the grid', tag: 'Beach club', auth: 'session', request: elementSchema, success: 201, errors: [400, 401, 403, 409] }, async (c) => {
+  route({ method: 'post', path: '/v1/manage/beaches/:slug/layout/elements', summary: 'Draw a walkway, a structure, a cabin block or a decoration on the grid', tag: 'Beach club', auth: 'session', request: elementSchema, success: 201, errors: [400, 401, 403, 409] }, async (c) => {
     const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'layout.edit');
     return c.json(await addElement(db, actor, parse(elementSchema, await body(c.req.raw), 'element')), 201);
   });

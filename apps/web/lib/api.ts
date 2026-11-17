@@ -1,4 +1,4 @@
-import { config, getDictionary, type DayParts, type LayoutElementKind, type SeaSide, type SiteContent, type SiteTemplate, type SpotZone, type WalkwayOrientation } from '@ombre/shared';
+import { config, getDictionary, type DayParts, type DecorationSign, type LayoutElementKind, type SeaSide, type SiteContent, type SiteTemplate, type SpotZone, type WalkwayOrientation } from '@ombre/shared';
 
 // Server-side client of the Ombrè API. The address is read at request time.
 
@@ -69,7 +69,7 @@ export interface ApiZoneGaps {
   landGapRows: number;
 }
 
-/** A walkway, a labelled structure or a cabin block, exactly as the manager drew it. */
+/** A walkway, a labelled structure, a cabin block or a decoration, exactly as the manager drew it. */
 export interface ApiLayoutElement {
   elementId: string;
   kind: LayoutElementKind;
@@ -80,6 +80,8 @@ export interface ApiLayoutElement {
   rowNumber: number | null;
   colStart: number | null;
   colEnd: number | null;
+  /** Only a decoration has a sign; null elsewhere. */
+  sign: DecorationSign | null;
 }
 
 /** A name written in Italian, with the optional English version (spec §4.2). */

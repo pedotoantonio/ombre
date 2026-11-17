@@ -185,6 +185,8 @@ export interface SpotCard {
   umbrellas: number;
   sunbeds: number;
   maxGuests: number;
+  /** Rental label of the spot («Stagionale», «Albergo» or a custom text): management data, never public. */
+  rentalType: string | null;
   state: OperationalState;
   /** Why the day cannot be sold; null for every other state. */
   notForSale: 'never_published' | 'withdrawn' | null;
@@ -218,6 +220,7 @@ export function spotCard(db: Database, actor: Actor, input: { day: string; code:
         umbrellas: spot.umbrellas,
         sunbeds: spot.sunbeds,
         maxGuests: spot.maxGuests,
+        rentalType: spot.rentalType,
         dayState: inventoryDay.state,
         priceCents: inventoryDay.priceCents,
         shared: inventoryDay.shared,
@@ -279,6 +282,7 @@ export function spotCard(db: Database, actor: Actor, input: { day: string; code:
       umbrellas: row.umbrellas,
       sunbeds: row.sunbeds,
       maxGuests: row.maxGuests,
+      rentalType: row.rentalType,
       state,
       notForSale,
       blockedReason,

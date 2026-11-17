@@ -1,4 +1,4 @@
-import { accountPath, beachLayoutPath, beachPath, bookingPath, bookPath, holdPath, isLocale, manageCabinsPath, manageCollectPath, manageDealsPath, manageExtrasPath, manageTodayPath, parseEuro, payPath, type Locale } from '@ombre/shared';
+import { accountPath, beachLayoutPath, beachPath, bookingPath, bookPath, decorationSigns, holdPath, isLocale, manageCabinsPath, manageCollectPath, manageDealsPath, manageExtrasPath, manageTodayPath, parseEuro, payPath, type Locale } from '@ombre/shared';
 import { api, apiCall, dayPattern, sandboxNotify, slugPattern, uuidPattern } from '@/lib/api';
 import { clearSessionCookieHeader, sessionCookie, sessionCookieHeader } from '@/lib/session';
 
@@ -173,7 +173,7 @@ function percentBps(text: string): number {
 }
 
 /** The tools of the drawing grid, as the query string spells them. */
-const drawTools = ['passerella-orizzontale', 'passerella-verticale', 'struttura', 'blocco-cabine', 'gomma'] as const;
+const drawTools = ['passerella-orizzontale', 'passerella-verticale', 'struttura', 'blocco-cabine', 'decorazione', 'gomma'] as const;
 
 /** A cell or interstice token of the drawing grid: zone/row/column. */
 const drawCellPattern = /^(riva|ombrelloni|monte)\/(\d{1,3})\/(\d{1,3})$/;
@@ -526,6 +526,15 @@ const actions: Record<string, (request: Request, form: Form, lang: Locale) => Pr
       // From the grid the vertical walkway crosses every zone; one zone only via the form.
       return done(await draw({ kind: 'walkway', orientation: 'vertical', colStart: wholeNumber(form('colonna')) }));
     }
+    if (tool === 'decorazione') {
+      // One step: the tapped cell, the chosen sign and the optional label (D35).
+      const cell = drawCellPattern.exec(form('cella'));
+      if (!cell) return bad();
+      const sign = form('segno');
+      if (!(decorationSigns as readonly string[]).includes(sign)) return bad();
+      const label = form('etichetta').trim().slice(0, 40);
+      return done(await draw({ kind: 'decoration', zone: cell[1], rowNumber: Number(cell[2]), colStart: Number(cell[3]), sign, ...(label ? { label } : {}) }));
+    }
     const horizontal = tool === 'passerella-orizzontale';
     const target = drawCellPattern.exec(form(horizontal ? 'interstizio' : 'cella'));
     if (!target) return bad();
@@ -561,6 +570,10 @@ const actions: Record<string, (request: Request, form: Form, lang: Locale) => Pr
     } else if (kind === 'struttura' || kind === 'blocco-cabine') {
       if (kind === 'struttura' && !label) return { to: `${withQuery(back, { derr: 'label_required' })}#disegno` };
       body = { kind: kind === 'struttura' ? 'structure' : 'cabin_block', zone, rowNumber: row, colStart: Math.min(from, to), colEnd: Math.max(from, to), ...(label ? { label } : {}) };
+    } else if (kind === 'decorazione') {
+      const sign = form('sign');
+      if (!(decorationSigns as readonly string[]).includes(sign)) return bad();
+      body = { kind: 'decoration', zone, rowNumber: row, colStart: from, sign, ...(label ? { label } : {}) };
     } else {
       return bad();
     }

@@ -21,17 +21,48 @@ export type SeaSide = (typeof seaSides)[number];
 
 /**
  * Elements drawn on the layout grid besides the spots: walkways (their own lanes),
- * cabin blocks (function 3) and generic labelled structures such as a bar.
+ * cabin blocks (function 3), generic labelled structures such as a bar, and
+ * decorations (D35): one-cell elements with a sign from the repertoire and an
+ * optional label, with no numbering, no state and nothing to sell.
  */
-export const layoutElementKinds = ['walkway', 'cabin_block', 'structure'] as const;
+export const layoutElementKinds = ['walkway', 'cabin_block', 'structure', 'decoration'] as const;
 export type LayoutElementKind = (typeof layoutElementKinds)[number];
+
+/**
+ * Fixed repertoire of decoration signs (D35). The client's reference boards dictate
+ * the subjects, never the drawings: every sign is redrawn as an original vector in
+ * the Solar & Fresh style. Italian identifiers, mirrored it/en names in the i18n.
+ */
+export const decorationSigns = [
+  'palma',
+  'chiosco',
+  'doccia',
+  'bandiera',
+  'salvagente',
+  'cartello',
+  'cestino',
+  'amaca',
+  'altalena',
+  'giochi',
+  'tavolino',
+  'grill',
+  'acqua',
+  'armadietti',
+  'campo',
+  'pingpong',
+] as const;
+export type DecorationSign = (typeof decorationSigns)[number];
 
 /** A horizontal walkway adds its own drawing row after a zone row; a vertical one runs between two columns. */
 export const walkwayOrientations = ['horizontal', 'vertical'] as const;
 export type WalkwayOrientation = (typeof walkwayOrientations)[number];
 
-/** Fixed repertoire of graphic marks for spot types, custom ones included: no uploaded icons. */
-export const spotMarks = ['umbrella', 'sunbed', 'gazebo', 'tent', 'daybed'] as const;
+/**
+ * Fixed repertoire of graphic marks for spot types, custom ones included: no uploaded
+ * icons. The last six come from the client's boards (D35), useful as custom rental
+ * types: deckchair, canvas gazebo, canoe, SUP board, pedal boat, jet ski.
+ */
+export const spotMarks = ['umbrella', 'sunbed', 'gazebo', 'tent', 'daybed', 'deckchair', 'canopy', 'canoe', 'sup', 'pedalo', 'jetski'] as const;
 export type SpotMark = (typeof spotMarks)[number];
 
 export const spotTypeNameMaxLength = 40;

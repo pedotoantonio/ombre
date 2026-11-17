@@ -54,6 +54,7 @@ interface Card {
   umbrellas: number;
   sunbeds: number;
   maxGuests: number;
+  rentalType: string | null;
   state: string;
   notForSale: string | null;
   blockedReason: string | null;
@@ -81,6 +82,8 @@ describe.skipIf(!testAdminUrl)('the card of one spot on one day', () => {
     expect(collected.status).toBe(200);
     // A spot in the drawing whose day was never published.
     await h.database.admin.query("INSERT INTO spot (beach_id, code, row_number) VALUES ($1, 'X01', 2)", [h.beach.beachId]);
+    // The rental label of the model (D24): the card shows it next to the day data (D35).
+    await h.database.admin.query("UPDATE spot SET rental_type = 'Stagionale' WHERE id = $1", [h.beach.spotIds[0]]);
   });
 
   afterAll(async () => {
@@ -102,6 +105,7 @@ describe.skipIf(!testAdminUrl)('the card of one spot on one day', () => {
       umbrellas: 1,
       sunbeds: 2,
       maxGuests: 2,
+      rentalType: 'Stagionale',
       state: 'free',
       notForSale: null,
       blockedReason: null,
@@ -113,7 +117,8 @@ describe.skipIf(!testAdminUrl)('the card of one spot on one day', () => {
 
   it('carries the block reason from the audit trail, and the withdrawal as the console tells it', async () => {
     const blocked = (await card('A02')).body as Card;
-    expect(blocked).toMatchObject({ state: 'blocked', blockedReason: 'Manutenzione', booking: null });
+    // Without a rental label the row stays empty: the card never invents one.
+    expect(blocked).toMatchObject({ state: 'blocked', blockedReason: 'Manutenzione', booking: null, rentalType: null });
     const withdrawn = (await card('A03')).body as Card;
     expect(withdrawn).toMatchObject({ state: 'not_for_sale', notForSale: 'withdrawn', blockedReason: null });
   });

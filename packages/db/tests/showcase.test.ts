@@ -51,13 +51,18 @@ describe.skipIf(!testAdminUrl)('showcase beach club', () => {
     expect(free.find((spot) => spot.code === 'T01')).toMatchObject({ typeName: 'Tenda araba', priceCents: 5000 });
   });
 
-  it('draws walkways, the bar and the cabin block, and runs the cabin scenario', async () => {
-    const elements = await database.admin.query<{ kind: string; label: string | null }>('SELECT kind, label FROM layout_element WHERE beach_id = $1 ORDER BY kind, label', [beachId]);
+  it('draws walkways, the bar, the cabin block and the decorations, and runs the cabin scenario', async () => {
+    const elements = await database.admin.query<{ kind: string; label: string | null; sign: string | null }>('SELECT kind, label, sign FROM layout_element WHERE beach_id = $1 ORDER BY kind, label, sign', [beachId]);
     expect(elements.rows).toEqual([
-      { kind: 'cabin_block', label: 'Cabine' },
-      { kind: 'structure', label: 'Bar' },
-      { kind: 'walkway', label: null },
-      { kind: 'walkway', label: null },
+      { kind: 'cabin_block', label: 'Cabine', sign: null },
+      { kind: 'decoration', label: 'Area giochi', sign: 'giochi' },
+      { kind: 'decoration', label: 'Docce', sign: 'doccia' },
+      { kind: 'decoration', label: null, sign: 'bandiera' },
+      { kind: 'decoration', label: null, sign: 'palma' },
+      { kind: 'decoration', label: null, sign: 'salvagente' },
+      { kind: 'structure', label: 'Bar', sign: null },
+      { kind: 'walkway', label: null, sign: null },
+      { kind: 'walkway', label: null, sign: null },
     ]);
     expect(await count('spot_type WHERE beach_id = $1', [beachId])).toBe(4);
     expect(await count('cabin WHERE beach_id = $1', [beachId])).toBe(4);

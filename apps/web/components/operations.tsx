@@ -83,6 +83,8 @@ interface SpotCardData {
   umbrellas: number;
   sunbeds: number;
   maxGuests: number;
+  /** Rental label («Stagionale», «Albergo» or a custom text): management data, never public. */
+  rentalType: string | null;
   state: OperationalState;
   notForSale: 'never_published' | 'withdrawn' | null;
   blockedReason: string | null;
@@ -315,6 +317,11 @@ function SpotCardPanel({
         <div>
           <dt>{o.colEquipment}</dt>
           <dd>{`${t.booking.equipment(card.umbrellas, card.sunbeds)}, ${t.booking.guests(card.maxGuests).toLowerCase()}`}</dd>
+        </div>
+        {/* The rental label of the spot (D35): «Stagionale», «Albergo» or the manager's own text. */}
+        <div>
+          <dt>{o.rentalTypeLabel}</dt>
+          <dd>{card.rentalType ?? '—'}</dd>
         </div>
         <div>
           <dt>{t.account.price}</dt>

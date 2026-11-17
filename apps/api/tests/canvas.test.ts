@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { demoAccounts, demoBeach, seedDemo, upsertUser } from '@ombre/db';
-import { createTestDatabase, testAdminUrl, type TestDatabase } from '@ombre/db/testing';
+import { createTestDatabase, insertBeach, testAdminUrl, type TestDatabase } from '@ombre/db/testing';
 import { createApp } from '../src/app';
 
 const password = 'password-di-prova-123';
@@ -28,6 +28,7 @@ interface ElementRow {
   rowNumber: number | null;
   colStart: number | null;
   colEnd: number | null;
+  sign: string | null;
 }
 
 describe.skipIf(!testAdminUrl)('the drawing of the beach and the spot types', () => {
@@ -129,6 +130,54 @@ describe.skipIf(!testAdminUrl)('the drawing of the beach and the spot types', ()
     expect((await send('POST', `${manage}/layout/elements`, { kind: 'structure', label: 'Docce', zone: 'monte', rowNumber: 1, colStart: 2, colEnd: 4 }, manager())).status).toBe(201);
   });
 
+  it('places decorations with their sign and label, visible to manager and public (D35)', async () => {
+    // One cell each, a sign from the repertoire, the label only where it helps.
+    expect((await send('POST', `${manage}/layout/elements`, { kind: 'decoration', sign: 'palma', zone: 'monte', rowNumber: 4, colStart: 1 }, manager())).status).toBe(201);
+    expect((await send('POST', `${manage}/layout/elements`, { kind: 'decoration', sign: 'doccia', label: 'Docce fredde', zone: 'monte', rowNumber: 4, colStart: 2 }, manager())).status).toBe(201);
+
+    const drawn = (await layout()).elements.filter((element) => element.kind === 'decoration');
+    expect(drawn).toHaveLength(2);
+    expect(drawn[0]).toMatchObject({ sign: 'palma', label: null, orientation: null, rowNumber: 4, colStart: 1, colEnd: null });
+    expect(drawn[1]).toMatchObject({ sign: 'doccia', label: 'Docce fredde' });
+
+    // The public map shows the same decorations; no spot appears or disappears with them.
+    const open = await availability(demoBeach.day);
+    expect(open.elements.filter((element) => element.kind === 'decoration')).toEqual(drawn);
+    expect(open.layout.map((spot) => spot.code)).not.toContain('palma');
+
+    // A sign outside the repertoire or missing is refused before touching the database.
+    expect((await send('POST', `${manage}/layout/elements`, { kind: 'decoration', sign: 'faro', zone: 'monte', rowNumber: 4, colStart: 3 }, manager())).status).toBe(400);
+    expect((await send('POST', `${manage}/layout/elements`, { kind: 'decoration', zone: 'monte', rowNumber: 4, colStart: 3 }, manager())).status).toBe(400);
+
+    // An occupied cell is refused: a spot's, another decoration's, and a rectangle over one.
+    expect((await send('POST', `${manage}/layout/elements`, { kind: 'decoration', sign: 'cestino', zone: 'ombrelloni', rowNumber: 1, colStart: 3 }, manager())).status).toBe(409);
+    expect((await send('POST', `${manage}/layout/elements`, { kind: 'decoration', sign: 'cestino', zone: 'monte', rowNumber: 4, colStart: 1 }, manager())).status).toBe(409);
+    expect((await send('POST', `${manage}/layout/elements`, { kind: 'structure', label: 'Chiosco', zone: 'monte', rowNumber: 4, colStart: 1, colEnd: 3 }, manager())).status).toBe(409);
+
+    // Only layout.edit draws and erases; the eraser detaches nothing from a decoration.
+    expect((await send('POST', `${manage}/layout/elements`, { kind: 'decoration', sign: 'amaca', zone: 'monte', rowNumber: 4, colStart: 3 }, reception())).status).toBe(403);
+    expect((await send('DELETE', `${manage}/layout/elements/${drawn[0]!.elementId}`, undefined, reception())).status).toBe(403);
+    expect(await (await send('DELETE', `${manage}/layout/elements/${drawn[0]!.elementId}`, undefined, manager())).json()).toEqual({ detachedCabins: 0 });
+    expect((await layout()).elements.filter((element) => element.kind === 'decoration')).toHaveLength(1);
+  });
+
+  it('keeps decorations inside their beach club', async () => {
+    // A second club in the same database: it sees its own, empty, drawing only.
+    const other = await insertBeach(database.admin, 'disegno-altro', { spots: 2, day });
+    await upsertUser(database.adminUrl, { email: 'manager@disegno-altro.example', name: 'altro', password }, [{ beachId: other.beachId, role: 'manager' }]);
+    const signedIn = await send('POST', '/v1/auth/login', { email: 'manager@disegno-altro.example', password });
+    const token = ((await signedIn.json()) as { token: string }).token;
+
+    const theirs = (await (await send('GET', '/v1/manage/beaches/disegno-altro/layout', undefined, token)).json()) as { elements: ElementRow[] };
+    expect(theirs.elements).toEqual([]);
+
+    // A member of one club never draws on the other; an element id does not cross the fence.
+    expect((await send('POST', '/v1/manage/beaches/disegno-altro/layout/elements', { kind: 'decoration', sign: 'palma', zone: 'monte', rowNumber: 9, colStart: 1 }, manager())).status).toBe(403);
+    const mine = (await layout()).elements.find((element) => element.kind === 'decoration')!;
+    expect((await send('DELETE', `/v1/manage/beaches/disegno-altro/layout/elements/${mine.elementId}`, undefined, token)).status).toBe(404);
+    expect((await layout()).elements.find((element) => element.elementId === mine.elementId)).toBeTruthy();
+  });
+
   it('ships the three base types and lets the manager define, edit and guard them', async () => {
     const base = await types();
     expect(base.filter((type) => type.builtin).map((type) => type.name)).toEqual(['Gazebo', 'Lettino singolo', 'Ombrellone']);
@@ -141,6 +190,13 @@ describe.skipIf(!testAdminUrl)('the drawing of the beach and the spot types', ()
     expect(created.status).toBe(201);
     expect((await send('POST', `${manage}/types`, { name: 'Tenda araba', mark: 'tent', umbrellas: 0, sunbeds: 1, maxGuests: 2 }, manager())).status).toBe(409);
     expect((await send('POST', `${manage}/types`, { name: 'Iglù', mark: 'igloo', umbrellas: 0, sunbeds: 1, maxGuests: 2 }, manager())).status).toBe(400);
+
+    // The repertoire extended by D35: the rental subjects are selectable for custom types.
+    const canoe = (await (await send('POST', `${manage}/types`, { name: 'Canoa a noleggio', mark: 'canoe', umbrellas: 0, sunbeds: 0, maxGuests: 2, defaultPriceCents: 1500 }, manager())).json()) as { typeId: string };
+    expect((await types()).find((type) => type.name === 'Canoa a noleggio')).toMatchObject({ mark: 'canoe', builtin: false });
+    expect((await send('PUT', `${manage}/types/${canoe.typeId}`, { mark: 'jetski' }, manager())).status).toBe(204);
+    expect((await types()).find((type) => type.name === 'Canoa a noleggio')).toMatchObject({ mark: 'jetski' });
+    expect((await send('DELETE', `${manage}/types/${canoe.typeId}`, undefined, manager())).status).toBe(204);
 
     // Builtins keep name and mark; their defaults may change; they are never deleted.
     const gazebo = base.find((type) => type.name === 'Gazebo')!;

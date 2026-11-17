@@ -46,7 +46,7 @@ export const spotType = pgTable('spot_type', {
   id: uuid('id').primaryKey().defaultRandom(),
   beachId: uuid('beach_id').notNull(),
   name: text('name').notNull(),
-  mark: text('mark', { enum: ['umbrella', 'sunbed', 'gazebo', 'tent', 'daybed'] }).notNull(),
+  mark: text('mark', { enum: ['umbrella', 'sunbed', 'gazebo', 'tent', 'daybed', 'deckchair', 'canopy', 'canoe', 'sup', 'pedalo', 'jetski'] }).notNull(),
   umbrellas: smallint('umbrellas').notNull().default(1),
   sunbeds: smallint('sunbeds').notNull().default(2),
   maxGuests: smallint('max_guests').notNull().default(2),
@@ -57,7 +57,7 @@ export const spotType = pgTable('spot_type', {
 export const layoutElement = pgTable('layout_element', {
   id: uuid('id').primaryKey().defaultRandom(),
   beachId: uuid('beach_id').notNull(),
-  kind: text('kind', { enum: ['walkway', 'cabin_block', 'structure'] }).notNull(),
+  kind: text('kind', { enum: ['walkway', 'cabin_block', 'structure', 'decoration'] }).notNull(),
   label: text('label'),
   orientation: text('orientation', { enum: ['horizontal', 'vertical'] }),
   zone: text('zone', { enum: ['riva', 'ombrelloni', 'monte'] }),
@@ -65,6 +65,10 @@ export const layoutElement = pgTable('layout_element', {
   rowNumber: integer('row_number'),
   colStart: smallint('col_start'),
   colEnd: smallint('col_end'),
+  // Only a decoration carries a sign, always, from the fixed repertoire (D35).
+  sign: text('sign', {
+    enum: ['palma', 'chiosco', 'doccia', 'bandiera', 'salvagente', 'cartello', 'cestino', 'amaca', 'altalena', 'giochi', 'tavolino', 'grill', 'acqua', 'armadietti', 'campo', 'pingpong'],
+  }),
 });
 
 export const cabin = pgTable('cabin', {
