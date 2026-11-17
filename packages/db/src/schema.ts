@@ -152,11 +152,16 @@ export const holdExtra = pgTable('hold_extra', {
   unitPriceCents: integer('unit_price_cents').notNull(),
 });
 
-/** Snapshot copied from hold_extra when the hold converts into a booking. */
+/**
+ * Snapshot copied from hold_extra when the hold converts into a booking group.
+ * Extras are chosen once per period and belong to the group (D38); bookingId
+ * points at the first day, with which they accrue in the ledger.
+ */
 export const bookingExtra = pgTable('booking_extra', {
   id: uuid('id').primaryKey().defaultRandom(),
   beachId: uuid('beach_id').notNull(),
   bookingId: uuid('booking_id').notNull(),
+  groupId: uuid('group_id').notNull(),
   serviceId: uuid('service_id').notNull(),
   quantity: smallint('quantity').notNull(),
   unitPriceCents: integer('unit_price_cents').notNull(),
@@ -179,6 +184,8 @@ export const hold = pgTable('hold', {
   id: uuid('id').primaryKey().defaultRandom(),
   beachId: uuid('beach_id').notNull(),
   inventoryDayId: uuid('inventory_day_id').notNull(),
+  /** A period reserve (D39) is a family of holds with one expiry: the first day leads, the others name it. */
+  parentHoldId: uuid('parent_hold_id'),
   promotionId: uuid('promotion_id'),
   conventionId: uuid('convention_id'),
   status: holdStatus('status').notNull().default('active'),
@@ -218,11 +225,25 @@ export const refundStatus = pgEnum('refund_status', ['requested', 'in_progress',
 export const presenceStatus = pgEnum('presence_status', ['expected', 'inside', 'outside_reentry_allowed', 'ended']);
 export const accessKind = pgEnum('access_kind', ['entry', 'exit']);
 
+/**
+ * A booking group (D38): one spot over consecutive days, with one code, one
+ * pass and one total. Every booking belongs to a group; the single day is a
+ * group of one. The code lives here, unique per beach club.
+ */
+export const bookingGroup = pgTable('booking_group', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  beachId: uuid('beach_id').notNull(),
+  code: text('code').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const booking = pgTable('booking', {
   id: uuid('id').primaryKey().defaultRandom(),
   beachId: uuid('beach_id').notNull(),
   inventoryDayId: uuid('inventory_day_id').notNull(),
   holdId: uuid('hold_id').notNull(),
+  /** The group this one-day booking belongs to (D38). */
+  groupId: uuid('group_id').notNull(),
   promotionId: uuid('promotion_id'),
   conventionId: uuid('convention_id'),
   code: text('code').notNull(),
@@ -246,7 +267,10 @@ export const booking = pgTable('booking', {
 export const payment = pgTable('payment', {
   id: uuid('id').primaryKey().defaultRandom(),
   beachId: uuid('beach_id').notNull(),
+  /** First day of the group, for the ledger; the aggregate lives on the group. */
   bookingId: uuid('booking_id').notNull(),
+  /** The payment belongs to the group (D31 at group level, D38). */
+  groupId: uuid('group_id').notNull(),
   provider: text('provider').notNull(),
   providerRef: text('provider_ref').notNull(),
   status: paymentStatus('status').notNull().default('not_started'),
@@ -267,6 +291,8 @@ export const paymentRequest = pgTable('payment_request', {
   id: uuid('id').primaryKey().defaultRandom(),
   beachId: uuid('beach_id').notNull(),
   bookingId: uuid('booking_id').notNull(),
+  /** The request asks for (part of) the residual of the group (D31, D38). */
+  groupId: uuid('group_id').notNull(),
   amountCents: integer('amount_cents').notNull(),
   status: text('status', { enum: ['pending', 'paid', 'expired', 'cancelled'] }).notNull().default('pending'),
   expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
@@ -293,7 +319,9 @@ export const providerEvent = pgTable('provider_event', {
 export const pass = pgTable('pass', {
   id: uuid('id').primaryKey().defaultRandom(),
   beachId: uuid('beach_id').notNull(),
+  /** First day of the group; the pass itself is the group's (D38). */
   bookingId: uuid('booking_id').notNull(),
+  groupId: uuid('group_id').notNull(),
   revoked: boolean('revoked').notNull().default(false),
 });
 

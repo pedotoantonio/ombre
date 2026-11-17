@@ -1,7 +1,7 @@
 import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import { can, canTransition } from '@ombre/shared';
 import type { SpotMark } from '@ombre/shared';
-import { paidCentsOf, paymentStateOf, type PaymentState } from './bookings';
+import { groupTotalsByGroup, paidCentsOfGroup, paymentStateOf, type PaymentState } from './bookings';
 import { withActor, type Database } from './client';
 import { DomainError, zoneOrder, type SpotZone } from './inventory';
 import type { Actor } from './manage';
@@ -160,17 +160,32 @@ export function listDayOperations(db: Database, actor: Actor, day: string): Prom
   });
 }
 
+/** The group of the booked day as the card shows it (D38): code, period, total, collected, residual, state. */
+export interface SpotCardGroup {
+  code: string;
+  from: string;
+  to: string;
+  days: number;
+  totalCents: number;
+  paidCents: number;
+  remainingCents: number;
+  paymentState: PaymentState;
+}
+
 export interface SpotCardBooking {
+  /** Code of the GROUP the day belongs to (one code per period, D38). */
   code: string;
   guestName: string;
   /** Sale channel: 'online' or 'desk'. */
   source: string;
   presence: (typeof booking.$inferSelect)['presence'];
-  /** Comprehensive, extras included; the residual follows the D31 payment model. */
+  /** Price of THIS day, extras of the period included on the first day. */
   totalCents: number;
+  /** Money of the whole group (D31 at group level): the card shows the day's price and the group's balance. */
   paidCents: number;
   remainingCents: number;
   paymentState: PaymentState;
+  group: SpotCardGroup;
 }
 
 export interface SpotCard {
@@ -227,6 +242,7 @@ export function spotCard(db: Database, actor: Actor, input: { day: string; code:
         holdLive: sql<boolean>`coalesce(${hold.status} = 'active' and ${hold.expiresAt} > now(), false)`,
         bookingId: booking.id,
         bookingCode: booking.code,
+        bookingGroupId: booking.groupId,
         guestName: booking.guestName,
         source: booking.source,
         presence: booking.presence,
@@ -256,8 +272,10 @@ export function spotCard(db: Database, actor: Actor, input: { day: string; code:
     }
 
     let sold: SpotCardBooking | null = null;
-    if (seeBooking && row.bookingId && row.bookingCode && row.guestName && row.source && row.presence && row.totalCents !== null) {
-      const paidCents = await paidCentsOf(tx, row.bookingId);
+    if (seeBooking && row.bookingId && row.bookingCode && row.bookingGroupId && row.guestName && row.source && row.presence && row.totalCents !== null) {
+      const paidCents = await paidCentsOfGroup(tx, row.bookingGroupId);
+      const totals = (await groupTotalsByGroup(tx, [row.bookingGroupId])).get(row.bookingGroupId);
+      const groupTotal = totals?.totalCents ?? row.totalCents;
       sold = {
         code: row.bookingCode,
         guestName: row.guestName,
@@ -265,8 +283,18 @@ export function spotCard(db: Database, actor: Actor, input: { day: string; code:
         presence: row.presence,
         totalCents: row.totalCents,
         paidCents,
-        remainingCents: Math.max(0, row.totalCents - paidCents),
-        paymentState: paymentStateOf(row.totalCents, paidCents),
+        remainingCents: Math.max(0, groupTotal - paidCents),
+        paymentState: paymentStateOf(groupTotal, paidCents),
+        group: {
+          code: row.bookingCode,
+          from: totals?.from ?? input.day,
+          to: totals?.to ?? input.day,
+          days: totals?.days ?? 1,
+          totalCents: groupTotal,
+          paidCents,
+          remainingCents: Math.max(0, groupTotal - paidCents),
+          paymentState: paymentStateOf(groupTotal, paidCents),
+        },
       };
     }
 

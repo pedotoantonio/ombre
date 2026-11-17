@@ -67,6 +67,24 @@ const publicBeachColumns = {
 
 export type SpotZone = (typeof spot.$inferSelect)['zone'];
 
+/** A period never goes past a month (D38): beyond it there are season passes. */
+export const periodMaxDays = 31;
+
+/**
+ * The consecutive days of a closed dal–al range, computed once in UTC so no time
+ * zone can slip a day in. `to` equal to `from` is the single day; a backwards
+ * range or one beyond 31 days is refused with a DomainError (D38, D39).
+ */
+export function periodDays(from: string, to: string): string[] {
+  const start = Date.parse(`${from}T00:00:00Z`);
+  const end = Date.parse(`${to}T00:00:00Z`);
+  if (Number.isNaN(start) || Number.isNaN(end)) throw new DomainError('invalid_state', 'from and to must be YYYY-MM-DD days');
+  if (end < start) throw new DomainError('invalid_state', 'The end day must not come before the start day');
+  const span = (end - start) / 86_400_000 + 1;
+  if (span > periodMaxDays) throw new DomainError('cap_reached', `The period must not exceed ${periodMaxDays} days`);
+  return Array.from({ length: span }, (_, index) => new Date(start + index * 86_400_000).toISOString().slice(0, 10));
+}
+
 /** Zones in drawing and listing order: shore first, then umbrellas, then the land side. */
 export const zoneOrder = sql`case ${spot.zone} when 'riva' then 0 when 'ombrelloni' then 1 else 2 end`;
 
@@ -98,7 +116,9 @@ export interface AvailableSpot {
   umbrellas: number;
   sunbeds: number;
   maxGuests: number;
+  /** Total over the period: sum of the days. */
   priceCents: number;
+  /** True when EVERY day of the period is a shared one; a period may mix ordinary and shared days (D39). */
   shared: boolean;
 }
 
@@ -106,7 +126,12 @@ export interface AvailableSpot {
 const notPast = sql`${inventoryDay.day} >= (select (now() at time zone b.timezone)::date from beach b where b.id = ${inventoryDay.beachId})`;
 const isFree = sql`((${inventoryDay.state} = 'available' or (${inventoryDay.state} = 'held' and ${hold.expiresAt} <= now())) and ${notPast})`;
 
-export function listAvailability(db: Database, beachId: string, day: string): Promise<AvailableSpot[]> {
+/**
+ * Spots that can be bought for the WHOLE dal–al period (D39): a spot is listed
+ * only when it is free on every day, and its price is the sum of the days.
+ */
+export function listAvailability(db: Database, beachId: string, day: string, to: string = day): Promise<AvailableSpot[]> {
+  const days = periodDays(day, to);
   return withBeach(db, beachId, (tx) =>
     tx
       .select({
@@ -120,14 +145,16 @@ export function listAvailability(db: Database, beachId: string, day: string): Pr
         umbrellas: spot.umbrellas,
         sunbeds: spot.sunbeds,
         maxGuests: spot.maxGuests,
-        priceCents: inventoryDay.priceCents,
-        shared: inventoryDay.shared,
+        priceCents: sql<number>`sum(${inventoryDay.priceCents})::int`,
+        shared: sql<boolean>`bool_and(${inventoryDay.shared})`,
       })
       .from(inventoryDay)
       .innerJoin(spot, eq(spot.id, inventoryDay.spotId))
       .innerJoin(spotType, eq(spotType.id, spot.typeId))
       .leftJoin(hold, eq(hold.id, inventoryDay.activeHoldId))
-      .where(and(eq(inventoryDay.day, day), eq(spot.retired, false), isFree))
+      .where(and(inArray(inventoryDay.day, days), eq(spot.retired, false), isFree))
+      .groupBy(spot.id, spot.code, spot.zone, spot.rowNumber, spot.col, spotType.name, spotType.mark, spot.umbrellas, spot.sunbeds, spot.maxGuests)
+      .having(sql`count(*) = ${days.length}`)
       .orderBy(zoneOrder, asc(spot.rowNumber), asc(spot.col)),
   );
 }
@@ -146,14 +173,20 @@ export interface DaySpot {
   umbrellas: number;
   sunbeds: number;
   maxGuests: number;
-  /** `unavailable` covers everything that cannot be bought: held, sold, blocked, never published, past. */
+  /** `unavailable` covers everything that cannot be bought on every day of the period: held, sold, blocked, never published, past. */
   status: 'free' | 'shared' | 'unavailable';
-  /** Only for a spot that can be bought. */
+  /** Only for a spot that can be bought: the sum over the period. */
   priceCents: number | null;
 }
 
-/** Every spot of the beach club on a day, for the map: free ones with their price, the others without details. Retired spots stay hidden. */
-export function listDayMap(db: Database, beachId: string, day: string): Promise<DaySpot[]> {
+/**
+ * Every spot of the beach club over a dal–al period, for the map: the ones free
+ * on EVERY day with their total price (D39), the others without details. The
+ * `shared` badge appears only when every day is a shared one; a period may mix
+ * ordinary and shared days. Retired spots stay hidden.
+ */
+export function listDayMap(db: Database, beachId: string, day: string, to: string = day): Promise<DaySpot[]> {
+  const days = periodDays(day, to);
   return withBeach(db, beachId, async (tx) => {
     const rows = await tx
       .select({
@@ -167,18 +200,19 @@ export function listDayMap(db: Database, beachId: string, day: string): Promise<
         umbrellas: spot.umbrellas,
         sunbeds: spot.sunbeds,
         maxGuests: spot.maxGuests,
-        free: sql<boolean>`coalesce(${isFree}, false)`,
-        priceCents: inventoryDay.priceCents,
-        shared: inventoryDay.shared,
+        freeDays: sql<number>`count(*) filter (where ${isFree})::int`,
+        priceCents: sql<number | null>`sum(${inventoryDay.priceCents}) filter (where ${isFree})::int`,
+        shared: sql<boolean>`coalesce(bool_and(${inventoryDay.shared}) filter (where ${isFree}), false)`,
       })
       .from(spot)
       .innerJoin(spotType, eq(spotType.id, spot.typeId))
-      .leftJoin(inventoryDay, and(eq(inventoryDay.spotId, spot.id), eq(inventoryDay.day, day)))
+      .leftJoin(inventoryDay, and(eq(inventoryDay.spotId, spot.id), inArray(inventoryDay.day, days)))
       .leftJoin(hold, eq(hold.id, inventoryDay.activeHoldId))
       .where(eq(spot.retired, false))
+      .groupBy(spot.id, spot.code, spot.zone, spot.rowNumber, spot.col, spotType.name, spotType.mark, spot.umbrellas, spot.sunbeds, spot.maxGuests)
       .orderBy(zoneOrder, asc(spot.rowNumber), asc(spot.col));
-    return rows.map(({ free, priceCents, shared, ...place }) =>
-      free && priceCents !== null
+    return rows.map(({ freeDays, priceCents, shared, ...place }) =>
+      freeDays === days.length && priceCents !== null
         ? { ...place, status: shared ? ('shared' as const) : ('free' as const), priceCents }
         : { ...place, status: 'unavailable' as const, priceCents: null },
     );
@@ -209,6 +243,8 @@ export function getPublicCanvas(db: Database, beachId: string): Promise<PublicCa
 
 export interface BeachSearch {
   day: string;
+  /** Last day of the period; the single day when not given (D39). */
+  to?: string;
   /** People who must fit under one spot. One when not given. */
   guests?: number;
   sharedOnly?: boolean;
@@ -216,26 +252,31 @@ export interface BeachSearch {
 }
 
 export interface BeachOffer extends PublicBeach {
-  /** Spots that can be bought on the day and fit the guests. */
+  /** Spots that can be bought on EVERY day of the period and fit the guests. */
   freeSpots: number;
-  /** Lowest price among those same spots: a price that can really be paid. Null when there is none. */
+  /** Lowest total over the period among those same spots: a price that can really be paid. Null when there is none. */
   priceFromCents: number | null;
 }
 
-/** Active beach clubs with what each one can sell on a day. Each club is read inside its own boundary. */
+/** Active beach clubs with what each one can sell over a dal–al period. Each club is read inside its own boundary. */
 export async function searchBeaches(db: Database, search: BeachSearch): Promise<BeachOffer[]> {
+  const days = periodDays(search.day, search.to ?? search.day);
   const beaches = await listActiveBeaches(db, search.place);
   const offers: BeachOffer[] = [];
   for (const target of beaches) {
-    const [found] = await withBeach(db, target.id, (tx) =>
+    // One row per spot free on every day, with the total of the period; with
+    // sharedOnly, every day of the period must be a shared one.
+    const rows = await withBeach(db, target.id, (tx) =>
       tx
-        .select({ freeSpots: sql<number>`count(*)::int`, priceFromCents: sql<number | null>`min(${inventoryDay.priceCents})` })
+        .select({ totalCents: sql<number>`sum(${inventoryDay.priceCents})::int` })
         .from(inventoryDay)
         .innerJoin(spot, eq(spot.id, inventoryDay.spotId))
         .leftJoin(hold, eq(hold.id, inventoryDay.activeHoldId))
-        .where(and(eq(inventoryDay.day, search.day), eq(spot.retired, false), isFree, gte(spot.maxGuests, search.guests ?? 1), search.sharedOnly ? eq(inventoryDay.shared, true) : undefined)),
+        .where(and(inArray(inventoryDay.day, days), eq(spot.retired, false), isFree, gte(spot.maxGuests, search.guests ?? 1), search.sharedOnly ? eq(inventoryDay.shared, true) : undefined))
+        .groupBy(inventoryDay.spotId)
+        .having(sql`count(*) = ${days.length}`),
     );
-    offers.push({ ...target, freeSpots: found?.freeSpots ?? 0, priceFromCents: found?.priceFromCents ?? null });
+    offers.push({ ...target, freeSpots: rows.length, priceFromCents: rows.length > 0 ? Math.min(...rows.map((row) => row.totalCents)) : null });
   }
   return offers;
 }
@@ -259,13 +300,49 @@ export interface HoldView {
   /** False once the time is up, even if the row still says active. */
   live: boolean;
   expiresAt: Date;
+  /** First day of the reserved period; `from`–`to` carry the whole of it (D39). */
   day: string;
+  from: string;
+  to: string;
   spotCode: string;
   rowNumber: number;
   umbrellas: number;
   sunbeds: number;
-  /** `total` is comprehensive: spot discounted price + extras. */
+  /** `total` is comprehensive over the period: discounted days + extras, chosen once. */
   quote: PurchaseQuote;
+}
+
+/** The reserve family behind a lead hold, each member with its day, first day first. */
+async function holdFamilyRows(tx: Transaction, lead: typeof hold.$inferSelect): Promise<{ held: typeof hold.$inferSelect; day: string }[]> {
+  const rows = await tx
+    .select({ held: hold, day: inventoryDay.day })
+    .from(hold)
+    .innerJoin(inventoryDay, eq(inventoryDay.id, hold.inventoryDayId))
+    .where(or(eq(hold.id, lead.id), eq(hold.parentHoldId, lead.id)))
+    .orderBy(asc(inventoryDay.day));
+  return rows;
+}
+
+/** Joins the per-day quotes of a family into the period quote, extras counted once (they sit on the lead). */
+function familyQuote(members: { held: typeof hold.$inferSelect; day: string }[], extras: ExtraLine[]): PurchaseQuote {
+  const listPrice = members.reduce((sum, member) => sum + member.held.listPriceCents, 0);
+  const discount = members.reduce((sum, member) => sum + member.held.discountCents, 0);
+  const extrasCents = members.reduce((sum, member) => sum + member.held.extrasCents, 0);
+  const total = members.reduce((sum, member) => sum + member.held.totalCents, 0);
+  return {
+    listPrice,
+    discount,
+    total,
+    promoCode: members[0]?.held.promoCode ?? null,
+    extrasCents,
+    extras,
+    days: members.map((member) => ({
+      day: member.day,
+      listPriceCents: member.held.listPriceCents,
+      discountCents: member.held.discountCents,
+      totalCents: member.held.totalCents - member.held.extrasCents,
+    })),
+  };
 }
 
 export async function getHold(db: Database, beachId: string, holdId: string): Promise<HoldView> {
@@ -284,25 +361,21 @@ export async function getHold(db: Database, beachId: string, holdId: string): Pr
       .innerJoin(inventoryDay, eq(inventoryDay.id, hold.inventoryDayId))
       .innerJoin(spot, eq(spot.id, inventoryDay.spotId))
       .where(eq(hold.id, holdId));
-    if (!row) throw new DomainError('not_found', 'Hold not found');
+    if (!row || row.hold.parentHoldId !== null) throw new DomainError('not_found', 'Hold not found');
+    const members = await holdFamilyRows(tx, row.hold);
     return {
       holdId: row.hold.id,
       status: row.hold.status,
       live: row.live,
       expiresAt: row.hold.expiresAt,
-      day: row.day,
+      day: members[0]?.day ?? row.day,
+      from: members[0]?.day ?? row.day,
+      to: members[members.length - 1]?.day ?? row.day,
       spotCode: row.spotCode,
       rowNumber: row.rowNumber,
       umbrellas: row.umbrellas,
       sunbeds: row.sunbeds,
-      quote: {
-        listPrice: row.hold.listPriceCents,
-        discount: row.hold.discountCents,
-        total: row.hold.totalCents,
-        promoCode: row.hold.promoCode,
-        extrasCents: row.hold.extrasCents,
-        extras: await holdExtraLines(tx, row.hold.id),
-      },
+      quote: familyQuote(members, await holdExtraLines(tx, row.hold.id)),
     };
   });
 }
@@ -327,14 +400,25 @@ export interface ExtraLine {
   subtotalCents: number;
 }
 
+/** One day of a period quote: the spot alone, discounts applied per day as always (D39). */
+export interface PeriodDayQuote {
+  day: string;
+  listPriceCents: number;
+  discountCents: number;
+  totalCents: number;
+}
+
 /**
  * A full purchase quote: the spot fields of DayQuote (list price, discount — a
  * promotion or hotel convention discounts the spot alone, never the extras) plus
  * the extras per line. `total` is comprehensive: listPrice − discount + extrasCents.
+ * Over a period every money field is the sum of the days; `days` lists them.
  */
 export interface PurchaseQuote extends DayQuote {
   extrasCents: number;
   extras: ExtraLine[];
+  /** The days of the period, in order; absent only on pre-period payloads. */
+  days?: PeriodDayQuote[];
 }
 
 const lineOrder = (left: ExtraLine, right: ExtraLine) => left.name.it.localeCompare(right.name.it) || left.serviceId.localeCompare(right.serviceId);
@@ -406,6 +490,8 @@ async function holdExtraLines(tx: Transaction, holdId: string): Promise<ExtraLin
 export interface DayRequest {
   spotId: string;
   day: string;
+  /** Last day of the period; the single day when left out (D39). */
+  to?: string | null;
   promoCode?: string | null;
   /** Quantities per extra service; empty or missing means a spot alone. */
   extras?: ExtraRequest[];
@@ -441,43 +527,70 @@ function codeRefused(): DomainError {
   return new DomainError('promo_not_applicable', 'This code cannot be applied');
 }
 
-async function findConvention(tx: Transaction, code: string, day: string): Promise<ConventionPricing | undefined> {
+/** An active convention whose validity window, when set, contains the WHOLE booked period. */
+async function findConvention(tx: Transaction, code: string, from: string, to: string = from): Promise<ConventionPricing | undefined> {
   const [deal] = await tx
     .select({ id: hotelConvention.id, percentBps: hotelConvention.percentBps, fixedPriceCents: hotelConvention.fixedPriceCents })
     .from(hotelConvention)
-    .where(and(eq(hotelConvention.code, code), conventionAppliesOn(day)));
+    .where(
+      and(
+        eq(hotelConvention.code, code),
+        eq(hotelConvention.active, true),
+        sql`(${hotelConvention.validFrom} is null or ${hotelConvention.validFrom} <= ${from})`,
+        sql`(${hotelConvention.validTo} is null or ${hotelConvention.validTo} >= ${to})`,
+      ),
+    );
   return deal;
 }
 
-/** Joins a spot quote and its extra lines into a comprehensive purchase quote. */
-function withExtras(quote: DayQuote, priced: { lines: ExtraLine[]; extrasCents: number }): PurchaseQuote {
-  return { ...quote, total: quote.total + priced.extrasCents, extrasCents: priced.extrasCents, extras: priced.lines };
+/** Joins per-day spot quotes and the extra lines into a comprehensive period quote (D39). */
+function periodPurchaseQuote(days: string[], per: DayQuote[], priced: { lines: ExtraLine[]; extrasCents: number }): PurchaseQuote {
+  const listPrice = per.reduce((sum, quote) => sum + quote.listPrice, 0);
+  const discount = per.reduce((sum, quote) => sum + quote.discount, 0);
+  const total = per.reduce((sum, quote) => sum + quote.total, 0) + priced.extrasCents;
+  return {
+    listPrice,
+    discount,
+    total,
+    promoCode: per[0]?.promoCode ?? null,
+    extrasCents: priced.extrasCents,
+    extras: priced.lines,
+    days: per.map((quote, index) => ({ day: days[index]!, listPriceCents: quote.listPrice, discountCents: quote.discount, totalCents: quote.total })),
+  };
 }
 
-/** Price of a day, with the chosen extras per line, as the server computes it. It reserves nothing. */
+/**
+ * Price of a dal–al period, with the chosen extras per line, as the server
+ * computes it: discounts per day as always and summed, extras once for the
+ * period. It reserves nothing. The spot must be free on EVERY day.
+ */
 export function quoteSpot(db: Database, beachId: string, request: DayRequest): Promise<PurchaseQuote> {
+  const days = periodDays(request.day, request.to ?? request.day);
   return withBeach(db, beachId, async (tx) => {
-    const [row] = await tx
-      .select({ priceCents: inventoryDay.priceCents })
+    const rows = await tx
+      .select({ day: inventoryDay.day, priceCents: inventoryDay.priceCents })
       .from(inventoryDay)
       .innerJoin(spot, eq(spot.id, inventoryDay.spotId))
       .leftJoin(hold, eq(hold.id, inventoryDay.activeHoldId))
-      .where(and(eq(inventoryDay.spotId, request.spotId), eq(inventoryDay.day, request.day), eq(spot.retired, false), isFree));
-    if (!row) throw new DomainError('inventory_conflict', 'This spot is not available on this day');
+      .where(and(eq(inventoryDay.spotId, request.spotId), inArray(inventoryDay.day, days), eq(spot.retired, false), isFree))
+      .orderBy(asc(inventoryDay.day));
+    if (rows.length !== days.length) {
+      throw new DomainError('inventory_conflict', days.length === 1 ? 'This spot is not available on this day' : 'This spot is not available on every day of this period');
+    }
 
     const priced = await priceExtras(tx, request.extras ?? []);
     const code = normalizePromo(request.promoCode);
-    if (!code) return withExtras(quoteDay(row.priceCents), priced);
+    if (!code) return periodPurchaseQuote(days, rows.map((row) => quoteDay(row.priceCents)), priced);
 
     const [promo] = await tx
       .select({ percentBps: promotion.percentBps })
       .from(promotion)
       .where(and(eq(promotion.code, code), eq(promotion.active, true), sql`(${promotion.maxUses} is null or ${promotion.committedUses} < ${promotion.maxUses})`));
-    // A promotion or convention discounts the spot alone: the extras are added after.
-    if (promo) return withExtras(quoteDay(row.priceCents, { code, percentBps: promo.percentBps }), priced);
-    const deal = await findConvention(tx, code, request.day);
+    // A promotion or convention discounts the spot alone, day by day: the extras are added after.
+    if (promo) return periodPurchaseQuote(days, rows.map((row) => quoteDay(row.priceCents, { code, percentBps: promo.percentBps })), priced);
+    const deal = await findConvention(tx, code, days[0]!, days[days.length - 1]!);
     if (!deal) throw codeRefused();
-    return withExtras(quoteConventionDay(row.priceCents, code, deal), priced);
+    return periodPurchaseQuote(days, rows.map((row) => quoteConventionDay(row.priceCents, code, deal)), priced);
   });
 }
 
@@ -485,25 +598,23 @@ export interface HoldResult {
   holdId: string;
   status: (typeof hold.$inferSelect)['status'];
   expiresAt: Date;
-  /** `total` is comprehensive: spot discounted price + extras. */
+  /** The reserved period; from = to for the single day (D39). */
+  from: string;
+  to: string;
+  /** `total` is comprehensive over the period: discounted days + extras, chosen once. */
   quote: PurchaseQuote;
   /** True when the same request had already been served and nothing new was created. */
   replayed: boolean;
 }
 
-function toResult(row: typeof hold.$inferSelect, extras: ExtraLine[], replayed: boolean): HoldResult {
+function toResult(lead: typeof hold.$inferSelect, members: { held: typeof hold.$inferSelect; day: string }[], extras: ExtraLine[], replayed: boolean): HoldResult {
   return {
-    holdId: row.id,
-    status: row.status,
-    expiresAt: row.expiresAt,
-    quote: {
-      listPrice: row.listPriceCents,
-      discount: row.discountCents,
-      total: row.totalCents,
-      promoCode: row.promoCode,
-      extrasCents: row.extrasCents,
-      extras,
-    },
+    holdId: lead.id,
+    status: lead.status,
+    expiresAt: lead.expiresAt,
+    from: members[0]?.day ?? '',
+    to: members[members.length - 1]?.day ?? '',
+    quote: familyQuote(members, extras),
     replayed,
   };
 }
@@ -527,111 +638,133 @@ export interface HoldRequest extends DayRequest {
 }
 
 /**
- * Takes a day for a limited time. The inventory row is locked first, so two buyers of the
- * same day are served one after the other and only one can win. Lock order is always
- * inventory row, then promotion.
+ * Takes a dal–al period for a limited time, all or nothing (D39): every day of the
+ * period is locked and must be free, one hold per day is written with a SINGLE
+ * expiry — the first day leads the family, the others name it — and the extras
+ * are frozen once on the lead. The inventory rows are locked first, in identifier
+ * order like every multi-day path, so two buyers of the same days are served one
+ * after the other and only one can win. Lock order is always inventory rows,
+ * then promotion.
  */
 export async function acquireHold(db: Database, beachId: string, request: HoldRequest): Promise<HoldResult> {
   const promoCode = normalizePromo(request.promoCode);
+  const days = periodDays(request.day, request.to ?? request.day);
   // The idempotency fingerprint covers the extras in a canonical, sorted form: the
   // same request replays the same hold, different quantities are a different request.
-  // Without extras the fingerprint is the same as before migration 015.
+  // Without extras and for a single day the fingerprint is the same as before.
   const canonicalExtras = (request.extras ?? [])
     .map((entry) => [entry.serviceId, entry.quantity] as const)
     .sort((left, right) => left[0].localeCompare(right[0]));
   const hashedParts: unknown[] = [request.spotId, request.day, promoCode];
   if (canonicalExtras.length > 0) hashedParts.push(canonicalExtras);
+  if (days.length > 1) hashedParts.push(['to', days[days.length - 1]]);
   const requestHash = createHash('sha256').update(JSON.stringify(hashedParts)).digest('hex');
 
   try {
     return await withBeach(db, beachId, async (tx) => {
-      const [row] = await tx
+      const rows = await tx
         .select()
         .from(inventoryDay)
-        .where(and(eq(inventoryDay.spotId, request.spotId), eq(inventoryDay.day, request.day)))
+        .where(and(eq(inventoryDay.spotId, request.spotId), inArray(inventoryDay.day, days)))
+        .orderBy(asc(inventoryDay.id))
         .for('update');
 
       const [previous] = await tx.select().from(hold).where(eq(hold.idempotencyKey, request.idempotencyKey));
       if (previous) {
-        if (previous.requestHash !== requestHash) {
+        if (previous.requestHash !== requestHash || previous.parentHoldId !== null) {
           throw new DomainError('idempotency_mismatch', 'This idempotency key was used for a different request');
         }
-        return toResult(previous, await holdExtraLines(tx, previous.id), true);
+        return toResult(previous, await holdFamilyRows(tx, previous), await holdExtraLines(tx, previous.id), true);
       }
-      if (!row) throw new DomainError('not_found', 'Spot or day not found');
+      if (rows.length !== days.length) throw new DomainError('not_found', 'Spot or day not found');
       const [place] = await tx.select({ retired: spot.retired }).from(spot).where(eq(spot.id, request.spotId));
       if (place?.retired) throw new DomainError('inventory_conflict', 'This spot has been retired from sale');
-      const [clock] = await tx.select({ past: sql<boolean>`${row.day}::date < (now() at time zone ${beach.timezone})::date` }).from(beach).where(eq(beach.id, beachId));
+      const [clock] = await tx.select({ past: sql<boolean>`${days[0]}::date < (now() at time zone ${beach.timezone})::date` }).from(beach).where(eq(beach.id, beachId));
       if (clock?.past) throw new DomainError('inventory_conflict', 'This day has already passed');
 
-      let state = row.state;
-      if (state === 'held' && row.activeHoldId) {
-        const [lapsed] = await tx
-          .update(hold)
-          .set({ status: 'expired' })
-          .where(and(eq(hold.id, row.activeHoldId), eq(hold.status, 'active'), sql`${hold.expiresAt} <= now()`))
-          .returning({ promotionId: hold.promotionId });
-        if (lapsed) {
-          await returnPromoUse(tx, lapsed.promotionId);
-          state = 'available';
+      for (const row of rows) {
+        let state = row.state;
+        if (state === 'held' && row.activeHoldId) {
+          const [lapsed] = await tx
+            .update(hold)
+            .set({ status: 'expired' })
+            .where(and(eq(hold.id, row.activeHoldId), eq(hold.status, 'active'), sql`${hold.expiresAt} <= now()`))
+            .returning({ promotionId: hold.promotionId });
+          if (lapsed) {
+            await returnPromoUse(tx, lapsed.promotionId);
+            state = 'available';
+          }
         }
+        // One busy day refuses the whole period: the reserve is all or nothing (D39).
+        if (state !== 'available') throw new DomainError('inventory_conflict', 'This spot has just been taken');
       }
-      if (state !== 'available') throw new DomainError('inventory_conflict', 'This spot has just been taken');
 
       // Promotion first, then convention (same documented order as the quote); a
-      // convention has no use counter, so it is only read, never locked.
+      // convention has no use counter, so it is only read, never locked. The
+      // promotion commits one use per day, as its economy stays per day.
       let promo: { id: string; percentBps: number } | undefined;
       let deal: { id: string; percentBps: number | null; fixedPriceCents: number | null } | undefined;
       if (promoCode) {
         [promo] = await tx
           .update(promotion)
-          .set({ committedUses: sql`${promotion.committedUses} + 1` })
-          .where(and(eq(promotion.code, promoCode), eq(promotion.active, true), sql`(${promotion.maxUses} is null or ${promotion.committedUses} < ${promotion.maxUses})`))
+          .set({ committedUses: sql`${promotion.committedUses} + ${days.length}` })
+          .where(and(eq(promotion.code, promoCode), eq(promotion.active, true), sql`(${promotion.maxUses} is null or ${promotion.committedUses} + ${days.length} <= ${promotion.maxUses})`))
           .returning({ id: promotion.id, percentBps: promotion.percentBps });
         if (!promo) {
-          deal = await findConvention(tx, promoCode, request.day);
+          deal = await findConvention(tx, promoCode, days[0]!, days[days.length - 1]!);
           if (!deal) throw codeRefused();
         }
       }
 
-      // The discount applies to the spot alone; the hold freezes the unit prices
-      // of the extras in its own snapshot (hold_extra).
-      const quote =
-        promoCode && promo
-          ? quoteDay(row.priceCents, { code: promoCode, percentBps: promo.percentBps })
-          : promoCode && deal
-            ? quoteConventionDay(row.priceCents, promoCode, deal)
-            : quoteDay(row.priceCents);
+      // The discount applies to the spot alone, day by day; the lead hold freezes
+      // the unit prices of the extras in its own snapshot (hold_extra), once for
+      // the whole period.
       const priced = await priceExtras(tx, request.extras ?? []);
-      const [created] = await tx
-        .insert(hold)
-        .values({
-          beachId,
-          inventoryDayId: row.id,
-          promotionId: promo?.id ?? null,
-          conventionId: deal?.id ?? null,
-          idempotencyKey: request.idempotencyKey,
-          requestHash,
-          listPriceCents: quote.listPrice,
-          discountCents: quote.discount,
-          extrasCents: priced.extrasCents,
-          totalCents: quote.total + priced.extrasCents,
-          promoCode: quote.promoCode,
-          expiresAt: sql`now() + make_interval(secs => ${request.ttlSeconds})`,
-        })
-        .returning();
-      if (!created) throw new Error('hold was not created');
+      const byDay = new Map(rows.map((row) => [row.day, row]));
+      let lead: typeof hold.$inferSelect | undefined;
+      const members: { held: typeof hold.$inferSelect; day: string }[] = [];
+      for (const [index, day] of days.entries()) {
+        const row = byDay.get(day)!;
+        const quote =
+          promoCode && promo
+            ? quoteDay(row.priceCents, { code: promoCode, percentBps: promo.percentBps })
+            : promoCode && deal
+              ? quoteConventionDay(row.priceCents, promoCode, deal)
+              : quoteDay(row.priceCents);
+        const extrasCents = index === 0 ? priced.extrasCents : 0;
+        const [created] = await tx
+          .insert(hold)
+          .values({
+            beachId,
+            inventoryDayId: row.id,
+            parentHoldId: index === 0 ? null : lead!.id,
+            promotionId: promo?.id ?? null,
+            conventionId: deal?.id ?? null,
+            idempotencyKey: index === 0 ? request.idempotencyKey : `${lead!.id}#${index}`,
+            requestHash,
+            listPriceCents: quote.listPrice,
+            discountCents: quote.discount,
+            extrasCents,
+            totalCents: quote.total + extrasCents,
+            promoCode: quote.promoCode,
+            // now() is transaction-stable: the whole family shares ONE expiry (D39).
+            expiresAt: sql`now() + make_interval(secs => ${request.ttlSeconds})`,
+          })
+          .returning();
+        if (!created) throw new Error('hold was not created');
+        if (index === 0) lead = created;
+        members.push({ held: created, day });
+        await tx
+          .update(inventoryDay)
+          .set({ state: 'held', activeHoldId: created.id, updatedAt: sql`now()` })
+          .where(eq(inventoryDay.id, row.id));
+      }
       if (priced.lines.length > 0) {
         await tx
           .insert(holdExtra)
-          .values(priced.lines.map((line) => ({ beachId, holdId: created.id, serviceId: line.serviceId, quantity: line.quantity, unitPriceCents: line.unitPriceCents })));
+          .values(priced.lines.map((line) => ({ beachId, holdId: lead!.id, serviceId: line.serviceId, quantity: line.quantity, unitPriceCents: line.unitPriceCents })));
       }
-
-      await tx
-        .update(inventoryDay)
-        .set({ state: 'held', activeHoldId: created.id, updatedAt: sql`now()` })
-        .where(eq(inventoryDay.id, row.id));
-      return toResult(created, priced.lines, false);
+      return toResult(lead!, members, priced.lines, false);
     });
   } catch (error) {
     // Two different requests raced with the same key: the unique index stopped the second.
@@ -642,25 +775,37 @@ export async function acquireHold(db: Database, beachId: string, request: HoldRe
   }
 }
 
-/** Gives a held day back. Returns false when the hold was no longer active. */
+/** Gives a reserved period back, the whole family (D39). Returns false when the lead hold was no longer active. */
 export function releaseHold(db: Database, beachId: string, holdId: string): Promise<boolean> {
   return withBeach(db, beachId, async (tx) => {
-    const [target] = await tx.select({ inventoryDayId: hold.inventoryDayId }).from(hold).where(eq(hold.id, holdId));
-    if (!target) throw new DomainError('not_found', 'Hold not found');
-
-    await tx.select({ id: inventoryDay.id }).from(inventoryDay).where(eq(inventoryDay.id, target.inventoryDayId)).for('update');
-    const [released] = await tx
-      .update(hold)
-      .set({ status: 'released' })
-      .where(and(eq(hold.id, holdId), eq(hold.status, 'active')))
-      .returning({ promotionId: hold.promotionId });
-    if (!released) return false;
-
-    await returnPromoUse(tx, released.promotionId);
+    const [target] = await tx.select().from(hold).where(eq(hold.id, holdId));
+    if (!target || target.parentHoldId !== null) throw new DomainError('not_found', 'Hold not found');
+    const family = await tx
+      .select()
+      .from(hold)
+      .where(or(eq(hold.id, holdId), eq(hold.parentHoldId, holdId)));
     await tx
-      .update(inventoryDay)
-      .set({ state: 'available', activeHoldId: null, updatedAt: sql`now()` })
-      .where(and(eq(inventoryDay.id, target.inventoryDayId), eq(inventoryDay.activeHoldId, holdId)));
-    return true;
+      .select({ id: inventoryDay.id })
+      .from(inventoryDay)
+      .where(inArray(inventoryDay.id, family.map((member) => member.inventoryDayId)))
+      .orderBy(asc(inventoryDay.id))
+      .for('update');
+
+    let leadReleased = false;
+    for (const member of family) {
+      const [released] = await tx
+        .update(hold)
+        .set({ status: 'released' })
+        .where(and(eq(hold.id, member.id), eq(hold.status, 'active')))
+        .returning({ promotionId: hold.promotionId });
+      if (!released) continue;
+      if (member.id === holdId) leadReleased = true;
+      await returnPromoUse(tx, released.promotionId);
+      await tx
+        .update(inventoryDay)
+        .set({ state: 'available', activeHoldId: null, updatedAt: sql`now()` })
+        .where(and(eq(inventoryDay.id, member.inventoryDayId), eq(inventoryDay.activeHoldId, member.id)));
+    }
+    return leadReleased;
   });
 }

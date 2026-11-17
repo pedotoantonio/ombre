@@ -274,7 +274,7 @@ describe.skipIf(!testAdminUrl)('hotel conventions: pricing, desk, statement and 
   it('adds nothing new to the public answers: the availability keeps its exact shape', async () => {
     const availability = await json('GET', `/v1/beaches/${slug}/availability?day=${day}`);
     expect(availability.status).toBe(200);
-    expect(Object.keys(availability.body as Record<string, unknown>).sort()).toEqual(['beach', 'currency', 'day', 'elements', 'gaps', 'layout', 'seaSide', 'spots']);
+    expect(Object.keys(availability.body as Record<string, unknown>).sort()).toEqual(['beach', 'currency', 'day', 'elements', 'gaps', 'layout', 'seaSide', 'spots', 'to']);
     expect(JSON.stringify(availability.body)).not.toMatch(/convention|Hotel/i);
   });
 });

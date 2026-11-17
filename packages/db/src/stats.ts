@@ -102,9 +102,12 @@ export function statisticsReport(db: Database, actor: Actor, from: string, to: s
       .where(sold)
       .groupBy(hotelConvention.id, hotelConvention.partnerName)
       .orderBy(asc(hotelConvention.partnerName));
-    // Derived from the residual (D31): total minus the succeeded payments of the booking.
-    const paidOfBooking = sql<number>`coalesce((select sum(p.amount_cents) from payment p where p.booking_id = ${booking.id} and p.status = 'succeeded'), 0)`;
-    const derivedState = sql<string>`case when ${paidOfBooking} >= ${booking.totalCents} then 'paid' when ${paidOfBooking} > 0 then 'partial' else 'to_collect' end`;
+    // Derived from the residual (D31, at group level since D38): the group total
+    // minus the succeeded payments of the GROUP; each sold day reads the state of
+    // its group, since one booking now shares its payments with its period.
+    const paidOfGroup = sql<number>`coalesce((select sum(p.amount_cents) from payment p where p.group_id = ${booking.groupId} and p.status = 'succeeded'), 0)`;
+    const totalOfGroup = sql<number>`coalesce((select sum(b2.total_cents) from booking b2 where b2.group_id = ${booking.groupId} and b2.status <> 'cancelled'), 0)`;
+    const derivedState = sql<string>`case when ${paidOfGroup} >= ${totalOfGroup} then 'paid' when ${paidOfGroup} > 0 then 'partial' else 'to_collect' end`;
     const byPaymentStatus = await tx
       .select({ status: derivedState, bookings: sql<number>`count(*)::int` })
       .from(booking)

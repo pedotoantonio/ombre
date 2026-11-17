@@ -67,6 +67,8 @@ describe.skipIf(!testAdminUrl)('inventory on a real PostgreSQL', () => {
       promoCode: 'MARE10',
       extrasCents: 0,
       extras: [],
+      // Il periodo minimo di un giorno (D39): la stessa giornata, per esteso.
+      days: [{ day, listPriceCents: 3000, discountCents: 300, totalCents: 2700 }],
     });
     const held = await acquireHold(db(), dune.beachId, { spotId, day, promoCode: 'MARE10', idempotencyKey: key(), ttlSeconds: 600 });
     expect(held.quote.total).toBe(2700);

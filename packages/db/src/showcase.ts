@@ -337,7 +337,10 @@ export async function seedShowcase(adminUrl: string, signingSecret: string): Pro
       sequence.set(past, next);
       await client.query('UPDATE inventory_day SET day = $1 WHERE spot_id = $2 AND day = $3', [past, spots[code], day(soldOn)]);
       await client.query('UPDATE availability_proposal SET day = $1 WHERE contract_id = $2 AND day = $3', [past, contracts[code]?.id ?? null, day(soldOn)]);
-      await client.query('UPDATE booking SET code = $1 WHERE id = $2', [`OM-${past.slice(2).replaceAll('-', '')}-${String(next).padStart(3, '0')}`, sold.bookingId]);
+      const renamed = `OM-${past.slice(2).replaceAll('-', '')}-${String(next).padStart(3, '0')}`;
+      // The code lives on the group (D38): the group and its day change together.
+      await client.query('UPDATE booking_group SET code = $1 WHERE id = (SELECT group_id FROM booking WHERE id = $2)', [renamed, sold.bookingId]);
+      await client.query('UPDATE booking SET code = $1 WHERE id = $2', [renamed, sold.bookingId]);
       await publish(code, day(soldOn));
     }
     await closeDay(db, beachId, day(-1));

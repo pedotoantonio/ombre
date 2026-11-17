@@ -86,10 +86,10 @@ describe.skipIf(!testAdminUrl)('planner grid of a window', () => {
     expect(grid.spots.map((entry) => entry.code)).toEqual(['A05', 'A01', 'A02', 'A03', 'A04', 'A06']);
     const byCode = Object.fromEntries(grid.spots.map((entry) => [entry.code, entry]));
     expect(byCode.A01!.cells.map((cell) => cell.state)).toEqual(['booked', 'not_published']);
-    expect(byCode.A01!.cells[0]).toEqual({ day: today, state: 'booked', bookingCode, guestName: 'Riservato Griglia' });
+    expect(byCode.A01!.cells[0]).toEqual({ day: today, state: 'booked', bookingCode, guestName: 'Riservato Griglia', period: { from: today, to: today } });
     expect(byCode.A02!.cells[0]!.state).toBe('blocked');
     expect(byCode.A03!.cells[0]!.state).toBe('not_for_sale');
-    expect(byCode.A04!.cells[0]).toEqual({ day: today, state: 'free', bookingCode: null, guestName: null });
+    expect(byCode.A04!.cells[0]).toEqual({ day: today, state: 'free', bookingCode: null, guestName: null, period: null });
     // A hold is not a booking: the cell stays free until a sale really lands.
     expect(byCode.A06!.cells[0]!.state).toBe('free');
     expect(byCode.A01!).toMatchObject({ typeName: 'Ombrellone', typeMark: 'umbrella', rowNumber: 1 });
@@ -132,7 +132,7 @@ describe.skipIf(!testAdminUrl)('planner grid of a window', () => {
     const grid = (await json('GET', `/v1/manage/beaches/planner-altro/planner?from=${today}&to=${today}`, undefined, headers)).body as Grid;
     expect(grid.spots.map((entry) => entry.code)).toEqual(['A01', 'A02']);
     // The first club's sale never leaks into the second club's grid.
-    expect(grid.spots[0]!.cells[0]).toEqual({ day: today, state: 'free', bookingCode: null, guestName: null });
+    expect(grid.spots[0]!.cells[0]).toEqual({ day: today, state: 'free', bookingCode: null, guestName: null, period: null });
     expect((await json('GET', `/v1/manage/beaches/planner/planner?from=${today}&to=${today}`, undefined, headers)).status).toBe(403);
   });
 });

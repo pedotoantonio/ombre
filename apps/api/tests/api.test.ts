@@ -84,6 +84,8 @@ describe.skipIf(!testAdminUrl)('API /v1 on the demo beach club', () => {
     const beach = { slug: 'bagno-delle-dune', name: 'Bagno delle Dune', locality: 'Lido di Pomposa', timezone: 'Europe/Rome', demo: true, latitude: demoBeach.latitude, longitude: demoBeach.longitude, cover: null };
     expect((await search(`?day=${demoBeach.day}`)).body).toEqual({
       day: demoBeach.day,
+      // Il periodo minimo (D39): «al» predefinito uguale a «dal».
+      to: demoBeach.day,
       guests: 1,
       sharedOnly: false,
       currency: 'EUR',

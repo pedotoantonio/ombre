@@ -2,12 +2,12 @@ import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { can } from '@ombre/shared';
 import type { SpotMark } from '@ombre/shared';
 import { withActor, type Database } from './client';
-import { DomainError, zoneOrder, type SpotZone } from './inventory';
+import { DomainError, periodMaxDays, zoneOrder, type SpotZone } from './inventory';
 import type { Actor } from './manage';
 import { booking, inventoryDay, spot, spotType } from './schema';
 
-/** The planner never goes past a month per request (D33). */
-export const plannerMaxDays = 31;
+/** The planner never goes past a month per request (D33), the same cap as a period (D38). */
+export const plannerMaxDays = periodMaxDays;
 
 /**
  * State of one spot-day cell. In the model a booking is one spot for one day
@@ -19,9 +19,11 @@ export type PlannerCellState = 'not_published' | 'free' | 'blocked' | 'not_for_s
 export interface PlannerCell {
   day: string;
   state: PlannerCellState;
-  /** Only on a booked cell, and only with the bookings.read permission; null otherwise. */
+  /** Code of the GROUP (D38): adjacent cells of the same period share it. Only on a booked cell, and only with the bookings.read permission; null otherwise. */
   bookingCode: string | null;
   guestName: string | null;
+  /** The whole period of the group the cell belongs to, for the cell's title; null like bookingCode. */
+  period: { from: string; to: string } | null;
 }
 
 export interface PlannerSpot {
@@ -79,6 +81,7 @@ export function plannerGrid(db: Database, actor: Actor, input: { from: string; t
         day: inventoryDay.day,
         dayState: inventoryDay.state,
         bookingCode: booking.code,
+        bookingGroupId: booking.groupId,
         guestName: booking.guestName,
       })
       .from(spot)
@@ -88,6 +91,20 @@ export function plannerGrid(db: Database, actor: Actor, input: { from: string; t
       .leftJoin(booking, and(eq(booking.inventoryDayId, inventoryDay.id), inArray(booking.status, ['confirmed', 'completed'])))
       .where(and(eq(spot.retired, false), ...(input.zone ? [eq(spot.zone, input.zone)] : [])))
       .orderBy(zoneOrder, asc(spot.rowNumber), asc(spot.col), asc(inventoryDay.day));
+
+    // The period of each group seen in the window, read once: the title of a
+    // booked cell shows the whole dal–al even when it leaves the window (D38).
+    const groupIds = [...new Set(rows.flatMap((row) => (row.bookingGroupId ? [row.bookingGroupId] : [])))];
+    const periods = new Map<string, { from: string; to: string }>();
+    if (seeGuests && groupIds.length > 0) {
+      const spans = await tx
+        .select({ groupId: booking.groupId, from: sql<string>`min(${inventoryDay.day})::text`, to: sql<string>`max(${inventoryDay.day})::text` })
+        .from(booking)
+        .innerJoin(inventoryDay, eq(inventoryDay.id, booking.inventoryDayId))
+        .where(and(inArray(booking.groupId, groupIds), inArray(booking.status, ['confirmed', 'completed'])))
+        .groupBy(booking.groupId);
+      for (const span of spans) periods.set(span.groupId, { from: span.from, to: span.to });
+    }
 
     const spots: PlannerSpot[] = [];
     const bySpot = new Map<string, Map<string, PlannerCell>>();
@@ -110,10 +127,11 @@ export function plannerGrid(db: Database, actor: Actor, input: { from: string; t
         state,
         bookingCode: state === 'booked' && seeGuests ? row.bookingCode : null,
         guestName: state === 'booked' && seeGuests ? row.guestName : null,
+        period: state === 'booked' && seeGuests && row.bookingGroupId ? (periods.get(row.bookingGroupId) ?? null) : null,
       });
     }
     for (const entry of spots) {
-      entry.cells = days.map((day) => bySpot.get(entry.spotId)?.get(day) ?? { day, state: 'not_published', bookingCode: null, guestName: null });
+      entry.cells = days.map((day) => bySpot.get(entry.spotId)?.get(day) ?? { day, state: 'not_published', bookingCode: null, guestName: null, period: null });
     }
     return { from: input.from, to: input.to, days, spots };
   });

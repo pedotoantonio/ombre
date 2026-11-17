@@ -119,19 +119,19 @@ export function deleteExtraService(db: Database, actor: Actor, serviceId: string
   });
 }
 
-/** The snapshot of a booking as quote lines: frozen prices, live names, display order. */
-export async function bookingExtraLines(tx: Transaction, bookingId: string): Promise<ExtraLine[]> {
-  const grouped = await bookingExtraLinesByBooking(tx, [bookingId]);
-  return grouped.get(bookingId) ?? [];
+/** The snapshot of a booking group as quote lines: frozen prices, live names, display order. Extras belong to the group (D38). */
+export async function groupExtraLines(tx: Transaction, groupId: string): Promise<ExtraLine[]> {
+  const grouped = await extraLinesByGroup(tx, [groupId]);
+  return grouped.get(groupId) ?? [];
 }
 
-/** Like `bookingExtraLines`, for many bookings in one query (the day list of the front desk). */
-export async function bookingExtraLinesByBooking(tx: Transaction, bookingIds: string[]): Promise<Map<string, ExtraLine[]>> {
+/** Like `groupExtraLines`, for many groups in one query (the day list of the front desk). */
+export async function extraLinesByGroup(tx: Transaction, groupIds: string[]): Promise<Map<string, ExtraLine[]>> {
   const grouped = new Map<string, ExtraLine[]>();
-  if (bookingIds.length === 0) return grouped;
+  if (groupIds.length === 0) return grouped;
   const rows = await tx
     .select({
-      bookingId: bookingExtra.bookingId,
+      groupId: bookingExtra.groupId,
       serviceId: bookingExtra.serviceId,
       nameIt: extraService.nameIt,
       nameEn: extraService.nameEn,
@@ -140,7 +140,7 @@ export async function bookingExtraLinesByBooking(tx: Transaction, bookingIds: st
     })
     .from(bookingExtra)
     .innerJoin(extraService, eq(extraService.id, bookingExtra.serviceId))
-    .where(inArray(bookingExtra.bookingId, bookingIds))
+    .where(inArray(bookingExtra.groupId, groupIds))
     .orderBy(...byDisplayOrder);
   for (const row of rows) {
     const line: ExtraLine = {
@@ -150,9 +150,9 @@ export async function bookingExtraLinesByBooking(tx: Transaction, bookingIds: st
       unitPriceCents: row.unitPriceCents,
       subtotalCents: row.unitPriceCents * row.quantity,
     };
-    const lines = grouped.get(row.bookingId);
+    const lines = grouped.get(row.groupId);
     if (lines) lines.push(line);
-    else grouped.set(row.bookingId, [line]);
+    else grouped.set(row.groupId, [line]);
   }
   return grouped;
 }

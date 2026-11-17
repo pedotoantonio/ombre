@@ -135,6 +135,8 @@ describe.skipIf(!testAdminUrl)('the card of one spot on one day', () => {
       paidCents: 1000,
       remainingCents: 2000,
       paymentState: 'partial',
+      // Il gruppo di un giorno (D38): stesso codice, periodo di una giornata, stessi importi.
+      group: { code: bookingCode, from: h.today, to: h.today, days: 1, totalCents: 3000, paidCents: 1000, remainingCents: 2000, paymentState: 'partial' },
     });
   });
 

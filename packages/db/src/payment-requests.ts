@@ -1,15 +1,17 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
-import { and, desc, eq, sql } from 'drizzle-orm';
-import { paidCentsOf, paymentStateOf, type PaymentState } from './bookings';
+import { and, asc, desc, eq, sql } from 'drizzle-orm';
+import { lockGroup, paidCentsOfGroup, paymentStateOf, type PaymentState } from './bookings';
 import { withActor, withBeach, type Database, type Transaction } from './client';
 import { DomainError } from './inventory';
 import type { Actor } from './manage';
-import { auditEvent, beach, booking, inventoryDay, notification, payment, paymentRequest, spot } from './schema';
+import { auditEvent, beach, booking, bookingGroup, inventoryDay, notification, payment, paymentRequest, spot } from './schema';
 
-// Payment requests (deposit or balance, spec §4.3, D31). The public token is
-// `{id}.{signature}` — signed with OMBRE_SIGNING_SECRET like the passes, never
-// stored, verified in constant time. A pending request past its expiry becomes
-// `expired` lazily, at the first read that meets it: no worker job needed.
+// Payment requests (deposit or balance, spec §4.3, D31 — at GROUP level since
+// D38: one request asks for part of the residual of the whole period). The
+// public token is `{id}.{signature}` — signed with OMBRE_SIGNING_SECRET like
+// the passes, never stored, verified in constant time. A pending request past
+// its expiry becomes `expired` lazily, at the first read that meets it: no
+// worker job needed.
 
 function sign(secret: string, id: string): string {
   return createHmac('sha256', secret).update(`payment_request:${id}`).digest('base64url');
@@ -34,11 +36,37 @@ async function expireLazily(tx: Transaction, requestId: string): Promise<void> {
     .where(and(eq(paymentRequest.id, requestId), eq(paymentRequest.status, 'pending'), sql`${paymentRequest.expiresAt} <= now()`));
 }
 
+/** The days of one group with beach and spot data, first day first: what every request reads. */
+async function groupDetail(tx: Transaction, code: string) {
+  const [group] = await tx.select().from(bookingGroup).where(eq(bookingGroup.code, code.toUpperCase()));
+  if (!group) throw new DomainError('not_found', 'Booking not found');
+  const members = await tx
+    .select({ booking, day: inventoryDay.day, spotCode: spot.code, beachName: beach.name, timezone: beach.timezone })
+    .from(booking)
+    .innerJoin(inventoryDay, eq(inventoryDay.id, booking.inventoryDayId))
+    .innerJoin(spot, eq(spot.id, inventoryDay.spotId))
+    .innerJoin(beach, eq(beach.id, booking.beachId))
+    .where(eq(booking.groupId, group.id))
+    .orderBy(asc(inventoryDay.day));
+  if (members.length === 0) throw new DomainError('not_found', 'Booking not found');
+  const live = members.filter((member) => member.booking.status !== 'cancelled');
+  const counted = live.length > 0 ? live : members;
+  return {
+    group,
+    members,
+    lead: members[0]!,
+    from: members[0]!.day,
+    to: members[members.length - 1]!.day,
+    alive: members.some((member) => member.booking.status === 'confirmed' || member.booking.status === 'completed'),
+    totalCents: counted.reduce((sum, member) => sum + member.booking.totalCents, 0),
+  };
+}
+
 export interface PayRequestMessageData {
   locale: 'it' | 'en';
   guestName: string;
   beachName: string;
-  /** Booked day, YYYY-MM-DD, plus the beach club's time zone to write the deadline. */
+  /** First booked day, YYYY-MM-DD, plus the beach club's time zone to write the deadline. */
   day: string;
   timezone: string;
   spotCode: string;
@@ -65,9 +93,10 @@ export interface CreatedPaymentRequest {
 }
 
 /**
- * Creates a payment request for a confirmed booking: amount within the residual
- * at creation time, expiry of 72 hours by default but NEVER past the end of the
- * booked day in the beach club's time zone (truncated when the day is close).
+ * Creates a payment request for a confirmed booking group: amount within the
+ * residual of the GROUP at creation time, expiry of 72 hours by default but
+ * NEVER past the end of the LAST booked day in the beach club's time zone
+ * (truncated when that end is close).
  * With an email on the booking, a `queued` notification row carries the full
  * message; without one, the text stays readable from the request detail.
  */
@@ -80,28 +109,25 @@ export function createPaymentRequest(
 ): Promise<CreatedPaymentRequest> {
   return withActor(db, actor.beachId, actor.userId, async (tx) => {
     if (!Number.isInteger(input.amountCents) || input.amountCents <= 0) throw new DomainError('invalid_state', 'The amount must be a positive amount of cents');
-    const [row] = await tx
-      .select({ booking, day: inventoryDay.day, spotCode: spot.code, beachName: beach.name, timezone: beach.timezone })
-      .from(booking)
-      .innerJoin(inventoryDay, eq(inventoryDay.id, booking.inventoryDayId))
-      .innerJoin(spot, eq(spot.id, inventoryDay.spotId))
-      .innerJoin(beach, eq(beach.id, booking.beachId))
-      .where(eq(booking.code, input.code.toUpperCase()));
-    if (!row) throw new DomainError('not_found', 'Booking not found');
-    const [reserved] = await tx.select().from(booking).where(eq(booking.id, row.booking.id)).for('update');
-    if (!reserved || reserved.status !== 'confirmed') throw new DomainError('invalid_state', 'Only a confirmed booking can receive a payment request');
+    const detail = await groupDetail(tx, input.code);
+    // Lock order: group → payment → payment_request, everywhere.
+    await lockGroup(tx, detail.group.id);
+    if (!detail.members.some((member) => member.booking.status === 'confirmed')) {
+      throw new DomainError('invalid_state', 'Only a confirmed booking can receive a payment request');
+    }
+    const reserved = detail.lead.booking;
 
-    const residual = reserved.totalCents - (await paidCentsOf(tx, reserved.id));
+    const residual = detail.totalCents - (await paidCentsOfGroup(tx, detail.group.id));
     if (input.amountCents > residual) throw new DomainError('invalid_state', 'The amount exceeds the outstanding balance');
 
-    // 72 hours by default, truncated to the end of the booked day in the beach
-    // club's time zone; once that end has passed, no request can be created.
+    // 72 hours by default, truncated to the end of the LAST booked day in the
+    // beach club's time zone; once that end has passed, no request can be created.
     const hours = input.expiresInHours ?? 72;
     // A raw execute hands timestamps back as text: the instant travels as epoch seconds.
     const [deadline] = (
       await tx.execute<{ expires_epoch: string; day_over: boolean }>(sql`
-        select extract(epoch from least(now() + make_interval(hours => ${hours}::int), ((${row.day}::date + 1)::timestamp at time zone ${row.timezone})))::text as expires_epoch,
-               ((${row.day}::date + 1)::timestamp at time zone ${row.timezone}) <= now() as day_over
+        select extract(epoch from least(now() + make_interval(hours => ${hours}::int), ((${detail.to}::date + 1)::timestamp at time zone ${detail.lead.timezone})))::text as expires_epoch,
+               ((${detail.to}::date + 1)::timestamp at time zone ${detail.lead.timezone}) <= now() as day_over
       `)
     ).rows;
     if (!deadline || deadline.day_over) throw new DomainError('invalid_state', 'The booked day is over: nothing can be requested any more');
@@ -111,6 +137,7 @@ export function createPaymentRequest(
       .values({
         beachId: actor.beachId,
         bookingId: reserved.id,
+        groupId: detail.group.id,
         amountCents: input.amountCents,
         expiresAt: new Date(Number(deadline.expires_epoch) * 1000),
         note: input.note?.trim() || null,
@@ -123,10 +150,10 @@ export function createPaymentRequest(
     const message = compose({
       locale: reserved.locale === 'en' ? 'en' : 'it',
       guestName: reserved.guestName,
-      beachName: row.beachName,
-      day: row.day,
-      timezone: row.timezone,
-      spotCode: row.spotCode,
+      beachName: detail.lead.beachName,
+      day: detail.from,
+      timezone: detail.lead.timezone,
+      spotCode: detail.lead.spotCode,
       bookingCode: reserved.code,
       amountCents: created.amountCents,
       token,
@@ -173,7 +200,7 @@ export function cancelPaymentRequest(db: Database, actor: Actor, requestId: stri
     if (!found) throw new DomainError('not_found', 'Payment request not found');
     if (found.status !== 'pending') throw new DomainError('invalid_state', 'Only a pending request can be cancelled');
     await tx.update(paymentRequest).set({ status: 'cancelled', closedAt: sql`now()` }).where(eq(paymentRequest.id, requestId));
-    const [named] = await tx.select({ code: booking.code }).from(booking).where(eq(booking.id, found.bookingId));
+    const [named] = await tx.select({ code: bookingGroup.code }).from(bookingGroup).where(eq(bookingGroup.id, found.groupId));
     await tx.insert(auditEvent).values({
       beachId: actor.beachId,
       actorUserId: actor.userId,
@@ -204,7 +231,10 @@ export interface BookingPaymentRequests {
   locale: 'it' | 'en';
   beachName: string;
   timezone: string;
+  /** First day of the group; `from`–`to` carry the whole period (D38). */
   day: string;
+  from: string;
+  to: string;
   spotCode: string;
   totalCents: number;
   paidCents: number;
@@ -213,38 +243,34 @@ export interface BookingPaymentRequests {
   requests: PaymentRequestRow[];
 }
 
-/** Every request of one booking, newest first, with the data to compose the text by hand. */
+/** Every request of one booking group, newest first, with the data to compose the text by hand. */
 export function listPaymentRequests(db: Database, actor: Actor, code: string, secret: string): Promise<BookingPaymentRequests> {
   return withActor(db, actor.beachId, actor.userId, async (tx) => {
-    const [row] = await tx
-      .select({ booking, day: inventoryDay.day, spotCode: spot.code, beachName: beach.name, timezone: beach.timezone })
-      .from(booking)
-      .innerJoin(inventoryDay, eq(inventoryDay.id, booking.inventoryDayId))
-      .innerJoin(spot, eq(spot.id, inventoryDay.spotId))
-      .innerJoin(beach, eq(beach.id, booking.beachId))
-      .where(eq(booking.code, code.toUpperCase()));
-    if (!row) throw new DomainError('not_found', 'Booking not found');
+    const detail = await groupDetail(tx, code);
+    const reserved = detail.lead.booking;
     // Pending requests past their expiry flip to expired before being listed.
     await tx
       .update(paymentRequest)
       .set({ status: 'expired', closedAt: sql`now()` })
-      .where(and(eq(paymentRequest.bookingId, row.booking.id), eq(paymentRequest.status, 'pending'), sql`${paymentRequest.expiresAt} <= now()`));
-    const rows = await tx.select().from(paymentRequest).where(eq(paymentRequest.bookingId, row.booking.id)).orderBy(desc(paymentRequest.createdAt));
-    const paidCents = await paidCentsOf(tx, row.booking.id);
+      .where(and(eq(paymentRequest.groupId, detail.group.id), eq(paymentRequest.status, 'pending'), sql`${paymentRequest.expiresAt} <= now()`));
+    const rows = await tx.select().from(paymentRequest).where(eq(paymentRequest.groupId, detail.group.id)).orderBy(desc(paymentRequest.createdAt));
+    const paidCents = await paidCentsOfGroup(tx, detail.group.id);
     return {
-      bookingCode: row.booking.code,
-      guestName: row.booking.guestName,
-      guestEmail: row.booking.guestEmail,
-      guestPhone: row.booking.guestPhone,
-      locale: row.booking.locale === 'en' ? 'en' : 'it',
-      beachName: row.beachName,
-      timezone: row.timezone,
-      day: row.day,
-      spotCode: row.spotCode,
-      totalCents: row.booking.totalCents,
+      bookingCode: detail.group.code,
+      guestName: reserved.guestName,
+      guestEmail: reserved.guestEmail,
+      guestPhone: reserved.guestPhone,
+      locale: reserved.locale === 'en' ? 'en' : 'it',
+      beachName: detail.lead.beachName,
+      timezone: detail.lead.timezone,
+      day: detail.from,
+      from: detail.from,
+      to: detail.to,
+      spotCode: detail.lead.spotCode,
+      totalCents: detail.totalCents,
       paidCents,
-      remainingCents: Math.max(0, row.booking.totalCents - paidCents),
-      paymentState: paymentStateOf(row.booking.totalCents, paidCents),
+      remainingCents: Math.max(0, detail.totalCents - paidCents),
+      paymentState: paymentStateOf(detail.totalCents, paidCents),
       requests: rows.map((entry) => ({
         requestId: entry.id,
         amountCents: entry.amountCents,
@@ -274,11 +300,15 @@ async function locateByToken(db: Database, token: string, secret: string): Promi
 export interface PublicPayRequest {
   status: 'pending';
   beach: { slug: string; name: string };
+  /** First booked day of the group. */
   day: string;
   spotCode: string;
   amountCents: number;
   expiresAt: Date;
 }
+
+/** True while the group behind the request still has a confirmed or completed day. */
+const groupAlive = sql<boolean>`exists (select 1 from booking b where b.group_id = ${paymentRequest.groupId} and b.status in ('confirmed', 'completed'))`;
 
 /**
  * What the public /paga/{token} page shows: the essential summary only. Expired,
@@ -291,14 +321,14 @@ export async function readPayRequest(db: Database, token: string, secret: string
   await withBeach(db, beachId, (tx) => expireLazily(tx, requestId));
   return withBeach(db, beachId, async (tx) => {
     const [row] = await tx
-      .select({ request: paymentRequest, bookingStatus: booking.status, day: inventoryDay.day, spotCode: spot.code, beachName: beach.name, beachSlug: beach.slug })
+      .select({ request: paymentRequest, alive: groupAlive, day: inventoryDay.day, spotCode: spot.code, beachName: beach.name, beachSlug: beach.slug })
       .from(paymentRequest)
       .innerJoin(booking, eq(booking.id, paymentRequest.bookingId))
       .innerJoin(inventoryDay, eq(inventoryDay.id, booking.inventoryDayId))
       .innerJoin(spot, eq(spot.id, inventoryDay.spotId))
       .innerJoin(beach, eq(beach.id, paymentRequest.beachId))
       .where(eq(paymentRequest.id, requestId));
-    if (!row || row.request.status !== 'pending' || (row.bookingStatus !== 'confirmed' && row.bookingStatus !== 'completed')) throw unavailable();
+    if (!row || row.request.status !== 'pending' || !row.alive) throw unavailable();
     return {
       status: 'pending',
       beach: { slug: row.beachSlug, name: row.beachName },
@@ -313,9 +343,9 @@ export async function readPayRequest(db: Database, token: string, secret: string
 /**
  * Opens the payment of a request with the test provider, exactly like the
  * checkout: a reference the sandbox will answer about through the webhook. The
- * residual is checked again here: when other collections reduced it below the
- * amount, the payment is refused with a clear message (the token is genuine).
- * Called twice, it returns the same open payment.
+ * residual of the GROUP is checked again here: when other collections reduced it
+ * below the amount, the payment is refused with a clear message (the token is
+ * genuine). Called twice, it returns the same open payment.
  */
 export async function startPayRequestPayment(db: Database, token: string, secret: string): Promise<{ provider: string; reference: string; amountCents: number }> {
   const { requestId, beachId } = await locateByToken(db, token, secret);
@@ -324,13 +354,16 @@ export async function startPayRequestPayment(db: Database, token: string, secret
   return withBeach(db, beachId, async (tx) => {
     const [found] = await tx.select().from(paymentRequest).where(eq(paymentRequest.id, requestId));
     if (!found || found.status !== 'pending') throw unavailable();
-    // Lock order: booking → payment → payment_request (as the webhook does).
-    const [reserved] = await tx.select().from(booking).where(eq(booking.id, found.bookingId)).for('update');
-    if (!reserved || (reserved.status !== 'confirmed' && reserved.status !== 'completed')) throw unavailable();
+    // Lock order: group → payment_request (as the webhook does).
+    await lockGroup(tx, found.groupId);
+    const members = await tx.select().from(booking).where(eq(booking.groupId, found.groupId));
+    if (!members.some((member) => member.status === 'confirmed' || member.status === 'completed')) throw unavailable();
     const [request] = await tx.select().from(paymentRequest).where(eq(paymentRequest.id, requestId)).for('update');
     if (!request || request.status !== 'pending') throw unavailable();
 
-    const residual = reserved.totalCents - (await paidCentsOf(tx, reserved.id));
+    const live = members.filter((member) => member.status !== 'cancelled');
+    const totalCents = (live.length > 0 ? live : members).reduce((sum, member) => sum + member.totalCents, 0);
+    const residual = totalCents - (await paidCentsOfGroup(tx, found.groupId));
     if (request.amountCents > residual) throw new DomainError('request_not_payable', 'This request can no longer be paid: the balance has changed');
 
     const [open] = await tx
@@ -342,7 +375,8 @@ export async function startPayRequestPayment(db: Database, token: string, secret
     const reference = `sbx_${randomBytes(12).toString('hex')}`;
     await tx.insert(payment).values({
       beachId,
-      bookingId: reserved.id,
+      bookingId: found.bookingId,
+      groupId: found.groupId,
       provider: 'sandbox',
       providerRef: reference,
       status: 'in_progress',

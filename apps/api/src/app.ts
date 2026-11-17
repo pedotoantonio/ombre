@@ -211,10 +211,13 @@ const extrasRequestSchema = z
   .max(20)
   .refine((extras) => new Set(extras.map((entry) => entry.serviceId)).size === extras.length)
   .optional();
+// Since D39 a quote or a hold may cover a dal–al period: `to` is the last day,
+// equal to `day` when left out; at most 31 consecutive days (checked in the domain).
 const dayRequestSchema = z.object({
   beachSlug: slugSchema,
   spotId: z.uuid(),
   day: daySchema,
+  to: daySchema.optional(),
   promoCode: z.string().trim().min(1).max(40).optional(),
   extras: extrasRequestSchema,
 });
@@ -281,6 +284,8 @@ const guestPhoneSchema = z.string().trim().min(3).max(40).regex(/^[+0-9 ()./-]+$
 const deskSchema = z.object({
   spotId: z.uuid(),
   day: daySchema,
+  /** Last day of the period (D39): the desk books dal–al like the website; one day when left out. */
+  to: daySchema.optional(),
   guestName: z.string().trim().min(1).max(120),
   guestEmail: z.email().max(200).nullable().optional(),
   guestPhone: guestPhoneSchema.nullable().optional(),
@@ -428,15 +433,16 @@ const updateSpotSchema = z
   .refine((change) => Object.values(change).some((value) => value !== undefined));
 const rowRentalSchema = z.object({ zone: zoneSchema, rowNumber: z.number().int().min(1).max(200), rentalType: rentalTypeSchema.nullable(), rentalNotes: rentalNotesSchema.nullable() });
 const retiredSchema = z.object({ retired: z.boolean() });
-// Guests and shared days only mean something on a given day.
+// Guests, shared days and a period only mean something on a given day.
 const beachSearchSchema = z
   .object({
     day: daySchema.optional(),
+    to: daySchema.optional(),
     guests: z.string().regex(/^\d{1,2}$/).transform(Number).pipe(z.number().int().min(1).max(20)).optional(),
     locality: z.string().trim().min(1).max(80).optional(),
     sharedOnly: z.enum(['true', 'false']).optional(),
   })
-  .refine((search) => search.day !== undefined || (search.guests === undefined && search.sharedOnly === undefined));
+  .refine((search) => search.day !== undefined || (search.guests === undefined && search.sharedOnly === undefined && search.to === undefined));
 
 function parse<T>(schema: z.ZodType<T>, value: unknown, what: string): T {
   const result = schema.safeParse(value);
@@ -460,7 +466,7 @@ function money(quote: DayQuote) {
  * comprehensive (list − discount + extras); `extras` lists the lines.
  */
 function purchaseMoney(quote: PurchaseQuote) {
-  return { ...money(quote), extrasCents: quote.extrasCents, extras: quote.extras };
+  return { ...money(quote), extrasCents: quote.extrasCents, extras: quote.extras, ...(quote.days ? { days: quote.days } : {}) };
 }
 
 function publicBeach(beach: PublicBeach) {
@@ -717,19 +723,21 @@ export function createApp(options: AppOptions): Hono {
     return c.json(await checkAccess(db, actor, parse(accessSchema, await body(c.req.raw), 'request'), signingSecret), 201);
   });
 
-  route({ method: 'post', path: '/v1/manage/beaches/:slug/desk-bookings', summary: 'Book a spot at the front desk, paid there, optionally under a hotel convention and with extra services', tag: 'Beach club', auth: 'session', request: deskSchema, success: 201, errors: [400, 401, 403, 404, 409, 422] }, async (c) => {
+  route({ method: 'post', path: '/v1/manage/beaches/:slug/desk-bookings', summary: 'Book a spot at the front desk for a day or a dal–al period, paid there or «da incassare», optionally under a hotel convention and with extra services', tag: 'Beach club', auth: 'session', request: deskSchema, success: 201, errors: [400, 401, 403, 404, 409, 422] }, async (c) => {
     const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'bookings.create');
     return c.json(await deskBooking(db, actor, parse(deskSchema, await body(c.req.raw), 'request'), signingSecret), 201);
   });
 
-  route({ method: 'post', path: '/v1/manage/beaches/:slug/bookings/:code/move', summary: 'Move a confirmed booking to another spot of the same day', tag: 'Beach club', auth: 'session', request: z.object({ spotId: z.uuid() }), success: 204, errors: [400, 401, 403, 404, 409] }, async (c) => {
+  // «Sposta» stays per day (D38): a group of several days names the day to move.
+  const moveSchema = z.object({ spotId: z.uuid(), day: daySchema.optional() });
+  route({ method: 'post', path: '/v1/manage/beaches/:slug/bookings/:code/move', summary: 'Move one day of a confirmed booking to another spot of the same day', tag: 'Beach club', auth: 'session', request: moveSchema, success: 204, errors: [400, 401, 403, 404, 409] }, async (c) => {
     const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'bookings.move');
-    const { spotId } = parse(z.object({ spotId: z.uuid() }), await body(c.req.raw), 'request');
-    await moveBooking(db, actor, { code: parse(bookingCodeSchema, c.req.param('code'), 'booking code'), spotId });
+    const { spotId, day } = parse(moveSchema, await body(c.req.raw), 'request');
+    await moveBooking(db, actor, { code: parse(bookingCodeSchema, c.req.param('code'), 'booking code'), spotId, day });
     return c.body(null, 204);
   });
 
-  route({ method: 'post', path: '/v1/manage/beaches/:slug/bookings/:code/cancel', summary: 'Cancel a confirmed booking and record its refund', tag: 'Beach club', auth: 'session', request: z.object({ reason: z.string().trim().min(3).max(200) }), success: 204, errors: [400, 401, 403, 404, 409] }, async (c) => {
+  route({ method: 'post', path: '/v1/manage/beaches/:slug/bookings/:code/cancel', summary: 'Cancel the whole period of a confirmed booking and record its refund', tag: 'Beach club', auth: 'session', request: z.object({ reason: z.string().trim().min(3).max(200) }), success: 204, errors: [400, 401, 403, 404, 409] }, async (c) => {
     const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'bookings.cancel');
     const { reason } = parse(z.object({ reason: z.string().trim().min(3).max(200) }), await body(c.req.raw), 'request');
     await cancelByBeachClub(db, actor, { code: parse(bookingCodeSchema, c.req.param('code'), 'booking code'), reason });
@@ -1252,26 +1260,29 @@ export function createApp(options: AppOptions): Hono {
     {
       method: 'get',
       path: '/v1/beaches',
-      summary: 'Active beach clubs; with a day, the free spots and the lowest price of each',
+      summary: 'Active beach clubs; with a day or a dal–al period, the spots free every day and the lowest total of each',
       tag: 'Public',
       auth: 'none',
       optionalQuery: {
         day: 'YYYY-MM-DD. Adds freeSpots and priceFromCents to every beach club',
+        to: 'YYYY-MM-DD, last day of the period. Needs day; equal to day when left out, at most 31 days',
         guests: 'People who must fit under one spot, 1 to 20. Needs day; 1 when left out',
         locality: 'Text contained in the locality or in the name',
         sharedOnly: 'true to count only shared days. Needs day',
       },
       success: 200,
-      errors: [400],
+      errors: [400, 409],
     },
     async (c) => {
       const search = parse(beachSearchSchema, c.req.query(), 'search');
       if (!search.day) return c.json({ beaches: await Promise.all((await listActiveBeaches(db, search.locality)).map(listedBeach)) });
       const guests = search.guests ?? 1;
       const sharedOnly = search.sharedOnly === 'true';
-      const offers = await searchBeaches(db, { day: search.day, guests, sharedOnly, place: search.locality });
+      const to = search.to ?? search.day;
+      const offers = await searchBeaches(db, { day: search.day, to, guests, sharedOnly, place: search.locality });
       return c.json({
         day: search.day,
+        to,
         guests,
         sharedOnly,
         currency: 'EUR',
@@ -1302,6 +1313,8 @@ export function createApp(options: AppOptions): Hono {
       expiresAt: held.expiresAt.toISOString(),
       beach: publicBeach(beach),
       day: held.day,
+      from: held.from,
+      to: held.to,
       spot: { code: held.spotCode, rowNumber: held.rowNumber, umbrellas: held.umbrellas, sunbeds: held.sunbeds },
       ...purchaseMoney(held.quote),
     });
@@ -1311,21 +1324,26 @@ export function createApp(options: AppOptions): Hono {
     {
       method: 'get',
       path: '/v1/beaches/:slug/availability',
-      summary: 'Free spots of a day with prices, every spot with its cell and type for the map, and the drawing of the beach',
+      summary: 'Spots free on every day of a dal–al period with total prices, every spot with its cell and type for the map, and the drawing of the beach',
       tag: 'Public',
       auth: 'none',
-      query: { day: 'YYYY-MM-DD' },
-      optionalQuery: { guests: 'People who must fit under one spot, 1 to 20. Adds suggestedSpotId to the answer' },
+      query: { day: 'YYYY-MM-DD, first day of the period' },
+      optionalQuery: {
+        to: 'YYYY-MM-DD, last day of the period; equal to day when left out, at most 31 days',
+        guests: 'People who must fit under one spot, 1 to 20. Adds suggestedSpotId to the answer',
+      },
       success: 200,
-      errors: [400, 404],
+      errors: [400, 404, 409],
     },
     async (c) => {
       const slug = parse(slugSchema, c.req.param('slug'), 'beach club');
       const day = parse(daySchema, c.req.query('day'), 'day');
+      const toGiven = c.req.query('to');
+      const to = toGiven === undefined ? day : parse(daySchema, toGiven, 'end day');
       const guests = parse(guestsQuerySchema, c.req.query('guests'), 'guests');
       const beach = await beachBySlug(slug);
       // One reading for both lists, so that they can never disagree.
-      const layout = await listDayMap(db, beach.id, day);
+      const layout = await listDayMap(db, beach.id, day, to);
       const { seaSide, elements, ...gaps } = await getPublicCanvas(db, beach.id);
       // The suggestion (spec §3.3) only exists when the party size is known, and it is
       // the sole management-flavoured addition the public ever receives: an identifier.
@@ -1333,6 +1351,7 @@ export function createApp(options: AppOptions): Hono {
       return c.json({
         beach: publicBeach(beach),
         day,
+        to,
         currency: 'EUR',
         // The drawing: side of the sea, corridor rows between the zones, walkways and other elements.
         seaSide,
@@ -1345,14 +1364,14 @@ export function createApp(options: AppOptions): Hono {
     },
   );
 
-  route({ method: 'post', path: '/v1/quotes', summary: 'Price of a day, with the chosen extras per line, as the server computes it', tag: 'Booking', auth: 'none', request: dayRequestSchema, success: 200, errors: [400, 404, 409, 422, 429] }, async (c) => {
+  route({ method: 'post', path: '/v1/quotes', summary: 'Price of a day or of a dal–al period, with the chosen extras per line, as the server computes it', tag: 'Booking', auth: 'none', request: dayRequestSchema, success: 200, errors: [400, 404, 409, 422, 429] }, async (c) => {
     const request = parse(dayRequestSchema, await body(c.req.raw), 'request');
     const beach = await beachBySlug(request.beachSlug);
     const quote = await quoteSpot(db, beach.id, request);
-    return c.json({ beachSlug: beach.slug, spotId: request.spotId, day: request.day, ...purchaseMoney(quote) });
+    return c.json({ beachSlug: beach.slug, spotId: request.spotId, day: request.day, to: request.to ?? request.day, ...purchaseMoney(quote) });
   });
 
-  route({ method: 'post', path: '/v1/holds', summary: 'Hold a spot for a limited time', tag: 'Booking', auth: 'none', request: dayRequestSchema, headers: { 'Idempotency-Key': 'Chosen by the client: the same key returns the same hold' }, success: 201, errors: [400, 404, 409, 422, 429] }, async (c) => {
+  route({ method: 'post', path: '/v1/holds', summary: 'Hold a spot for a limited time, for a day or a whole dal–al period, all or nothing', tag: 'Booking', auth: 'none', request: dayRequestSchema, headers: { 'Idempotency-Key': 'Chosen by the client: the same key returns the same hold' }, success: 201, errors: [400, 404, 409, 422, 429] }, async (c) => {
     const header = c.req.header('Idempotency-Key');
     if (!header) throw new HttpError(400, 'idempotency_key_required', 'The Idempotency-Key header is required');
     const idempotencyKey = parse(idempotencyKeySchema, header, 'Idempotency-Key header');
@@ -1367,6 +1386,8 @@ export function createApp(options: AppOptions): Hono {
         beachSlug: beach.slug,
         spotId: request.spotId,
         day: request.day,
+        from: held.from,
+        to: held.to,
         ...purchaseMoney(held.quote),
       },
       held.replayed ? 200 : 201,

@@ -37,12 +37,16 @@ describe('API contract', () => {
     expect(JSON.stringify(hold.requestBody)).toContain('beachSlug');
     expect(Object.keys(hold.responses)).toEqual(expect.arrayContaining(['201', '409', '429']));
 
-    // The search filters may be left out; the day of an availability request may not.
+    // The search filters may be left out, the period (dal–al, D39) with them; the
+    // first day of an availability request may not.
     const searchParameters = document.paths['/v1/beaches']!.get!.parameters;
-    expect(searchParameters.map((parameter) => parameter.name)).toEqual(['day', 'guests', 'locality', 'sharedOnly']);
+    expect(searchParameters.map((parameter) => parameter.name)).toEqual(['day', 'to', 'guests', 'locality', 'sharedOnly']);
     expect(searchParameters.every((parameter) => parameter.in === 'query' && !parameter.required)).toBe(true);
     expect(document.paths['/v1/beaches/{slug}/availability']!.get!.parameters).toEqual(
-      expect.arrayContaining([expect.objectContaining({ name: 'day', in: 'query', required: true })]),
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'day', in: 'query', required: true }),
+        expect.objectContaining({ name: 'to', in: 'query', required: false }),
+      ]),
     );
   });
 
