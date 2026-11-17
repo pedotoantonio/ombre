@@ -966,6 +966,34 @@ export async function BeachLayoutView({ locale, beachSlug, query }: { locale: Lo
                     </form>
                   </div>
 
+                  {/* Bulk generation of rows (spec §4, D34): one prefix, progressive numbering. */}
+                  <div className="panel" id="aggiungi-file">
+                    <h2>{l.addRowsTitle}</h2>
+                    <p className="prose">{l.addRowsLead}</p>
+                    <form method="post" action="/azioni/spiaggia-file" className="form-row">
+                      <Hidden values={common} />
+                      <ZoneSelect locale={locale} id="file-zona" />
+                      <div className="field">
+                        <label htmlFor="file-prefisso">{l.prefix}</label>
+                        <input id="file-prefisso" name="prefix" maxLength={4} pattern="[A-Za-z]{1,4}" autoComplete="off" required />
+                      </div>
+                      <div className="field">
+                        <label htmlFor="file-quante">{l.rowsCount}</label>
+                        <input id="file-quante" name="rows" type="number" inputMode="numeric" min={1} max={10} required />
+                      </div>
+                      <div className="field">
+                        <label htmlFor="file-per-fila">{l.perRowCount}</label>
+                        <input id="file-per-fila" name="perRow" type="number" inputMode="numeric" min={1} max={50} required />
+                      </div>
+                      <TypeSelect locale={locale} id="file-tipo" types={types} />
+                      <EquipmentFields locale={locale} prefix="file" />
+                      <p className="field__hint">{l.typeDefaultsHint}</p>
+                      <button className="button button--secondary" type="submit">
+                        {l.addRows}
+                      </button>
+                    </form>
+                  </div>
+
                   <div className="panel" id="aggiungi-postazione">
                     <h2>{l.addSpotTitle}</h2>
                     <p className="prose">{l.addSpotLead}</p>

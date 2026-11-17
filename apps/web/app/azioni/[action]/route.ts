@@ -46,12 +46,13 @@ async function layoutAct(
   method: string,
   body: unknown,
   errorMap: Record<string, string> = {},
+  okMessage?: (data: unknown) => string,
 ): Promise<Outcome> {
   const beach = form('beach');
   if (!slugPattern.test(beach)) return bad();
   const result = await apiCall<unknown>(method, `/v1/manage/beaches/${beach}/layout${path}`, { body, token: cookieToken(request) });
   const back = beachLayoutPath(lang, beach);
-  if (result.ok) return { to: back, ok: '1' };
+  if (result.ok) return { to: back, ok: okMessage ? okMessage(result.data) : '1' };
   if (result.status === 401) return { to: accountPath(lang, 'signIn') };
   const code = result.status === 0 ? 'unavailable' : result.code;
   return { to: back, err: errorMap[code] ?? code };
@@ -435,6 +436,33 @@ const actions: Record<string, (request: Request, form: Form, lang: Locale) => Pr
       ...(optionalNumber(form('sunbeds')) === undefined ? {} : { sunbeds: optionalNumber(form('sunbeds')) }),
       ...(optionalNumber(form('guests')) === undefined ? {} : { maxGuests: optionalNumber(form('guests')) }),
     }),
+  // Several whole rows in one transaction (spec §4, D34): the outcome carries the counts
+  // and the code range; a 409 code collision comes back in words, with nothing created.
+  'spiaggia-file': async (request, form, lang) => {
+    const { getDictionary, config } = await import('@ombre/shared');
+    return layoutAct(
+      request,
+      form,
+      lang,
+      '/rows/bulk',
+      'POST',
+      {
+        zone: form('zone'),
+        prefix: form('prefix').trim().toUpperCase(),
+        rows: wholeNumber(form('rows')),
+        perRow: wholeNumber(form('perRow')),
+        ...(uuidPattern.test(form('type')) ? { typeId: form('type') } : {}),
+        ...(optionalNumber(form('umbrellas')) === undefined ? {} : { umbrellas: optionalNumber(form('umbrellas')) }),
+        ...(optionalNumber(form('sunbeds')) === undefined ? {} : { sunbeds: optionalNumber(form('sunbeds')) }),
+        ...(optionalNumber(form('guests')) === undefined ? {} : { maxGuests: optionalNumber(form('guests')) }),
+      },
+      { invalid_state: 'row_codes_taken' },
+      (data) => {
+        const made = data as { rowNumbers: number[]; spotIds: string[]; firstCode: string; lastCode: string };
+        return getDictionary(lang, config.brandName).layout.bulkDone(made.rowNumbers.length, made.spotIds.length, made.firstCode, made.lastCode);
+      },
+    );
+  },
   'spiaggia-postazione': (request, form, lang) =>
     layoutAct(request, form, lang, '/spots', 'POST', {
       zone: form('zone'),

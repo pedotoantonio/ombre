@@ -200,6 +200,7 @@ export function makeEn(brand: string): Dictionary {
         totp_invalid: 'Code not valid. Check the app and try again.',
         totp_setup_required: 'To manage the beach club, switch two-step verification on first.',
         spot_used: 'This spot has already been used and cannot be deleted. You can retire it from sale: its history stays.',
+        row_codes_taken: 'The codes collide with existing spots: no row was created. Change the prefix, or remove the conflicting spots.',
         element_overlap: 'The chosen cells are already occupied by a spot or by another element. A retired spot keeps its cell.',
         step_mismatch: 'The end must stay on the same row or on the same gap as the start. Start over from the first step.',
         label_required: 'Write the label of the structure, for example "Bar", and repeat the step.',
@@ -445,6 +446,18 @@ export function makeEn(brand: string): Dictionary {
       prefix: 'Prefix of the codes (for example R gives R01, R02…)',
       count: 'How many spots',
       addRow: 'Add the row',
+      // ---- Bulk generation of rows (§4, D34) ----
+      addRowsTitle: 'Add several rows',
+      addRowsLead:
+        'Several whole rows at once, appended to the chosen zone. The numbering runs with a single prefix across the rows: 3 rows of 10 with prefix A give A01–A10, A11–A20 and A21–A30, with leading zeroes sized by the total. At most 10 rows, 50 spots per row and 200 spots per operation; if a code is already used, no row is created.',
+      rowsCount: 'How many rows (1–10)',
+      perRowCount: 'Spots per row (1–50)',
+      addRows: 'Add the rows',
+      bulkDone: (rows: number, spots: number, firstCode: string, lastCode: string) => {
+        const made = rows === 1 ? 'Created 1 row' : `Created ${rows} rows`;
+        const total = spots === 1 ? '1 spot' : `${spots} spots`;
+        return `${made} (${total}), codes ${firstCode}–${lastCode}.`;
+      },
       addSpotTitle: 'Add a spot',
       addSpotLead: 'A single spot, for example a sunbed on the shore. Without a row it lands in the last one of the zone.',
       code: 'Code',

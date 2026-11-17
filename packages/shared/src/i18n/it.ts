@@ -212,6 +212,7 @@ export function makeIt(brand: string) {
         totp_invalid: 'Codice non valido. Controlla l\'app e riprova.',
         totp_setup_required: 'Per gestire lo stabilimento attiva prima la verifica in due passaggi.',
         spot_used: 'La postazione è già stata usata e non si può eliminare. Puoi ritirarla dalla vendita: la storia resta.',
+        row_codes_taken: 'Codici in collisione con postazioni esistenti: nessuna fila creata. Cambia il prefisso oppure elimina le postazioni in conflitto.',
         element_overlap: 'Le celle scelte sono già occupate da una postazione o da un altro elemento. Una postazione ritirata tiene occupata la sua cella.',
         step_mismatch: 'La fine deve stare sulla stessa fila o sullo stesso interstizio dell\'inizio. Ricomincia dal primo passo.',
         label_required: 'Scrivi l\'etichetta della struttura, per esempio «Bar», e ripeti il passo.',
@@ -457,6 +458,18 @@ export function makeIt(brand: string) {
       prefix: 'Prefisso dei codici (per esempio R dà R01, R02…)',
       count: 'Quante postazioni',
       addRow: 'Aggiungi la fila',
+      // ---- Generazione in blocco delle file (§4, D34) ----
+      addRowsTitle: 'Aggiungi più file',
+      addRowsLead:
+        'Più file intere in una volta, accodate alla zona scelta. La numerazione è progressiva con un solo prefisso attraverso le file: 3 file da 10 con prefisso A danno A01–A10, A11–A20 e A21–A30, con gli zeri in testa secondo il totale. Al massimo 10 file, 50 postazioni per fila e 200 postazioni per operazione; se un codice è già usato non nasce nessuna fila.',
+      rowsCount: 'Quante file (1–10)',
+      perRowCount: 'Postazioni per fila (1–50)',
+      addRows: 'Aggiungi le file',
+      bulkDone: (rows: number, spots: number, firstCode: string, lastCode: string) => {
+        const made = rows === 1 ? 'Creata 1 fila' : `Create ${rows} file`;
+        const total = spots === 1 ? '1 postazione' : `${spots} postazioni`;
+        return `${made} (${total}), codici ${firstCode}–${lastCode}.`;
+      },
       addSpotTitle: 'Aggiungi una postazione',
       addSpotLead: 'Una postazione singola, per esempio un lettino in riva. Senza fila finisce nell’ultima della zona.',
       code: 'Codice',
