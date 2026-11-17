@@ -63,6 +63,8 @@ import {
   listPaymentRequests,
   listPendingSublets,
   listProposals,
+  plannerGrid,
+  plannerMaxDays,
   listMemberships,
   listSpotTypes,
   login,
@@ -628,6 +630,30 @@ export function createApp(options: AppOptions): Hono {
     const code = parse(spotCodeSchema, c.req.query('code'), 'spot code');
     return c.json({ currency: 'EUR', ...(await spotCard(db, actor, { day, code })) });
   });
+
+  route(
+    {
+      method: 'get',
+      path: '/v1/manage/beaches/:slug/planner',
+      summary: 'Spot-by-day grid of a window: not published, free, blocked, withdrawn or booked, at most 31 days',
+      tag: 'Beach club',
+      auth: 'session',
+      query: { from: 'YYYY-MM-DD', to: `YYYY-MM-DD, at most ${plannerMaxDays - 1} days after from` },
+      optionalQuery: { zone: 'riva, ombrelloni or monte' },
+      success: 200,
+      errors: [400, 401, 403, 409],
+    },
+    async (c) => {
+      // Whoever sees the console sees the planner (D33); guest names need bookings.read inside.
+      const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'inventory.read');
+      const from = parse(daySchema, c.req.query('from'), 'start day');
+      const to = parse(daySchema, c.req.query('to'), 'end day');
+      const zoneGiven = c.req.query('zone');
+      const zone = zoneGiven === undefined ? undefined : parse(zoneSchema, zoneGiven, 'zone');
+      if (Date.parse(`${to}T00:00:00Z`) < Date.parse(`${from}T00:00:00Z`)) throw new HttpError(400, 'invalid_request', 'The end day must not come before the start day');
+      return c.json(await plannerGrid(db, actor, { from, to, zone }));
+    },
+  );
 
   route({ method: 'put', path: '/v1/manage/beaches/:slug/inventory/price', summary: 'Change the price of a spot on a day', tag: 'Beach club', auth: 'session', request: spotPriceSchema, success: 204, errors: [400, 401, 403, 404] }, async (c) => {
     const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'inventory.price');
