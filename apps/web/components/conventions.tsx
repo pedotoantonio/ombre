@@ -3,7 +3,8 @@ import { notFound } from 'next/navigation';
 import { accountPath, can, config, formatMoney, getDictionary, locales, manageDealsPath, type Locale } from '@ombre/shared';
 import { api, apiCall, dayPattern, formatDate, formatPeriod, slugPattern, today, uuidPattern } from '@/lib/api';
 import { Hidden, Notice, requireMe, SectionNotice } from './account';
-import { PageHead, PageShell } from './PageShell';
+import { ManageShell } from './manage-shell';
+import { PageHead } from './PageShell';
 import { Cell, DataTable, Row, RowHead } from './table';
 
 // Hotel conventions (spec §4.1, D30): the manager's register of partner structures,
@@ -252,7 +253,7 @@ export async function ConventionsView({ locale, beachSlug, query }: { locale: Lo
   const list = allowed ? await apiCall<{ conventions: ApiConvention[] }>('GET', `${base}/conventions`, { token }) : null;
   if (!allowed || (list !== null && !list.ok && list.status === 403)) {
     return (
-      <PageShell locale={locale} page="help" highlight={false} alternatePath={alternate} crumbs={crumbs} signedInAs={me.user.name}>
+      <ManageShell locale={locale} beachSlug={beachSlug} beachName={membership.beachName} role={membership.role} active={null} userName={me.user.name} alternatePath={alternate} crumbs={crumbs}>
         <PageHead title={d.title(membership.beachName)} lead={d.lead} />
         <section className="section">
           <div className="container">
@@ -262,7 +263,7 @@ export async function ConventionsView({ locale, beachSlug, query }: { locale: Lo
             </div>
           </div>
         </section>
-      </PageShell>
+      </ManageShell>
     );
   }
   const deals = list?.ok ? list.data.conventions : [];
@@ -292,7 +293,7 @@ export async function ConventionsView({ locale, beachSlug, query }: { locale: Lo
   const dealsBase = manageDealsPath(locale, beachSlug);
 
   return (
-    <PageShell locale={locale} page="help" highlight={false} alternatePath={alternate} crumbs={crumbs} signedInAs={me.user.name}>
+    <ManageShell locale={locale} beachSlug={beachSlug} beachName={membership.beachName} role={membership.role} active={null} userName={me.user.name} alternatePath={alternate} crumbs={crumbs}>
       <PageHead title={d.title(membership.beachName)} lead={d.lead} />
       <section className="section">
         <div className="container stack">
@@ -360,6 +361,6 @@ export async function ConventionsView({ locale, beachSlug, query }: { locale: Lo
           <DealForm locale={locale} beachSlug={beachSlug} deal={editing} query={query} />
         </div>
       </section>
-    </PageShell>
+    </ManageShell>
   );
 }

@@ -16,7 +16,8 @@ import {
 import { api, apiCall, dayPattern, formatPeriod, slugPattern, today, type ApiLayoutElement, type ApiZoneGaps } from '@/lib/api';
 import { Notice, requireMe } from './account';
 import { PlanCanvas, planSize } from './beach';
-import { PageHead, PageShell } from './PageShell';
+import { ManageShell } from './manage-shell';
+import { PageHead } from './PageShell';
 import { Cell, DataTable, Row, RowHead } from './table';
 
 // The statistics page (spec §3.2, reports.read): indicators of a period, CSS-only bars
@@ -175,7 +176,7 @@ export async function StatisticsView({ locale, beachSlug, query }: { locale: Loc
   // Who may not read the reports gets a clean message, like the other reserved pages.
   if (!allowed || (report !== null && !report.ok && report.status === 403)) {
     return (
-      <PageShell locale={locale} page="help" highlight={false} alternatePath={alternate} crumbs={crumbs} signedInAs={me.user.name}>
+      <ManageShell locale={locale} beachSlug={beachSlug} beachName={membership.beachName} role={role} active="stats" userName={me.user.name} alternatePath={alternate} crumbs={crumbs}>
         <PageHead title={s.title(membership.beachName)} lead={s.lead} />
         <section className="section">
           <div className="container">
@@ -185,7 +186,7 @@ export async function StatisticsView({ locale, beachSlug, query }: { locale: Loc
             </div>
           </div>
         </section>
-      </PageShell>
+      </ManageShell>
     );
   }
 
@@ -197,7 +198,7 @@ export async function StatisticsView({ locale, beachSlug, query }: { locale: Loc
   const empty = data !== null && data.occupancy.publishedDays === 0 && data.soldDays === 0 && data.cancelled.bookings === 0;
 
   return (
-    <PageShell locale={locale} page="help" highlight={false} alternatePath={alternate} crumbs={crumbs} signedInAs={me.user.name}>
+    <ManageShell locale={locale} beachSlug={beachSlug} beachName={membership.beachName} role={role} active="stats" userName={me.user.name} alternatePath={alternate} crumbs={crumbs}>
       <PageHead title={s.title(membership.beachName)} lead={s.lead} />
       <section className="section">
         <div className="container stack">
@@ -436,6 +437,6 @@ export async function StatisticsView({ locale, beachSlug, query }: { locale: Loc
           )}
         </div>
       </section>
-    </PageShell>
+    </ManageShell>
   );
 }

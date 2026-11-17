@@ -15,7 +15,8 @@ import {
 import { api, apiCall, dayPattern, formatDay, isDay, slugPattern, today } from '@/lib/api';
 import { Notice, requireMe } from './account';
 import { SpotMark } from './beach';
-import { PageHead, PageShell } from './PageShell';
+import { ManageShell } from './manage-shell';
+import { PageHead } from './PageShell';
 
 // The planner page (spec §3, D33): rows are the spots of the drawing, columns the days of
 // a window of 7, 14 or 31 days, every cell the state of one spot on one day, in text beyond
@@ -124,17 +125,20 @@ export async function PlannerView({ locale, beachSlug, query }: { locale: Locale
   const headFormat = new Intl.DateTimeFormat(locale === 'it' ? 'it-IT' : 'en-GB', { weekday: 'short', day: 'numeric', month: 'numeric', timeZone: 'UTC' });
 
   return (
-    <PageShell
+    <ManageShell
       locale={locale}
-      page="help"
-      highlight={false}
+      beachSlug={beachSlug}
+      beachName={membership.beachName}
+      role={membership.role}
+      active="planner"
+      day={from}
+      userName={me.user.name}
       alternatePath={alternate}
       crumbs={[
         { label: t.account.overviewTitle, href: accountPath(locale, 'overview') },
         { label: membership.beachName, href: accountPath(locale, 'manage', beachSlug) },
         { label: p.short },
       ]}
-      signedInAs={me.user.name}
     >
       <PageHead title={p.title(membership.beachName)} lead={p.lead} />
       <section className="section section--planner">
@@ -260,7 +264,7 @@ export async function PlannerView({ locale, beachSlug, query }: { locale: Locale
           )}
         </div>
       </section>
-    </PageShell>
+    </ManageShell>
   );
 }
 

@@ -3,7 +3,8 @@ import { notFound } from 'next/navigation';
 import { accountPath, can, config, formatMoney, getDictionary, locales, manageExtrasPath, type Locale } from '@ombre/shared';
 import { apiCall, slugPattern, uuidPattern } from '@/lib/api';
 import { Hidden, Notice, requireMe, SectionNotice } from './account';
-import { PageHead, PageShell } from './PageShell';
+import { ManageShell } from './manage-shell';
+import { PageHead } from './PageShell';
 import { Cell, DataTable, Row, RowHead } from './table';
 
 // Extra services sold with the spot (spec §4.2): the manager's register of towels, safes,
@@ -102,7 +103,7 @@ export async function ExtrasView({ locale, beachSlug, query }: { locale: Locale;
   const list = allowed ? await apiCall<{ extras: ApiExtraServiceRow[] }>('GET', `/v1/manage/beaches/${beachSlug}/extras`, { token }) : null;
   if (!allowed || (list !== null && !list.ok && list.status === 403)) {
     return (
-      <PageShell locale={locale} page="help" highlight={false} alternatePath={alternate} crumbs={crumbs} signedInAs={me.user.name}>
+      <ManageShell locale={locale} beachSlug={beachSlug} beachName={membership.beachName} role={membership.role} active={null} userName={me.user.name} alternatePath={alternate} crumbs={crumbs}>
         <PageHead title={x.title(membership.beachName)} lead={x.lead} />
         <section className="section">
           <div className="container">
@@ -112,7 +113,7 @@ export async function ExtrasView({ locale, beachSlug, query }: { locale: Locale;
             </div>
           </div>
         </section>
-      </PageShell>
+      </ManageShell>
     );
   }
   const services = list?.ok ? list.data.extras : [];
@@ -123,7 +124,7 @@ export async function ExtrasView({ locale, beachSlug, query }: { locale: Locale;
   const base = manageExtrasPath(locale, beachSlug);
 
   return (
-    <PageShell locale={locale} page="help" highlight={false} alternatePath={alternate} crumbs={crumbs} signedInAs={me.user.name}>
+    <ManageShell locale={locale} beachSlug={beachSlug} beachName={membership.beachName} role={membership.role} active={null} userName={me.user.name} alternatePath={alternate} crumbs={crumbs}>
       <PageHead title={x.title(membership.beachName)} lead={x.lead} />
       <section className="section">
         <div className="container stack">
@@ -185,6 +186,6 @@ export async function ExtrasView({ locale, beachSlug, query }: { locale: Locale;
           <ExtraForm locale={locale} beachSlug={beachSlug} service={editing} query={query} />
         </div>
       </section>
-    </PageShell>
+    </ManageShell>
   );
 }

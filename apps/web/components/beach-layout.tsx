@@ -28,7 +28,8 @@ import { apiCall, formatPeriod, slugPattern, type ApiLayoutElement } from '@/lib
 import { Hidden, Notice, requireMe, SectionNotice } from './account';
 import { MarkLegendItems, PlanCanvas, planSize, SpotMark, zoneRows } from './beach';
 import { DecorationMark } from './decorations';
-import { PageHead, PageShell } from './PageShell';
+import { ManageShell } from './manage-shell';
+import { PageHead } from './PageShell';
 
 // The "Spiaggia" page of the reserved area: the preview of the beach map with its zones on
 // top, then the drawing editor (sea side, walkways, structures, cabin blocks), the zone
@@ -725,17 +726,19 @@ export async function BeachLayoutView({ locale, beachSlug, query }: { locale: Lo
   const stepLabel = (first(query.etichetta) ?? '').slice(0, elementLabelMaxLength);
 
   return (
-    <PageShell
+    <ManageShell
       locale={locale}
-      page="help"
-      highlight={false}
+      beachSlug={beachSlug}
+      beachName={membership.beachName}
+      role={membership.role}
+      active="beach"
+      userName={me.user.name}
       alternatePath={beachLayoutPath(other, beachSlug)}
       crumbs={[
         { label: t.account.overviewTitle, href: accountPath(locale, 'overview') },
         { label: membership.beachName, href: accountPath(locale, 'manage', beachSlug) },
         { label: l.short },
       ]}
-      signedInAs={me.user.name}
     >
       <PageHead title={l.title(membership.beachName)} lead={l.lead} />
       <section className="section">
@@ -1107,6 +1110,6 @@ export async function BeachLayoutView({ locale, beachSlug, query }: { locale: Lo
           )}
         </div>
       </section>
-    </PageShell>
+    </ManageShell>
   );
 }

@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { accountPath, can, config, getDictionary, locales, manageCabinsPath, type Locale, type SpotZone } from '@ombre/shared';
 import { apiCall, formatDate, formatPeriod, slugPattern, uuidPattern, type ApiLayoutElement } from '@/lib/api';
 import { Hidden, Notice, requireMe } from './account';
+import { ManageShell } from './manage-shell';
 import { PageHead, PageShell } from './PageShell';
 import { Cell, DataTable, Row, RowHead } from './table';
 
@@ -242,17 +243,19 @@ export async function CabinsManageView({ locale, beachSlug, query }: { locale: L
   const common = { lang: locale, beach: beachSlug };
 
   return (
-    <PageShell
+    <ManageShell
       locale={locale}
-      page="help"
-      highlight={false}
+      beachSlug={beachSlug}
+      beachName={membership.beachName}
+      role={membership.role}
+      active={null}
+      userName={me.user.name}
       alternatePath={manageCabinsPath(other, beachSlug)}
       crumbs={[
         { label: t.account.overviewTitle, href: accountPath(locale, 'overview') },
         { label: membership.beachName, href: accountPath(locale, 'manage', beachSlug) },
         { label: c.short },
       ]}
-      signedInAs={me.user.name}
     >
       <PageHead title={c.title(membership.beachName)} lead={c.lead} />
       <section className="section">
@@ -379,7 +382,7 @@ export async function CabinsManageView({ locale, beachSlug, query }: { locale: L
           )}
         </div>
       </section>
-    </PageShell>
+    </ManageShell>
   );
 }
 

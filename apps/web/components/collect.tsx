@@ -4,7 +4,8 @@ import { accountPath, can, config, formatMoney, getDictionary, locales, manageCo
 import { api, apiCall, formatDay, formatInstant, slugPattern, type ApiExtraService } from '@/lib/api';
 import { Hidden, Notice, requireMe } from './account';
 import { ExtraQuantityFields } from './beach';
-import { PageHead, PageShell } from './PageShell';
+import { ManageShell } from './manage-shell';
+import { PageHead } from './PageShell';
 import { Cell, DataTable, Row } from './table';
 
 // Collections and payment requests of one booking (spec §4.3, D31): total, paid and
@@ -54,16 +55,42 @@ export async function CollectView({ locale, beachSlug, query }: { locale: Locale
   const membership = me.memberships.find((entry) => entry.beachSlug === beachSlug);
   if (!membership) notFound();
   const askedCode = first(query.code);
-  if (!askedCode || !bookingCodePattern.test(askedCode)) notFound();
-  const code = askedCode.toUpperCase();
+  const code = askedCode !== undefined && bookingCodePattern.test(askedCode) ? askedCode.toUpperCase() : null;
   const other = locales.find((candidate) => candidate !== locale) ?? locale;
 
-  const alternate = `${manageCollectPath(other, beachSlug)}?code=${code}`;
+  const alternate = code === null ? manageCollectPath(other, beachSlug) : `${manageCollectPath(other, beachSlug)}?code=${code}`;
   const crumbs = [
     { label: t.account.overviewTitle, href: accountPath(locale, 'overview') },
     { label: membership.beachName, href: accountPath(locale, 'manage', beachSlug) },
     { label: x.short },
   ];
+
+  // Without a code the page asks for one (D36): the «Incassi» voice of the navigation lands here.
+  if (code === null) {
+    return (
+      <ManageShell locale={locale} beachSlug={beachSlug} beachName={membership.beachName} role={membership.role} active="collect" userName={me.user.name} alternatePath={alternate} crumbs={crumbs}>
+        <PageHead title={x.pickTitle} lead={x.pickLead} />
+        <section className="section">
+          <div className="container stack">
+            {askedCode !== undefined ? (
+              <p className="alert" role="alert">
+                {x.pickBad}
+              </p>
+            ) : null}
+            <form method="get" action={manageCollectPath(locale, beachSlug)} className="form-row">
+              <div className="field">
+                <label htmlFor="incassi-codice">{x.pickCode}</label>
+                <input id="incassi-codice" name="code" maxLength={14} autoComplete="off" required />
+              </div>
+              <button className="button button--secondary" type="submit">
+                {x.pickOpen}
+              </button>
+            </form>
+          </div>
+        </section>
+      </ManageShell>
+    );
+  }
 
   // Reading is desk work, like the day list; who cannot read bookings gets a clean message.
   const allowed = can(membership.role, 'bookings.read');
@@ -72,7 +99,7 @@ export async function CollectView({ locale, beachSlug, query }: { locale: Locale
     : null;
   if (!allowed || (detail !== null && !detail.ok && detail.status === 403)) {
     return (
-      <PageShell locale={locale} page="help" highlight={false} alternatePath={alternate} crumbs={crumbs} signedInAs={me.user.name}>
+      <ManageShell locale={locale} beachSlug={beachSlug} beachName={membership.beachName} role={membership.role} active="collect" userName={me.user.name} alternatePath={alternate} crumbs={crumbs}>
         <PageHead title={x.title(code)} lead={x.lead} />
         <section className="section">
           <div className="container">
@@ -82,7 +109,7 @@ export async function CollectView({ locale, beachSlug, query }: { locale: Locale
             </div>
           </div>
         </section>
-      </PageShell>
+      </ManageShell>
     );
   }
   if (detail !== null && !detail.ok && detail.status === 404) notFound();
@@ -96,7 +123,7 @@ export async function CollectView({ locale, beachSlug, query }: { locale: Locale
   const common = { lang: locale, beach: beachSlug, code };
 
   return (
-    <PageShell locale={locale} page="help" highlight={false} alternatePath={alternate} crumbs={crumbs} signedInAs={me.user.name}>
+    <ManageShell locale={locale} beachSlug={beachSlug} beachName={membership.beachName} role={membership.role} active="collect" userName={me.user.name} alternatePath={alternate} crumbs={crumbs}>
       <PageHead title={x.title(code)} lead={x.lead} />
       <section className="section">
         <div className="container stack">
@@ -265,6 +292,6 @@ export async function CollectView({ locale, beachSlug, query }: { locale: Locale
           ) : null}
         </div>
       </section>
-    </PageShell>
+    </ManageShell>
   );
 }

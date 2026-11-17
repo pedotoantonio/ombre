@@ -2275,3 +2275,209 @@ a.ops-tile:active {
 .copy-block a {
   overflow-wrap: anywhere;
 }
+
+/* ---- Cornice «applicazione» dell'area di gestione (§4ter, D36) ----
+   Barra superiore fissa e navigazione laterale compatta a icone, tutte servite dal
+   server. Sulle pagine della gestione l'intestazione del sito torna a scorrere:
+   l'unico elemento fisso è la barra dell'applicazione. */
+body:has(.manage-app) .site-header {
+  position: static;
+  background: var(--carta);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.manage-app {
+  /* Altezza della barra quando è fissa: la sintesi della console vi si aggancia sotto. */
+  --barra-gestione: 3.75rem;
+}
+
+.manage-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spazio-2) var(--spazio-3);
+  padding: var(--spazio-2) var(--margine);
+  background: var(--carta);
+  border-block: 1px solid var(--bordo);
+}
+
+.manage-top__club {
+  color: var(--abisso);
+  font-weight: var(--peso-forte);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.manage-top__club:hover {
+  text-decoration: underline;
+}
+
+.manage-top__form {
+  display: flex;
+  align-items: center;
+  gap: var(--spazio-2);
+}
+
+.manage-top__form input {
+  min-width: 0;
+}
+
+.manage-top__form input[name='q'] {
+  width: clamp(7rem, 16vw, 13rem);
+}
+
+.manage-top__desk {
+  white-space: nowrap;
+}
+
+.manage-top__tools {
+  display: flex;
+  align-items: center;
+  gap: var(--spazio-3);
+  margin-inline-start: auto;
+}
+
+.manage-top__profile {
+  color: var(--abisso);
+  font-weight: var(--peso-medio);
+  white-space: nowrap;
+}
+
+/* La navigazione: icone con l'etichetta sotto; la voce attiva ha barra laterale e
+   grassetto, mai il solo colore. */
+.manage-nav ul {
+  display: flex;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.manage-nav a {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  min-height: var(--tocco);
+  padding: var(--spazio-2) var(--spazio-1);
+  border-radius: var(--raggio-piccolo);
+  color: var(--testo-secondario);
+  font-size: 0.8125rem;
+  font-weight: var(--peso-medio);
+  line-height: 1.2;
+  text-align: center;
+  text-decoration: none;
+}
+
+.manage-nav svg {
+  width: 1.5rem;
+  height: 1.5rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.manage-nav a:hover {
+  color: var(--oceano-scuro);
+  background: var(--spuma);
+}
+
+/* Da larghezza tablet in su: barra fissa su una riga, navigazione in colonna a lato. */
+@media (min-width: 48rem) {
+  .manage-top {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    min-height: var(--barra-gestione);
+  }
+
+  .manage-app__body {
+    display: flex;
+    align-items: flex-start;
+  }
+
+  .manage-nav {
+    position: sticky;
+    top: calc(var(--barra-gestione) + var(--spazio-3));
+    flex: none;
+    width: 6rem;
+    padding-block: var(--spazio-3);
+    padding-inline-start: var(--spazio-2);
+  }
+
+  .manage-nav ul {
+    flex-direction: column;
+    gap: var(--spazio-1);
+  }
+
+  .manage-nav a {
+    border-inline-start: 3px solid transparent;
+  }
+
+  .manage-nav a[aria-current='page'] {
+    color: var(--oceano-scuro);
+    background: var(--spuma);
+    border-inline-start-color: var(--oceano);
+    font-weight: var(--peso-forte);
+  }
+
+  .manage-app__content {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+}
+
+/* A larghezza telefono la navigazione passa fissa in basso, sopra la propria riga di
+   spazio: contenuti e piè di pagina non le finiscono mai sotto. */
+@media (max-width: 47.9375rem) {
+  .manage-nav {
+    position: fixed;
+    inset: auto 0 0 0;
+    z-index: 25;
+    background: var(--carta);
+    border-top: 1px solid var(--bordo);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .manage-nav ul {
+    flex-direction: row;
+    justify-content: space-around;
+    gap: 0;
+    padding-inline: var(--spazio-1);
+    overflow-x: auto;
+  }
+
+  .manage-nav a {
+    flex: 1 0 3.25rem;
+    border-top: 3px solid transparent;
+    border-radius: 0;
+    font-size: 0.75rem;
+  }
+
+  .manage-nav a[aria-current='page'] {
+    color: var(--oceano-scuro);
+    background: var(--spuma);
+    border-top-color: var(--oceano);
+    font-weight: var(--peso-forte);
+  }
+
+  .manage-app__content {
+    padding-bottom: var(--spazio-4);
+  }
+
+  body:has(.manage-app) .site-footer {
+    padding-bottom: calc(4.75rem + env(safe-area-inset-bottom));
+  }
+}
+
+/* In stampa la cornice sparisce come il resto dell'intelaiatura. */
+@media print {
+  .manage-top,
+  .manage-nav {
+    display: none !important;
+  }
+}

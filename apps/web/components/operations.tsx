@@ -21,7 +21,8 @@ import {
 import { api, apiCall, dayPattern, formatDay, slugPattern, today, type ApiLayoutElement, type ApiResult, type ApiZoneGaps } from '@/lib/api';
 import { Hidden, Notice, requireMe } from './account';
 import { PlanCanvas, planSize, SpotMark } from './beach';
-import { PageHead, PageShell } from './PageShell';
+import { ManageShell } from './manage-shell';
+import { PageHead } from './PageShell';
 import { Cell, DataTable, Row, RowHead } from './table';
 
 // The operational console «Oggi sulla spiaggia» (spec §3.1, D29): the whole beach on one
@@ -543,17 +544,20 @@ export async function OperationsView({ locale, beachSlug, query }: { locale: Loc
   );
 
   return (
-    <PageShell
+    <ManageShell
       locale={locale}
-      page="help"
-      highlight={false}
+      beachSlug={beachSlug}
+      beachName={membership.beachName}
+      role={role}
+      active="today"
+      day={day}
+      userName={me.user.name}
       alternatePath={alternate}
       crumbs={[
         { label: t.account.overviewTitle, href: accountPath(locale, 'overview') },
         { label: membership.beachName, href: accountPath(locale, 'manage', beachSlug) },
         { label: o.short },
       ]}
-      signedInAs={me.user.name}
     >
       <PageHead title={o.title(membership.beachName)} lead={o.lead} />
       <section className={`section section--ops ops-view-${view ?? 'auto'}`}>
@@ -794,6 +798,6 @@ export async function OperationsView({ locale, beachSlug, query }: { locale: Loc
           )}
         </div>
       </section>
-    </PageShell>
+    </ManageShell>
   );
 }

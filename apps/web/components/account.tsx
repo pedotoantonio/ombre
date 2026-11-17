@@ -49,6 +49,7 @@ import { PlannerView } from './planner';
 import { StatisticsView } from './statistics';
 import { privateMetadata } from '@/lib/seo';
 import { signedIn, type Me } from '@/lib/session';
+import { ManageShell } from './manage-shell';
 import { PageHead, PageShell } from './PageShell';
 import { SiteEditorView } from './site-editor';
 import { Cell, DataTable, Row, RowHead } from './table';
@@ -429,12 +430,16 @@ async function ManageView({ locale, beachSlug, query }: { locale: Locale; beachS
   const euro = (cents: number | null) => (cents === null ? '' : (cents / 100).toFixed(2).replace('.', locale === 'it' ? ',' : '.'));
 
   return (
-    <PageShell
+    <ManageShell
       locale={locale}
-      page="help" highlight={false}
+      beachSlug={beachSlug}
+      beachName={membership.beachName}
+      role={role}
+      active="bookings"
+      day={day}
+      userName={me.user.name}
       alternatePath={`${accountPath(other(locale), 'manage', beachSlug)}?day=${day}`}
       crumbs={[{ label: t.overviewTitle, href: accountPath(locale, 'overview') }, { label: membership.beachName }]}
-      signedInAs={me.user.name}
     >
       <PageHead title={t.manageTitle(membership.beachName)} lead={`${t.roles[role]}. ${formatDay(day, locale)}.`} />
       <section className="section">
@@ -869,7 +874,7 @@ async function ManageView({ locale, beachSlug, query }: { locale: Locale; beachS
           ) : null}
         </div>
       </section>
-    </PageShell>
+    </ManageShell>
   );
 }
 

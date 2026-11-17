@@ -2,7 +2,8 @@ import { notFound, redirect } from 'next/navigation';
 import { accountPath, can, config, demoMedia, getDictionary, locales, siteTemplates, siteTextLimits, type DemoMediaId, type Locale, type SiteContent, type SiteTemplate, type SiteTexts } from '@ombre/shared';
 import { apiCall, slugPattern } from '@/lib/api';
 import { signedIn } from '@/lib/session';
-import { PageHead, PageShell } from './PageShell';
+import { ManageShell } from './manage-shell';
+import { PageHead } from './PageShell';
 import { BeachSite } from './site-view';
 import { Cell, DataTable, Row } from './table';
 
@@ -82,13 +83,15 @@ export async function SiteEditorView({ locale, beachSlug, query }: { locale: Loc
   const galleryIds = (content.it.images?.gallery ?? []).map((image) => idOf(image.src));
 
   return (
-    <PageShell
+    <ManageShell
       locale={locale}
-      page="help"
-      highlight={false}
+      beachSlug={beachSlug}
+      beachName={membership.beachName}
+      role={membership.role}
+      active="site"
+      userName={me.user.name}
       alternatePath={accountPath(other, 'site', beachSlug)}
       crumbs={[{ label: dictionary.account.overviewTitle, href: accountPath(locale, 'overview') }, { label: membership.beachName, href: accountPath(locale, 'manage', beachSlug) }, { label: t.openEditor }]}
-      signedInAs={me.user.name}
     >
       <PageHead title={t.editorTitle(membership.beachName)} lead={t.editorLead} />
       <section className="section">
@@ -183,6 +186,6 @@ export async function SiteEditorView({ locale, beachSlug, query }: { locale: Loc
           ) : null}
         </div>
       </section>
-    </PageShell>
+    </ManageShell>
   );
 }

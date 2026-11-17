@@ -3,7 +3,8 @@ import { notFound } from 'next/navigation';
 import { accountPath, can, config, getDictionary, locales, manageCommsPath, type Locale } from '@ombre/shared';
 import { api, apiCall, formatInstant, slugPattern } from '@/lib/api';
 import { Notice, requireMe } from './account';
-import { PageHead, PageShell } from './PageShell';
+import { ManageShell } from './manage-shell';
+import { PageHead } from './PageShell';
 import { Cell, DataTable, Row } from './table';
 
 // The «Comunicazioni» page (spec §4.3): every notification the system prepared, with the
@@ -45,7 +46,7 @@ export async function CommsView({ locale, beachSlug, query }: { locale: Locale; 
   const list = allowed ? await apiCall<{ notifications: NotificationRow[] }>('GET', `/v1/manage/beaches/${beachSlug}/notifications`, { token }) : null;
   if (!allowed || (list !== null && !list.ok && list.status === 403)) {
     return (
-      <PageShell locale={locale} page="help" highlight={false} alternatePath={alternate} crumbs={crumbs} signedInAs={me.user.name}>
+      <ManageShell locale={locale} beachSlug={beachSlug} beachName={membership.beachName} role={membership.role} active={null} userName={me.user.name} alternatePath={alternate} crumbs={crumbs}>
         <PageHead title={m.title(membership.beachName)} lead={m.lead} />
         <section className="section">
           <div className="container">
@@ -55,7 +56,7 @@ export async function CommsView({ locale, beachSlug, query }: { locale: Locale; 
             </div>
           </div>
         </section>
-      </PageShell>
+      </ManageShell>
     );
   }
   const rows = list?.ok ? list.data.notifications : [];
@@ -64,7 +65,7 @@ export async function CommsView({ locale, beachSlug, query }: { locale: Locale; 
   const timezone = card.ok ? card.data.beach.timezone : 'Europe/Rome';
 
   return (
-    <PageShell locale={locale} page="help" highlight={false} alternatePath={alternate} crumbs={crumbs} signedInAs={me.user.name}>
+    <ManageShell locale={locale} beachSlug={beachSlug} beachName={membership.beachName} role={membership.role} active={null} userName={me.user.name} alternatePath={alternate} crumbs={crumbs}>
       <PageHead title={m.title(membership.beachName)} lead={m.lead} />
       <section className="section">
         <div className="container stack">
@@ -110,6 +111,6 @@ export async function CommsView({ locale, beachSlug, query }: { locale: Locale; 
           </Link>
         </div>
       </section>
-    </PageShell>
+    </ManageShell>
   );
 }

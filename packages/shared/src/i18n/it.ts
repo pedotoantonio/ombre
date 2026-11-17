@@ -697,6 +697,27 @@ export function makeIt(brand: string) {
       state: 'Stato',
       truncatedNote: 'Una proposta «chiusa in anticipo» è stata troncata o chiusa dal gestore insieme all\'affidamento.',
     },
+    // ---- Cornice «applicazione» dell'area di gestione (§4ter, D36) ----
+    manage: {
+      barLabel: 'Barra della gestione',
+      navLabel: 'Pagine della gestione',
+      searchLabel: 'Cerca cognome o codice',
+      searchButton: 'Cerca',
+      dayLabel: 'Giorno',
+      dayGo: 'Vai al giorno',
+      desk: 'Prenota al banco',
+      profile: 'Profilo',
+      nav: {
+        today: 'Oggi',
+        planner: 'Planner',
+        bookings: 'Prenotazioni',
+        collect: 'Incassi',
+        stats: 'Statistiche',
+        beach: 'Spiaggia',
+        layout: 'Disegno',
+        site: 'Sito',
+      },
+    },
     // ---- Console operativa «Oggi sulla spiaggia» (§3.1) ----
     ops: {
       title: (name: string) => `Oggi sulla spiaggia — ${name}`,
@@ -950,6 +971,12 @@ export function makeIt(brand: string) {
     collect: {
       title: (code: string) => `Incassi della prenotazione ${code}`,
       short: 'Incassi e richieste',
+      // La pagina senza codice: il modulo che apre gli incassi di una prenotazione (D36).
+      pickTitle: 'Incassi e richieste',
+      pickLead: 'Apri gli incassi e le richieste di pagamento di una prenotazione dal suo codice. Lo trovi in «Prenotazioni» e nella scheda della console.',
+      pickCode: 'Codice prenotazione',
+      pickOpen: 'Apri',
+      pickBad: 'Codice non valido: il formato è OM-123456-789.',
       lead: 'Totale, pagato e residuo della prenotazione, con l\'incasso al banco, le richieste di pagamento con il collegamento da inviare e gli extra aggiunti a vendita fatta.',
       forbiddenTitle: 'Pagina riservata',
       forbiddenText: 'Gli incassi si leggono solo con il permesso di lettura delle prenotazioni dello stabilimento.',

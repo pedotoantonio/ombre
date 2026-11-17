@@ -685,6 +685,27 @@ export function makeEn(brand: string): Dictionary {
       state: 'State',
       truncatedNote: 'A proposal "closed early" was truncated or closed by the manager together with the assignment.',
     },
+    // ---- "Application" frame of the management area (§4ter, D36) ----
+    manage: {
+      barLabel: 'Management bar',
+      navLabel: 'Management pages',
+      searchLabel: 'Search by last name or code',
+      searchButton: 'Search',
+      dayLabel: 'Day',
+      dayGo: 'Go to the day',
+      desk: 'Book at the desk',
+      profile: 'Profile',
+      nav: {
+        today: 'Today',
+        planner: 'Planner',
+        bookings: 'Bookings',
+        collect: 'Payments',
+        stats: 'Statistics',
+        beach: 'Beach',
+        layout: 'Drawing',
+        site: 'Site',
+      },
+    },
     // ---- Operational console "Today on the beach" (§3.1) ----
     ops: {
       title: (name: string) => `Today on the beach — ${name}`,
@@ -938,6 +959,12 @@ export function makeEn(brand: string): Dictionary {
     collect: {
       title: (code: string) => `Collections of booking ${code}`,
       short: 'Collections and requests',
+      // The page without a code: the form that opens the collections of one booking (D36).
+      pickTitle: 'Collections and requests',
+      pickLead: 'Open the collections and payment requests of a booking from its code. You find it under "Bookings" and in the card of the console.',
+      pickCode: 'Booking code',
+      pickOpen: 'Open',
+      pickBad: 'Invalid code: the format is OM-123456-789.',
       lead: 'Total, paid and balance of the booking, with the collection at the desk, the payment requests with the link to send, and the extras added after the sale.',
       forbiddenTitle: 'Reserved page',
       forbiddenText: 'Collections can only be read with the booking-reading permission of the beach club.',
