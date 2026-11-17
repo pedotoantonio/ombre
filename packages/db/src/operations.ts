@@ -1,8 +1,9 @@
-import { and, asc, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import { can, canTransition } from '@ombre/shared';
 import type { SpotMark } from '@ombre/shared';
+import { paidCentsOf, paymentStateOf, type PaymentState } from './bookings';
 import { withActor, type Database } from './client';
-import { zoneOrder, type SpotZone } from './inventory';
+import { DomainError, zoneOrder, type SpotZone } from './inventory';
 import type { Actor } from './manage';
 import { auditEvent, booking, hold, inventoryDay, promotion, spot, spotType } from './schema';
 
@@ -52,6 +53,35 @@ export interface DayOperations {
   summary: OperationsSummary;
 }
 
+interface StateSource {
+  dayState: (typeof inventoryDay.$inferSelect)['state'] | null;
+  holdLive: boolean;
+  presence: (typeof booking.$inferSelect)['presence'] | null;
+  entered: boolean;
+}
+
+/** The one reading of inventory, hold, presence and accesses: console and spot card agree by construction. */
+function deriveState(row: StateSource): { state: OperationalState; notForSale: OperationsSpot['notForSale'] } {
+  if (row.dayState === null) return { state: 'not_for_sale', notForSale: 'never_published' };
+  if (row.dayState === 'unpublishable') return { state: 'not_for_sale', notForSale: 'withdrawn' };
+  if (row.dayState === 'blocked') return { state: 'blocked', notForSale: null };
+  if (row.dayState === 'held') {
+    // A hold that has run out no longer reserves anything, even before a job cleans it.
+    return { state: row.holdLive ? 'reserved' : 'free', notForSale: null };
+  }
+  if (row.dayState === 'occupied' && row.presence !== null) {
+    if (row.presence === 'inside') return { state: 'present', notForSale: null };
+    if (row.presence === 'outside_reentry_allowed') return { state: 'departed', notForSale: null };
+    // At the end of the day every presence is 'ended': only the access trail
+    // still tells a guest who came from one who never did.
+    if (row.presence === 'ended') return { state: row.entered ? 'departed' : 'expected', notForSale: null };
+    return { state: 'expected', notForSale: null };
+  }
+  // Occupied without a live booking should not happen; shown as a sold day.
+  if (row.dayState === 'occupied') return { state: 'expected', notForSale: null };
+  return { state: 'free', notForSale: null };
+}
+
 /**
  * The whole beach on one day, one card per spot, for manager and reception.
  * Guest surnames need bookings.read and the day's takings need reports.read:
@@ -94,32 +124,7 @@ export function listDayOperations(db: Database, actor: Actor, day: string): Prom
     const counts: Record<OperationalState, number> = { free: 0, reserved: 0, expected: 0, present: 0, departed: 0, blocked: 0, not_for_sale: 0 };
     let revenueCents = 0;
     const spots = rows.map((row) => {
-      let state: OperationalState;
-      let notForSale: OperationsSpot['notForSale'] = null;
-      if (row.dayState === null) {
-        state = 'not_for_sale';
-        notForSale = 'never_published';
-      } else if (row.dayState === 'unpublishable') {
-        state = 'not_for_sale';
-        notForSale = 'withdrawn';
-      } else if (row.dayState === 'blocked') {
-        state = 'blocked';
-      } else if (row.dayState === 'held') {
-        // A hold that has run out no longer reserves anything, even before a job cleans it.
-        state = row.holdLive ? 'reserved' : 'free';
-      } else if (row.dayState === 'occupied' && row.presence !== null) {
-        if (row.presence === 'inside') state = 'present';
-        else if (row.presence === 'outside_reentry_allowed') state = 'departed';
-        // At the end of the day every presence is 'ended': only the access trail
-        // still tells a guest who came from one who never did.
-        else if (row.presence === 'ended') state = row.entered ? 'departed' : 'expected';
-        else state = 'expected';
-      } else if (row.dayState === 'occupied') {
-        // Occupied without a live booking should not happen; shown as a sold day.
-        state = 'expected';
-      } else {
-        state = 'free';
-      }
+      const { state, notForSale } = deriveState(row);
       counts[state] += 1;
       if (row.totalCents !== null) revenueCents += row.totalCents;
       return {
@@ -151,6 +156,135 @@ export function listDayOperations(db: Database, actor: Actor, day: string): Prom
         presentGuests: counts.present,
         revenueCents: seeRevenue ? revenueCents : null,
       },
+    };
+  });
+}
+
+export interface SpotCardBooking {
+  code: string;
+  guestName: string;
+  /** Sale channel: 'online' or 'desk'. */
+  source: string;
+  presence: (typeof booking.$inferSelect)['presence'];
+  /** Comprehensive, extras included; the residual follows the D31 payment model. */
+  totalCents: number;
+  paidCents: number;
+  remainingCents: number;
+  paymentState: PaymentState;
+}
+
+export interface SpotCard {
+  day: string;
+  spotId: string;
+  code: string;
+  zone: SpotZone;
+  rowNumber: number;
+  col: number;
+  typeName: string;
+  typeMark: SpotMark;
+  umbrellas: number;
+  sunbeds: number;
+  maxGuests: number;
+  state: OperationalState;
+  /** Why the day cannot be sold; null for every other state. */
+  notForSale: 'never_published' | 'withdrawn' | null;
+  /** The reason given with the block, from the audit trail; null when not blocked or none was given. */
+  blockedReason: string | null;
+  shared: boolean;
+  priceCents: number | null;
+  /** Only with the bookings.read permission; null otherwise, and null when the day is not sold. */
+  booking: SpotCardBooking | null;
+}
+
+/**
+ * The card of one spot on one day (spec §2, D32): the same derived state as the
+ * console, plus the block reason and, on a sold day, the booking with its paid
+ * and outstanding amounts under the D31 payment model. An unknown code, a retired
+ * spot or a day never published answer with a DomainError, like the single-day
+ * actions do.
+ */
+export function spotCard(db: Database, actor: Actor, input: { day: string; code: string }): Promise<SpotCard> {
+  const seeBooking = can(actor.role, 'bookings.read');
+  return withActor(db, actor.beachId, actor.userId, async (tx) => {
+    const [row] = await tx
+      .select({
+        spotId: spot.id,
+        code: spot.code,
+        zone: spot.zone,
+        rowNumber: spot.rowNumber,
+        col: spot.col,
+        typeName: spotType.name,
+        typeMark: spotType.mark,
+        umbrellas: spot.umbrellas,
+        sunbeds: spot.sunbeds,
+        maxGuests: spot.maxGuests,
+        dayState: inventoryDay.state,
+        priceCents: inventoryDay.priceCents,
+        shared: inventoryDay.shared,
+        holdLive: sql<boolean>`coalesce(${hold.status} = 'active' and ${hold.expiresAt} > now(), false)`,
+        bookingId: booking.id,
+        bookingCode: booking.code,
+        guestName: booking.guestName,
+        source: booking.source,
+        presence: booking.presence,
+        totalCents: booking.totalCents,
+        entered: sql<boolean>`coalesce(exists (select 1 from access_event e where e.booking_id = ${booking.id} and e.kind = 'entry'), false)`,
+      })
+      .from(spot)
+      .innerJoin(spotType, eq(spotType.id, spot.typeId))
+      .leftJoin(inventoryDay, and(eq(inventoryDay.spotId, spot.id), eq(inventoryDay.day, input.day)))
+      .leftJoin(hold, eq(hold.id, inventoryDay.activeHoldId))
+      .leftJoin(booking, and(eq(booking.inventoryDayId, inventoryDay.id), inArray(booking.status, ['confirmed', 'completed'])))
+      .where(and(eq(spot.code, input.code), eq(spot.retired, false)));
+    if (!row) throw new DomainError('not_found', 'Spot not found');
+    if (row.dayState === null) throw new DomainError('not_found', 'This day is not published for this spot');
+
+    const { state, notForSale } = deriveState(row);
+
+    let blockedReason: string | null = null;
+    if (state === 'blocked') {
+      const [blockedBy] = await tx
+        .select({ reason: sql<string | null>`${auditEvent.detail} ->> 'reason'` })
+        .from(auditEvent)
+        .where(and(eq(auditEvent.action, 'inventory.block'), eq(auditEvent.target, `${row.spotId}/${input.day}`)))
+        .orderBy(desc(auditEvent.createdAt))
+        .limit(1);
+      blockedReason = blockedBy?.reason ?? null;
+    }
+
+    let sold: SpotCardBooking | null = null;
+    if (seeBooking && row.bookingId && row.bookingCode && row.guestName && row.source && row.presence && row.totalCents !== null) {
+      const paidCents = await paidCentsOf(tx, row.bookingId);
+      sold = {
+        code: row.bookingCode,
+        guestName: row.guestName,
+        source: row.source,
+        presence: row.presence,
+        totalCents: row.totalCents,
+        paidCents,
+        remainingCents: Math.max(0, row.totalCents - paidCents),
+        paymentState: paymentStateOf(row.totalCents, paidCents),
+      };
+    }
+
+    return {
+      day: input.day,
+      spotId: row.spotId,
+      code: row.code,
+      zone: row.zone,
+      rowNumber: row.rowNumber,
+      col: row.col,
+      typeName: row.typeName,
+      typeMark: row.typeMark,
+      umbrellas: row.umbrellas,
+      sunbeds: row.sunbeds,
+      maxGuests: row.maxGuests,
+      state,
+      notForSale,
+      blockedReason,
+      shared: row.shared ?? false,
+      priceCents: row.priceCents,
+      booking: sold,
     };
   });
 }

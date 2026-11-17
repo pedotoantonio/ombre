@@ -93,6 +93,7 @@ import {
   setSeaSide,
   setSharingSettings,
   setSpotType,
+  spotCard,
   startCheckout,
   startPayRequestPayment,
   statisticsReport,
@@ -343,9 +344,10 @@ const rentalTypeSchema = z.string().trim().min(1).max(rentalTypeMaxLength);
 const rentalNotesSchema = z.string().trim().min(1).max(rentalNotesMaxLength);
 const colSchema = z.number().int().min(1).max(maxColumns);
 const addRowSchema = z.object({ zone: zoneSchema, prefix: z.string().regex(/^[A-Z]{1,4}$/), count: z.number().int().min(1).max(50), typeId: z.uuid().optional(), ...equipmentFields });
+const spotCodeSchema = z.string().regex(/^[A-Z0-9][A-Z0-9-]{0,9}$/);
 const addSpotSchema = z.object({
   zone: zoneSchema,
-  code: z.string().regex(/^[A-Z0-9][A-Z0-9-]{0,9}$/),
+  code: spotCodeSchema,
   rowNumber: z.number().int().min(1).max(200).optional(),
   col: colSchema.optional(),
   typeId: z.uuid().optional(),
@@ -617,6 +619,14 @@ export function createApp(options: AppOptions): Hono {
     const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'inventory.read');
     const day = parse(daySchema, c.req.query('day'), 'day');
     return c.json({ currency: 'EUR', ...(await listDayOperations(db, actor, day)) });
+  });
+
+  route({ method: 'get', path: '/v1/manage/beaches/:slug/operations/spot', summary: 'Card of one spot on a day: state with its reason, price, and the booking with its balance', tag: 'Beach club', auth: 'session', query: { day: 'YYYY-MM-DD', code: 'Spot code' }, success: 200, errors: [400, 401, 403, 404] }, async (c) => {
+    // The card needs what the console needs; the booking inside is nulled without bookings.read.
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'inventory.read');
+    const day = parse(daySchema, c.req.query('day'), 'day');
+    const code = parse(spotCodeSchema, c.req.query('code'), 'spot code');
+    return c.json({ currency: 'EUR', ...(await spotCard(db, actor, { day, code })) });
   });
 
   route({ method: 'put', path: '/v1/manage/beaches/:slug/inventory/price', summary: 'Change the price of a spot on a day', tag: 'Beach club', auth: 'session', request: spotPriceSchema, success: 204, errors: [400, 401, 403, 404] }, async (c) => {
