@@ -1,5 +1,91 @@
 # Collaudo
 
+## Collaudo del 17/11/2026 — console, planner e repertorio
+
+Collaudo dell'iterazione della [specifica console/planner](specifica-console-planner.md)
+(commit `646710e`+`892f7be` C1 scheda della postazione, `7302ceb`+`ea899d0` C2 planner,
+`e93dc8e`+`f830a5b` C3 generazione in blocco, `3d02b85` C4 repertorio, `abf8b78` C5 layout
+applicazione, `92223ef` C6 filtri/sintesi/scala), eseguito sullo stack `ombre-collaudo`
+**ricostruito dal codice corrente con volume nuovo** (migrazioni 001–**017** applicate dal
+servizio `migrate`, seed demo «Bagno delle Dune» e vetrina «Lido Aurora», immagine del sito
+con `OMBRE_SITE_URL=http://localhost:3210` come nei collaudi precedenti), con `pnpm lint`,
+`pnpm typecheck`, `pnpm test:db`, i sette collaudi fumo in ordine su un database appena
+seminato e un giro HTTP dei criteri 0–7 del §6 (più §4bis e §4ter) nei panni di gestore,
+reception e stagionale, con `curl`/`fetch` e moduli GET/POST, **senza eseguire alcuno
+script**. I numeri sono quelli del ciclo finale, ripetuto per intero su un volume nuovo
+dopo la correzione del difetto trovato.
+
+### Test e collaudi fumo
+
+| Parte | Controlli | Esito |
+|---|---|---|
+| Lint e tipi (`pnpm lint`, `pnpm typecheck`) | tutto il codice | Superati |
+| Test con PostgreSQL vero (`pnpm test:db`) | **192** (34 shared, 2 comms, 25 db, 125 api, 6 worker), contratto OpenAPI a **96 rotte** | Superati |
+| Pagine pubbliche (`smoke`) | 279 | Superati |
+| Ricerca, planimetria e riserva (`smoke:flow`) | 69 | Superati |
+| Aree riservate (`smoke:areas`) | **68** (un controllo nuovo sulla navigazione, vedi difetti) | Superati |
+| Sito dello stabilimento (`smoke:site`) | 24 | Superati |
+| Prenotazione e ruoli sull'API (`smoke:booking`) | 15 | Superati |
+| Acquisti simultanei sull'API (`smoke:api`) | 13 | Superati |
+| Verifica in due passaggi (`smoke:2fa`) | 11 | Superati |
+| Criteri 1–7 da HTTP | 168 (158 del giro principale + 10 del percorso di ritiro) | Superati |
+| Verifiche a database (evento `layout.rows-add`, decorazioni, 30 postazioni generate) | 3 | Superate |
+
+Il giro dei criteri crea i propri dati: le giornate 1 e 2 luglio 2027 (30 e 20 €), una
+prenotazione al banco «da incassare» con acconto, un blocco con causale, 30 postazioni
+generate in riva, una decorazione, un tipo personalizzato e, per il «fuori vendita
+(ritirata)», una proposta stagionale su B02 (5/07/2027) approvata e poi ritirata.
+
+### Criteri di accettazione (§6, più §4bis e §4ter)
+
+| # | Criterio | Esito |
+|---|---|---|
+| 0 | Lint, tipi e 192 test verdi; le sette suite fumo verdi in ordine sullo stack appena seminato (dopo l'allineamento di due controlli alla barra nuova, vedi difetti); contratto a 96 rotte (`operations/spot`, `planner`, `layout/rows/bulk`) verificato dai test | Superato |
+| 1 | Tessera → `?postazione=`: scheda resa dal server con ancora `#scheda`; dati giusti per libera (prezzo 30,00 €, tipo di affitto, «Prenota al banco» con postazione preselezionata, modulo «Blocca»), bloccata (causale «Manutenzione», solo «Sblocca»), fuori vendita («Non in vendita (Ritirata dalla vendita)», nessuna azione) e prenotata (codice, ospite, canale, presenza «Atteso»); prenotazione al banco «da incassare»: totale 30,00/incassato 0,00/residuo 30,00 e stato «Da incassare» in parole, dopo l'acconto di 10 € dagli incassi residuo 20,00 e stato «Parziale»; «Sposta» dalla scheda porta la prenotazione su A04 e A02 torna libera; blocca/sblocca dalla scheda conservano il contesto; percentuale di occupazione nella sintesi e nel pannello, uguale a occupate/vendibili ricalcolato dai conteggi; `?postazione=Z99` → messaggio cortese; la reception vede scheda e azioni (sposta, incassa), non la voce Statistiche | Superato |
+| 2 | Griglia con prenotata (iniziali «OS», title con nome e codice, link alla console del giorno con la scheda aperta), bloccata, fuori vendita e giorni non pubblicati; ogni cella porta testo oltre al colore; finestre 7/14/31 esatte, `giorni=60` ricondotto alla predefinita (14), sull'API `from/to` oltre 31 giorni → 4xx con codice d'errore; filtro `zona=riva` restringe alle postazioni generate; frecce avanti/indietro di una finestra intera; prima colonna fissa (`position: sticky`) e stampa dell'intera griglia nel CSS; la reception lo vede, lo stagionale no (pagina 404, API 403) | Superato |
+| 3 | 3 file × 10 con prefisso C in riva → «Create 3 file (30 postazioni), codici C01–C30.», accodate alla zona; stesso prefisso → «Codici in collisione con postazioni esistenti: nessuna fila creata.» e nessuna fila; 11 file e 5×50 (250 > 200) rifiutati senza creare nulla; evento `layout.rows-add` nel registro coi conteggi e i codici; le postazioni generate compaiono in console e planner sulla giornata pubblicata dopo | Superato |
+| 4 | Scheda («Card of spot A04», «Outstanding», «Rental type»), planner («Planner grid») e modulo di generazione («Add several rows») su `/en/…`, con la sintesi tradotta («Expected arrivals») e la cornice presente | Superato |
+| 5 | Palma (senza etichetta) e chiosco (etichetta «Bar della palma») collocati dall'editor senza script; rese in editor, planimetria pubblica e console (`plan-deco`): mai dentro un `<a>`, mai con uno stato di postazione, soggetto nominato nel testo nascosto; la gomma toglie il chiosco e lascia la palma; segno «sdraio» (`deckchair`) selezionabile e tipo personalizzato «Sdraio relax» creato e in elenco; le 5 decorazioni del seed della vetrina rese sulla planimetria pubblica del Lido Aurora | Superato |
+| 6 | Barra `manage-top` (stabilimento, ricerca, giorno, «Prenota al banco», chi è collegato, uscita) e navigazione `manage-nav` su tutte e dieci le pagine di gestione (console, planner, gestione, incassi, statistiche, spiaggia/disegno, sito, convenzioni, extra, comunicazioni), voce attiva giusta pagina per pagina (nessuna voce evidenziata su convenzioni/extra/comunicazioni, che non hanno voce); reception senza Statistiche né Disegno; aree di profilo e stagionale senza cornice; URL invariati (le stesse rotte dei collaudi precedenti rispondono 200); stampa senza barre (`@media print` nasconde `manage-top`, `manage-nav`, `ops-strip`, `ops-filters`) | Superato |
+| 7 | Filtri `zona`/`stato` via GET, anche combinati con ricerca, viste e scheda aperta: la scena e la tabella si restringono (filtro `stato=not_for_sale` → esattamente le tessere contate dal pannello), i sei numeri della sintesi non cambiano mai col filtro e coincidono col pannello esteso (totale, libere, occupate, arrivi = attese, partenze = presenti, percentuale); sintesi fissa (`ops-strip`) presente su un giorno con stati misti; scala a scatti nel markup (`--plan-cell`: 4rem compatta, 5.5rem normale, 7rem ampia, «adatta» calcolata dalla larghezza con voce attiva evidenziata); i parametri si conservano a vicenda (viste, frecce del giorno e tessere portano `zona`, `stato` e `scala`) | Superato |
+
+### Difetti trovati e correzioni
+
+- **Due controlli fumo fermi alla vecchia barra** (`smoke:areas`, `smoke:site`): cercavano
+  `account-bar` sulla pagina di gestione e sull'editor del sito, dove il layout
+  applicazione (C5, D36) la sostituisce con la barra `manage-top` che porta le stesse
+  informazioni (chi è collegato e l'uscita). Non un difetto del prodotto ma delle
+  verifiche: corretto in `9333c64` — i due controlli ora verificano la barra nuova e
+  `smoke:areas` guadagna un controllo sulla navigazione laterale con la voce attiva
+  (67 → 68). Tutto il ciclo è stato rieseguito da zero dopo la correzione.
+- Nessun difetto del prodotto: tutte le altre verifiche sono passate; le stesure
+  intermedie dello script dei criteri hanno corretto solo attese dello script stesso
+  (il riepilogo si legge fino a `</dl>`, i testi con i segnaposto di React, e il caso
+  sotto, scoperto per strada e giusto così).
+
+### Limiti residui e note
+
+- **Il ritiro di una giornata venduta è rifiutato** (`invalid_state`), correttamente:
+  l'unica giornata condivisa del seed (B02, 17/06/2027) viene comprata dai collaudi
+  fumo, quindi il «fuori vendita (ritirata)» si ottiene — ed è stato verificato — col
+  percorso completo: proposta dello stagionale, approvazione del gestore, ritiro.
+- La scheda di una postazione su una giornata **mai pubblicata** (o di una postazione
+  ritirata) risponde col messaggio cortese, per progetto, come le azioni sul giorno
+  singolo; lo stato «Non in vendita (Mai pubblicata)» resta leggibile sulle tessere,
+  nella tabella e nei conteggi.
+- La reception **vede la voce «Sito»** (pagina in sola lettura, permesso `site.read`
+  che ha da prima dell'iterazione): coerente con D36, che mostra le voci delle pagine
+  che l'attore può raggiungere. Statistiche e Disegno restano nascosti. Se il
+  committente preferisce nascondere anche il sito alla reception, è una scelta di
+  permessi da registrare come decisione, non un difetto del layout.
+- L'ambiente `ombre-collaudo` resta **acceso** su 3232/3231 con le immagini nuove e i
+  dati del collaudo (giornate 1–2 e 5/07/2027, prenotazione `OM-270701-001` su A04 con
+  acconto, blocco su A01, postazioni C01–C30, palma, tipo «Sdraio relax», ritiro su
+  B02); la verifica in due passaggi resta attiva sull'accesso di contabilità, lasciata
+  da `smoke:2fa`.
+- Come prima: esclusi pagamenti reali, invio reale delle comunicazioni, carico, prove
+  con persone e lettore di schermo.
+
 ## Collaudo del 16/11/2026 — ondata B: convenzioni, extra, pagamenti multipli e comunicazioni
 
 Collaudo dell'ondata B della [specifica del confronto gestionale](specifica-confronto-gestionale.md)
