@@ -263,10 +263,12 @@ svg {
 
 .site-nav ul {
   display: flex;
-  gap: var(--spazio-1);
+  align-items: center;
+  gap: var(--spazio-2);
   overflow-x: auto;
   overscroll-behavior-x: contain;
-  padding-inline: calc(var(--margine) - var(--spazio-3)) 2.5rem;
+  padding-block: var(--spazio-2);
+  padding-inline: var(--margine) 2.5rem;
   scrollbar-width: none;
 }
 
@@ -280,12 +282,17 @@ svg {
   flex: none;
 }
 
+/* Each entry is little more than a button (D41): compact, a light border, all equal.
+   The current page is told apart by the filled background AND the heavier weight. */
 .site-nav a {
-  position: relative;
   display: inline-flex;
   align-items: center;
-  min-height: var(--tocco);
+  gap: var(--spazio-1);
+  min-height: 2.5rem;
   padding-inline: var(--spazio-3);
+  border: 1.5px solid var(--bordo-campo);
+  border-radius: var(--raggio-pillola);
+  background: var(--carta);
   color: var(--testo-secondario);
   font-size: var(--testo-piccolo);
   font-weight: var(--peso-medio);
@@ -299,29 +306,10 @@ svg {
   outline-offset: -3px;
 }
 
-/* Marker of the current page: a bar under the label, not colour alone. */
-.site-nav a::after {
-  content: '';
-  position: absolute;
-  inset-inline: var(--spazio-3);
-  bottom: 0;
-  height: 3px;
-  border-radius: 3px 3px 0 0;
-  background: var(--oceano);
-  opacity: 0;
-  transform: scaleX(0.5);
-  transition:
-    transform var(--normale) ease-out,
-    opacity var(--normale) ease-out;
-}
-
 .site-nav a:hover {
+  border-color: var(--oceano);
+  background: var(--spuma);
   color: var(--abisso);
-}
-
-.site-nav a:hover::after {
-  opacity: 0.4;
-  transform: none;
 }
 
 .site-nav a:active {
@@ -329,12 +317,16 @@ svg {
 }
 
 .site-nav a[aria-current='page'] {
-  color: var(--oceano);
+  border-color: var(--oceano);
+  background: var(--oceano);
+  color: var(--su-scuro);
+  font-weight: var(--peso-forte);
 }
 
-.site-nav a[aria-current='page']::after {
-  opacity: 1;
-  transform: none;
+/* The umbrella sign of «Ricerca ombrellone». Decorative: the label says it all. */
+.site-nav__mark {
+  font-size: 1em;
+  line-height: 1;
 }
 
 .lang-switch {
@@ -452,10 +444,6 @@ svg {
   .site-nav ul {
     justify-content: center;
     padding-inline: 0;
-  }
-
-  .site-nav a {
-    min-height: var(--testata);
   }
 }
 

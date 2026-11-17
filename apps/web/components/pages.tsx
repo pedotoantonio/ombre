@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { connection } from 'next/server';
-import { beachPath, config, formatMoney, getDictionary, pathFor, type InnerPageId, type Locale } from '@ombre/shared';
+import { accountPath, beachPath, config, formatMoney, getDictionary, pathFor, type InnerPageId, type Locale } from '@ombre/shared';
 import { api, formatDay, isDay, today, type ApiBeachOffer } from '@/lib/api';
 import { FeatureIcon, type FeatureIconName } from '@ombre/ui';
 import { breadcrumbData, JsonLd, pageUrl } from '@/lib/seo';
@@ -67,12 +67,12 @@ function StepList({ steps }: { steps: readonly { title: string; text: string }[]
 const resultsAnchor = 'risultati';
 
 /** Texts of the map box as plain strings: they cross to the client component. */
-function mapLabels(locale: Locale, where: 'home' | 'explore'): MapLabels {
+function mapLabels(locale: Locale, where: 'home' | 'search'): MapLabels {
   const t = getDictionary(locale, config.brandName).map;
   return {
-    invite: where === 'home' ? t.inviteExplore : t.inviteList,
-    inviteCta: where === 'home' ? t.goExplore : t.goList,
-    inviteHref: where === 'home' ? pathFor('explore', locale) : `#${resultsAnchor}`,
+    invite: where === 'home' ? t.inviteSearch : t.inviteList,
+    inviteCta: where === 'home' ? t.goSearch : t.goList,
+    inviteHref: where === 'home' ? pathFor('search', locale) : `#${resultsAnchor}`,
     unavailable: t.unavailable,
     region: t.region,
     open: t.open,
@@ -85,7 +85,7 @@ function mapLabels(locale: Locale, where: 'home' | 'explore'): MapLabels {
 function SearchForm({ locale, search, minDay }: { locale: Locale; search: ExploreSearch; minDay?: string }) {
   const t = getDictionary(locale, config.brandName).search;
   return (
-    <form className="portal-search" method="get" action={`${pathFor('explore', locale)}#${resultsAnchor}`} role="search" aria-label={t.title}>
+    <form className="portal-search" method="get" action={`${pathFor('search', locale)}#${resultsAnchor}`} role="search" aria-label={t.title}>
       <div className="field portal-search__place">
         <label htmlFor="cerca-luogo">{t.place}</label>
         <input id="cerca-luogo" name="place" type="text" maxLength={80} defaultValue={search.place} autoComplete="off" enterKeyHint="search" />
@@ -117,13 +117,13 @@ function SearchForm({ locale, search, minDay }: { locale: Locale; search: Explor
 export function HomePage({ locale }: PageProps) {
   const t = getDictionary(locale, config.brandName);
   const copy = t.pages.home;
-  const audienceLinks: readonly InnerPageId[] = ['howItWorks', 'forSeasonHolders', 'forBeachClubs'];
+  const audienceLinks: readonly InnerPageId[] = ['guestGuide', 'seasonGuide', 'managerGuide'];
   const featureLinks: readonly { icon: FeatureIconName; page: InnerPageId }[] = [
-    { icon: 'search', page: 'explore' },
-    { icon: 'map', page: 'howItWorks' },
-    { icon: 'pass', page: 'howItWorks' },
-    { icon: 'share', page: 'forSeasonHolders' },
-    { icon: 'manager', page: 'forBeachClubs' },
+    { icon: 'search', page: 'search' },
+    { icon: 'map', page: 'guestGuide' },
+    { icon: 'pass', page: 'guestGuide' },
+    { icon: 'share', page: 'seasonGuide' },
+    { icon: 'manager', page: 'managerGuide' },
   ];
 
 
@@ -167,17 +167,17 @@ export function HomePage({ locale }: PageProps) {
             <nav className="portal-roles" aria-label={copy.rolesLabel}>
               <ul>
                 <li>
-                  <Link className="portal-role" href={pathFor('explore', locale)}>
+                  <Link className="portal-role" href={pathFor('search', locale)}>
                     {copy.roles.search}
                   </Link>
                 </li>
                 <li>
-                  <Link className="portal-role" href={pathFor('forSeasonHolders', locale)}>
+                  <Link className="portal-role" href={pathFor('seasonGuide', locale)}>
                     {copy.roles.season}
                   </Link>
                 </li>
                 <li>
-                  <Link className="portal-role" href={pathFor('forBeachClubs', locale)}>
+                  <Link className="portal-role" href={pathFor('managerGuide', locale)}>
                     {copy.roles.manager}
                   </Link>
                 </li>
@@ -201,7 +201,7 @@ export function HomePage({ locale }: PageProps) {
           <ul className="portal-features">
             {copy.features.map((feature, index) => (
               <li key={feature.title}>
-                <Link className="portal-feature" href={pathFor(featureLinks[index]?.page ?? 'explore', locale)}>
+                <Link className="portal-feature" href={pathFor(featureLinks[index]?.page ?? 'search', locale)}>
                   <span className="portal-feature__icon">
                     <FeatureIcon name={featureLinks[index]?.icon ?? 'search'} />
                   </span>
@@ -235,7 +235,7 @@ export function HomePage({ locale }: PageProps) {
               <li className="card" key={audience.title}>
                 <h3>{audience.title}</h3>
                 <p>{audience.text}</p>
-                <Link className="card__link" href={pathFor(audienceLinks[index] ?? 'howItWorks', locale)}>
+                <Link className="card__link" href={pathFor(audienceLinks[index] ?? 'guestGuide', locale)}>
                   {audience.link}
                 </Link>
               </li>
@@ -249,7 +249,7 @@ export function HomePage({ locale }: PageProps) {
 
 function BeachCard({ locale, beach, day }: { locale: Locale; beach: ApiBeachOffer; day: string | null }) {
   const t = getDictionary(locale, config.brandName);
-  const copy = t.pages.explore;
+  const copy = t.pages.search;
   return (
     <li className="card portal-club">
       {beach.cover ? (
@@ -283,11 +283,11 @@ function BeachCard({ locale, beach, day }: { locale: Locale; beach: ApiBeachOffe
   );
 }
 
-async function ExplorePage({ locale, query = {} }: PageProps & { query?: Query }) {
+async function SearchPage({ locale, query = {} }: PageProps & { query?: Query }) {
   // The list comes from the API at request time: this page is never prerendered.
   await connection();
   const t = getDictionary(locale, config.brandName);
-  const copy = t.pages.explore;
+  const copy = t.pages.search;
   const asked = readSearch(query);
   const dayPast = asked.day !== null && asked.day < today();
   const search = { ...asked, day: dayPast ? null : asked.day };
@@ -342,7 +342,7 @@ async function ExplorePage({ locale, query = {} }: PageProps & { query?: Query }
               <div className="empty">
                 <h2>{copy.emptyTitle}</h2>
                 <p>{copy.emptyText}</p>
-                <Link className="button button--secondary" href={pathFor('howItWorks', locale)}>
+                <Link className="button button--secondary" href={pathFor('guestGuide', locale)}>
                   {copy.emptyLink}
                 </Link>
               </div>
@@ -350,7 +350,7 @@ async function ExplorePage({ locale, query = {} }: PageProps & { query?: Query }
               <div className="empty">
                 <h2>{copy.noMatchTitle}</h2>
                 <p>{copy.noMatchText(search.place)}</p>
-                <Link className="button button--secondary" href={pathFor('explore', locale)}>
+                <Link className="button button--secondary" href={pathFor('search', locale)}>
                   {copy.showAll}
                 </Link>
               </div>
@@ -358,9 +358,9 @@ async function ExplorePage({ locale, query = {} }: PageProps & { query?: Query }
               <>
                 {markers.length > 0 ? (
                   <div className="portal-map-block" aria-labelledby="mappa-risultati">
-                    <h2 id="mappa-risultati">{t.map.exploreTitle}</h2>
-                    <p className="portal-map-lead">{t.map.exploreLead}</p>
-                    <MapPanel markers={markers} labels={mapLabels(locale, 'explore')} />
+                    <h2 id="mappa-risultati">{t.map.searchTitle}</h2>
+                    <p className="portal-map-lead">{t.map.searchLead}</p>
+                    <MapPanel markers={markers} labels={mapLabels(locale, 'search')} />
                   </div>
                 ) : null}
                 <div className="portal-results__head">
@@ -371,7 +371,7 @@ async function ExplorePage({ locale, query = {} }: PageProps & { query?: Query }
                   <div className="empty">
                     <h3>{copy.noFreeTitle}</h3>
                     <p>{copy.noFreeText}</p>
-                    <Link className="button button--secondary" href={pathFor('explore', locale)}>
+                    <Link className="button button--secondary" href={pathFor('search', locale)}>
                       {copy.showAll}
                     </Link>
                   </div>
@@ -403,8 +403,8 @@ async function ExplorePage({ locale, query = {} }: PageProps & { query?: Query }
   );
 }
 
-function HowItWorksPage({ locale }: PageProps) {
-  const copy = getDictionary(locale, config.brandName).pages.howItWorks;
+function GuestGuidePage({ locale }: PageProps) {
+  const copy = getDictionary(locale, config.brandName).pages.guestGuide;
   return (
     <>
       <PageHead title={copy.h1} lead={copy.lead} />
@@ -437,16 +437,53 @@ function HowItWorksPage({ locale }: PageProps) {
           </ul>
         </div>
       </section>
-      <NextStep title={copy.nextTitle} text={copy.nextText} action={{ label: copy.nextAction, href: pathFor('explore', locale) }} />
+      <NextStep title={copy.nextTitle} text={copy.nextText} action={{ label: copy.nextAction, href: pathFor('search', locale) }} />
     </>
   );
 }
 
-function ForBeachClubsPage({ locale }: PageProps) {
-  const copy = getDictionary(locale, config.brandName).pages.forBeachClubs;
+/** The sign-in door of a role page, in plain sight right under the opening (criterion 6). */
+function RoleAccess({ locale, copy }: { locale: Locale; copy: { title: string; text: string; action: string } }) {
+  return (
+    <section className="section">
+      <div className="container">
+        <div className="next-step">
+          <h2>{copy.title}</h2>
+          <p>{copy.text}</p>
+          <p className="actions">
+            <Link className="button" href={accountPath(locale, 'signIn')}>
+              {copy.action}
+            </Link>
+          </p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function ManagerGuidePage({ locale }: PageProps) {
+  const copy = getDictionary(locale, config.brandName).pages.managerGuide;
+  const screens = ['console-filtri-it-desktop.png', 'planner-it-desktop.png', 'scheda-postazione-it-desktop.png', 'economia-it-desktop.png'];
   return (
     <>
       <PageHead title={copy.h1} lead={copy.lead} />
+      <RoleAccess locale={locale} copy={copy.access} />
+      <section className="section section--tinted">
+        <div className="container">
+          <h2>{copy.tourTitle}</h2>
+          <p className="prose">{copy.tourLead}</p>
+          <ul className="portal-tour">
+            {copy.tour.map((screen, index) => (
+              <li key={screen.caption}>
+                <figure>
+                  <img src={`/img/gestionale/${screens[index]}`} alt="" width={1366} height={900} loading="lazy" decoding="async" />
+                  <figcaption>{screen.caption}</figcaption>
+                </figure>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </section>
       <section className="section">
         <div className="container">
           <div className="callout">
@@ -495,18 +532,19 @@ function ForBeachClubsPage({ locale }: PageProps) {
       <NextStep
         title={copy.nextTitle}
         text={copy.nextText}
-        action={{ label: copy.nextAction, href: pathFor('explore', locale) }}
-        secondary={{ label: copy.nextSecondary, href: pathFor('howItWorks', locale) }}
+        action={{ label: copy.nextAction, href: pathFor('search', locale) }}
+        secondary={{ label: copy.nextSecondary, href: pathFor('guestGuide', locale) }}
       />
     </>
   );
 }
 
-function ForSeasonHoldersPage({ locale }: PageProps) {
-  const copy = getDictionary(locale, config.brandName).pages.forSeasonHolders;
+function SeasonGuidePage({ locale }: PageProps) {
+  const copy = getDictionary(locale, config.brandName).pages.seasonGuide;
   return (
     <>
       <PageHead title={copy.h1} lead={copy.lead} />
+      <RoleAccess locale={locale} copy={copy.access} />
       <section className="section section--tinted">
         <div className="container">
           <h2>{copy.stepsTitle}</h2>
@@ -556,16 +594,16 @@ function HelpPage({ locale }: PageProps) {
         </div>
       </section>
       <Contact locale={locale} />
-      <NextStep title={copy.nextTitle} text={copy.nextText} action={{ label: copy.nextAction, href: pathFor('explore', locale) }} />
+      <NextStep title={copy.nextTitle} text={copy.nextText} action={{ label: copy.nextAction, href: pathFor('search', locale) }} />
     </>
   );
 }
 
 const innerPages: Record<InnerPageId, (props: PageProps & { query?: Query }) => React.ReactNode | Promise<React.ReactNode>> = {
-  explore: ExplorePage,
-  howItWorks: HowItWorksPage,
-  forBeachClubs: ForBeachClubsPage,
-  forSeasonHolders: ForSeasonHoldersPage,
+  search: SearchPage,
+  guestGuide: GuestGuidePage,
+  seasonGuide: SeasonGuidePage,
+  managerGuide: ManagerGuidePage,
   help: HelpPage,
 };
 

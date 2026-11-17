@@ -95,6 +95,35 @@
   }
 }
 
+/* ---- Schermate vere del gestionale, nella pagina del Gestore stabilimento (D41) ---- */
+.portal-tour {
+  display: grid;
+  gap: var(--spazio-5);
+  margin-top: var(--spazio-5);
+}
+
+.portal-tour img {
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--bordo);
+  border-radius: var(--raggio);
+  background: var(--carta);
+  box-shadow: 0 0.5rem 1.5rem color-mix(in srgb, var(--abisso) 10%, transparent);
+}
+
+.portal-tour figcaption {
+  margin-top: var(--spazio-2);
+  color: var(--testo-secondario);
+  font-size: var(--testo-piccolo);
+}
+
+@media (min-width: 48rem) {
+  .portal-tour {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--spazio-6);
+  }
+}
+
 @media (min-width: 48rem) {
   .portal-hero {
     padding-block: clamp(3rem, 7vw, 5rem);

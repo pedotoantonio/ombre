@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getDictionary, innerPageIds, locales, pageFromSlug, pageIds, pathFor, readAddress, slugs } from '../src/index';
+import { getDictionary, innerPageIds, legacyRedirect, locales, pageFromSlug, pageIds, pathFor, readAddress, slugs } from '../src/index';
 
 function shape(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(shape);
@@ -72,8 +72,22 @@ describe('routes', () => {
   it('give Italian no prefix and English the /en prefix', () => {
     expect(pathFor('home', 'it')).toBe('/');
     expect(pathFor('home', 'en')).toBe('/en');
-    expect(pathFor('howItWorks', 'it')).toBe('/come-funziona');
-    expect(pathFor('howItWorks', 'en')).toBe('/en/how-it-works');
+    expect(pathFor('guestGuide', 'it')).toBe('/come-funziona');
+    expect(pathFor('guestGuide', 'en')).toBe('/en/how-it-works');
+    expect(pathFor('search', 'it')).toBe('/ricerca-ombrellone');
+    expect(pathFor('search', 'en')).toBe('/en/umbrella-search');
+  });
+
+  it('send every renamed address to the page of today, and nothing else anywhere (D41)', () => {
+    expect(legacyRedirect('/esplora')).toBe('/ricerca-ombrellone');
+    expect(legacyRedirect('/en/explore')).toBe('/en/umbrella-search');
+    expect(legacyRedirect('/per-gli-stabilimenti')).toBe('/gestore-stabilimento');
+    expect(legacyRedirect('/en/for-beach-clubs')).toBe('/en/beach-manager');
+    expect(legacyRedirect('/per-gli-stagionali')).toBe('/stagionale');
+    expect(legacyRedirect('/en/for-season-holders')).toBe('/en/season-holder');
+    for (const path of ['/', '/en', '/ricerca-ombrellone', '/come-funziona', '/en/explore/altro', '/bagni/esplora', '/en/esplora', '/explore']) {
+      expect(legacyRedirect(path), path).toBeNull();
+    }
   });
 
   it('resolve every slug back to its page and reject unknown ones', () => {
@@ -85,9 +99,9 @@ describe('routes', () => {
   });
 
   it('tell the pages of the site from unknown addresses, and in which language they are written', () => {
-    const known = ['/', '/en', '/esplora', '/en/explore', '/bagni/lido-aurora', '/bagni/lido-aurora/prenota', '/en/beach-clubs/lido-aurora/hold/abc', '/bagni/lido-aurora/prenotazione/abc', '/area/accesso', '/en/account/sign-in', '/area/gestione/lido-aurora', '/en/account/season/abc', '/area/gestione/lido-aurora/extra', '/en/account/manage/lido-aurora/extras'];
+    const known = ['/', '/en', '/ricerca-ombrellone', '/en/umbrella-search', '/stagionale', '/en/season-holder', '/gestore-stabilimento', '/en/beach-manager', '/bagni/lido-aurora', '/bagni/lido-aurora/prenota', '/en/beach-clubs/lido-aurora/hold/abc', '/bagni/lido-aurora/prenotazione/abc', '/area/accesso', '/en/account/sign-in', '/area/gestione/lido-aurora', '/en/account/season/abc', '/area/gestione/lido-aurora/extra', '/en/account/manage/lido-aurora/extras'];
     for (const path of known) expect(readAddress(path), path).toMatchObject({ known: true });
-    const unknown = ['/pagina-che-non-esiste', '/fr', '/en/come-funziona', '/en/bagni/lido-aurora', '/bagni', '/bagni/lido-aurora/book', '/bagni/a/b/c/d', '/area', '/area/gestione', '/area/accesso/altro', '/a/b', '/it/esplora'];
+    const unknown = ['/pagina-che-non-esiste', '/fr', '/en/come-funziona', '/en/bagni/lido-aurora', '/bagni', '/bagni/lido-aurora/book', '/bagni/a/b/c/d', '/area', '/area/gestione', '/area/accesso/altro', '/a/b', '/it/ricerca-ombrellone'];
     for (const path of unknown) expect(readAddress(path), path).toMatchObject({ known: false });
     expect(readAddress('/en/pagina-che-non-esiste').locale).toBe('en');
     expect(readAddress('/en').locale).toBe('en');

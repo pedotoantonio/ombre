@@ -4,7 +4,8 @@ import { accountPath, config, getDictionary, locales, pathFor, type InnerPageId,
 import { Logo, LogoLockup } from '@ombre/ui';
 import { crumbLabel } from '@/lib/seo';
 
-const navPages: readonly InnerPageId[] = ['explore', 'howItWorks', 'forBeachClubs', 'forSeasonHolders', 'help'];
+/* The five entries of D41, in the committed order: search, then one guide per role, then help. */
+const navPages: readonly InnerPageId[] = ['search', 'guestGuide', 'seasonGuide', 'managerGuide', 'help'];
 
 export interface Crumb {
   label: string;
@@ -79,6 +80,11 @@ export function PageShell({ locale, page, highlight = true, alternatePath, crumb
               {navPages.map((id) => (
                 <li key={id}>
                   <Link href={pathFor(id, locale)} aria-current={highlight && id === page ? 'page' : undefined}>
+                    {id === 'search' ? (
+                      <span className="site-nav__mark" aria-hidden="true">
+                        ⛱️
+                      </span>
+                    ) : null}
                     {t.nav[id]}
                   </Link>
                 </li>
@@ -182,8 +188,8 @@ export function NotFoundPage({ locale }: { locale: Locale }) {
           <Link className="button" href={pathFor('home', locale)}>
             {t.notFound.home}
           </Link>
-          <Link className="button button--secondary" href={pathFor('explore', locale)}>
-            {t.notFound.explore}
+          <Link className="button button--secondary" href={pathFor('search', locale)}>
+            {t.notFound.search}
           </Link>
         </p>
       </PageHead>

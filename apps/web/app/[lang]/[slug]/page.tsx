@@ -29,15 +29,15 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
   if (!found) return {};
   const metadata = buildMetadata(found.page, found.locale);
   // A search is one view of the same list: it is not indexed, and its canonical stays the plain address.
-  if (found.page === 'explore' && Object.keys(await searchParams).length > 0) return { ...metadata, robots: { index: false, follow: true } };
+  if (found.page === 'search' && Object.keys(await searchParams).length > 0) return { ...metadata, robots: { index: false, follow: true } };
   return metadata;
 }
 
 export default async function Page({ params, searchParams }: Props) {
   const found = await resolve(params);
   if (!found) notFound();
-  // Only the explore page reads the address: the others stay prerendered.
-  const query = found.page === 'explore' ? await searchParams : {};
+  // Only the search page reads the address: the others stay prerendered.
+  const query = found.page === 'search' ? await searchParams : {};
   const search = searchQuery(readSearch(query));
 
   return (

@@ -190,7 +190,7 @@ const proposal = /name="proposal" value="([0-9a-f-]{36})"/.exec(waiting.html)?.[
 check((await manager.post('gestione-proposta', { lang: 'it', beach, day, proposal, approve: 'yes' })).includes('ok=1'), 'management: the proposal was not approved');
 check((await holder.get(seasonUrl)).html.includes('Autorizzata'), 'season holder: the approval is not shown');
 check((await guest.get(`/bagni/${beach}?day=2027-07-06`)).html.includes('Giornata condivisa'), 'public page: the approved shared day is not on sale');
-check((await guest.get('/esplora?day=2027-07-06&guests=2&shared=1')).html.includes('1 postazione libera<'), 'explore: the approved shared day is not found by the search');
+check((await guest.get('/ricerca-ombrellone?day=2027-07-06&guests=2&shared=1')).html.includes('1 postazione libera<'), 'explore: the approved shared day is not found by the search');
 check((await holder.post('stagionale-ritira', { lang: 'it', contract: seasonUrl.split('/').at(-1)!, day: '2027-07-06' })).includes('ok=1'), 'season holder: could not withdraw a free day');
 check(!(await guest.get(`/bagni/${beach}?day=2027-07-06`)).html.includes('class="spot__code"'), 'public page: a withdrawn day is still on sale');
 check(JSON.stringify(await mapOf('2027-07-06')) === JSON.stringify({ free: 0, taken: 8 }), 'public page: the map still offers a withdrawn day');

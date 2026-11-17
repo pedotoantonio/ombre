@@ -35,42 +35,42 @@ const titleOf = (html: string): string => /<title>([^<]*)<\/title>/.exec(html)?.
 // ---- Home page: the search is a plain form that opens the explore page ----
 const home = await page('/');
 const form = /<form class="portal-search"[^>]*>[^]*?<\/form>/.exec(home.html)?.[0] ?? '';
-check(/method="get"/.test(form) && /action="\/esplora#risultati"/.test(form) && /role="search"/.test(form), 'home: no search form that opens the explore page at its results');
+check(/method="get"/.test(form) && /action="\/ricerca-ombrellone#risultati"/.test(form) && /role="search"/.test(form), 'home: no search form that opens the explore page at its results');
 for (const name of ['place', 'day', 'guests', 'shared']) check(form.includes(`name="${name}"`), `home: the search has no "${name}" field`);
 // The home page is prerendered, so its form carries no date limit; the explore page, rendered per request, does.
-const exploreForm = /<form class="portal-search"[^>]*>[^]*?<\/form>/.exec((await page('/esplora')).html)?.[0] ?? '';
+const exploreForm = /<form class="portal-search"[^>]*>[^]*?<\/form>/.exec((await page('/ricerca-ombrellone')).html)?.[0] ?? '';
 const firstDay = /name="day"[^>]*min="(\d{4}-\d{2}-\d{2})"|min="(\d{4}-\d{2}-\d{2})"[^>]*name="day"/.exec(exploreForm);
 const romeToday = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome' }).format(new Date());
 check((firstDay?.[1] ?? firstDay?.[2]) === romeToday, `explore: the search does not start from today (${firstDay?.[1] ?? firstDay?.[2]})`);
 // Besides the search, the only other button is the invitation to Explore inside the map box.
 const mapBox = /<div class="portal-map__invite">[^]*?<\/div>/.exec(home.html)?.[0] ?? '';
 check(count(form, /type="submit"/g) === 1 && count(home.html.replace(mapBox, ''), /class="button[ "]/g) === 1, 'home: expected exactly one main button, the search');
-check(mapBox.includes('href="/esplora"') && home.html.indexOf('class="portal-search"') < home.html.indexOf('class="portal-map'), 'home: the map box has no invitation to Explore after the search form');
-check(/action="\/en\/explore#risultati"/.test((await page('/en')).html), 'english home: the search does not open the English explore page');
-check(/action="\/esplora#risultati"/.test(exploreForm), 'explore: a new search does not land on the results');
+check(mapBox.includes('href="/ricerca-ombrellone"') && home.html.indexOf('class="portal-search"') < home.html.indexOf('class="portal-map'), 'home: the map box has no invitation to Explore after the search form');
+check(/action="\/en\/umbrella-search#risultati"/.test((await page('/en')).html), 'english home: the search does not open the English search page');
+check(/action="\/ricerca-ombrellone#risultati"/.test(exploreForm), 'explore: a new search does not land on the results');
 
 // ---- Explore: plain list, then searches by day, guests, shared days and place ----
-const explore = await page('/esplora');
+const explore = await page('/ricerca-ombrellone');
 check(explore.status === 200 && explore.html.includes('Bagno delle Dune'), 'explore: the demo beach club is not listed');
 check(explore.html.includes(`href="${beach}"`), 'explore: no link to the beach club page');
 check(!explore.html.includes('postazioni libere</span>') && explore.html.includes('Indica un giorno'), 'explore: free spots shown without a day, or no hint to choose one');
 
-const searched = await page(`/esplora?day=${demoDay}&guests=2`);
+const searched = await page(`/ricerca-ombrellone?day=${demoDay}&guests=2`);
 check(searched.html.includes('8 postazioni libere') && searched.html.includes('da 30,00'), 'search: free spots and "from" price of the demo day are not shown');
 check(searched.html.includes(`href="${beach}?day=${demoDay}"`), 'search: the card does not carry the day to the beach club page');
 const results = /id="risultati"[^]*$/.exec(searched.html)?.[0] ?? '';
 check(count(searched.html, /id="risultati"/g) === 1 && results.includes('<h2>Disponibilità per') && !results.includes('<form class="portal-search"'), 'search: the results anchor is missing, or it is not right before the results heading');
 check(/<meta name="robots" content="noindex/.test(searched.html), 'search: a page with parameters must not be indexable');
-check(/<link rel="canonical" href="[^"?]*\/esplora"/.test(searched.html), 'search: the canonical address is not the plain explore page');
-check(searched.html.includes(`href="/en/explore?day=${demoDay}&guests=2"`), 'search: the link to the other language loses the search');
-check((await page(`/esplora?day=${demoDay}&guests=2&shared=1`)).html.includes('1 postazione libera<'), 'search: shared days only should leave one free spot');
-const tooMany = await page(`/esplora?day=${demoDay}&guests=3`);
+check(/<link rel="canonical" href="[^"?]*\/ricerca-ombrellone"/.test(searched.html), 'search: the canonical address is not the plain explore page');
+check(searched.html.includes(`href="/en/umbrella-search?day=${demoDay}&guests=2"`), 'search: the link to the other language loses the search');
+check((await page(`/ricerca-ombrellone?day=${demoDay}&guests=2&shared=1`)).html.includes('1 postazione libera<'), 'search: shared days only should leave one free spot');
+const tooMany = await page(`/ricerca-ombrellone?day=${demoDay}&guests=3`);
 check(tooMany.html.includes('Nessuna postazione libera per questa ricerca') && !tooMany.html.includes('da 30,00'), 'search: no clear empty state when no spot fits the guests');
-check((await page('/esplora?place=Rimini')).html.includes('Nessuno stabilimento corrisponde alla ricerca'), 'search: no clear empty state for an unknown place');
-check((await page(`/esplora?place=pomposa&day=${demoDay}`)).html.includes('8 postazioni libere'), 'search: the place is not matched without regard to case');
-const past = await page('/esplora?day=2020-06-17&guests=2');
+check((await page('/ricerca-ombrellone?place=Rimini')).html.includes('Nessuno stabilimento corrisponde alla ricerca'), 'search: no clear empty state for an unknown place');
+check((await page(`/ricerca-ombrellone?place=pomposa&day=${demoDay}`)).html.includes('8 postazioni libere'), 'search: the place is not matched without regard to case');
+const past = await page('/ricerca-ombrellone?day=2020-06-17&guests=2');
 check(past.html.includes('già passato') && past.html.includes('Bagno delle Dune') && !past.html.includes('da 30,00'), 'search: a past day is not explained');
-const searchedEnglish = await page(`/en/explore?day=${demoDay}&guests=2`);
+const searchedEnglish = await page(`/en/umbrella-search?day=${demoDay}&guests=2`);
 check(searchedEnglish.html.includes('8 free spots') && searchedEnglish.html.includes(`href="/en/beach-clubs/bagno-delle-dune?day=${demoDay}"`), 'english search: results not served in English');
 
 // ---- Beach page: map with every spot, equivalent list, choice without scripts ----
@@ -149,7 +149,7 @@ check(count(after.html, /class="plan-spot plan-spot--taken"/g) === takenBefore +
 check(count(after.html, /<a class="plan-spot /g) === mapLinks.length - 1, 'beach page: the held spot is still a link on the map');
 const gone = await page(selectHref);
 check(gone.html.includes('non è più libera') && !gone.html.includes('class="plan-bar"'), 'choice: a spot taken in the meantime still opens the bar');
-check((await page(`/esplora?day=${day}&guests=2`)).html.includes(`${mapLinks.length - 1} postazioni libere`), 'search: the held spot is still counted as free');
+check((await page(`/ricerca-ombrellone?day=${day}&guests=2`)).html.includes(`${mapLinks.length - 1} postazioni libere`), 'search: the held spot is still counted as free');
 
 const english = await page('/en/beach-clubs/bagno-delle-dune');
 check(english.status === 200 && english.html.includes('<html lang="en"') && english.html.includes('Free spots on'), 'english beach page: not served in English');

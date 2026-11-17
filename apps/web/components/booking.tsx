@@ -39,7 +39,7 @@ export async function BookingView({ lang, section, slug, step, bookingId, token 
   return (
     <PageShell
       locale={locale}
-      page="explore"
+      page="search"
       alternatePath={`${bookingPath(otherLocale(locale), beach.slug, bookingId)}?t=${token}`}
       crumbs={crumbsFor(locale, beach, booked.code)}
     >

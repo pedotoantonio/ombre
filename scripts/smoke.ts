@@ -10,10 +10,10 @@ const demoMode = process.env.OMBRE_DEMO_MODE;
 
 const pages: { it: string; en: string; types: string[] }[] = [
   { it: '/', en: '/en', types: ['WebSite'] },
-  { it: '/esplora', en: '/en/explore', types: ['BreadcrumbList'] },
+  { it: '/ricerca-ombrellone', en: '/en/umbrella-search', types: ['BreadcrumbList'] },
   { it: '/come-funziona', en: '/en/how-it-works', types: ['BreadcrumbList'] },
-  { it: '/per-gli-stabilimenti', en: '/en/for-beach-clubs', types: ['BreadcrumbList'] },
-  { it: '/per-gli-stagionali', en: '/en/for-season-holders', types: ['BreadcrumbList'] },
+  { it: '/gestore-stabilimento', en: '/en/beach-manager', types: ['BreadcrumbList'] },
+  { it: '/stagionale', en: '/en/season-holder', types: ['BreadcrumbList'] },
   { it: '/assistenza', en: '/en/help', types: ['BreadcrumbList', 'FAQPage'] },
 ];
 
@@ -111,8 +111,8 @@ for (const page of pages) {
   await checkPage(page.en, 'en', page, page.types);
 }
 
-// A search is one view of the explore page: never indexed, canonical on the plain address.
-for (const [path, plain] of [['/esplora?day=2027-06-17&guests=2', '/esplora'], ['/en/explore?place=mare', '/en/explore']] as const) {
+// A search is one view of the umbrella-search page: never indexed, canonical on the plain address.
+for (const [path, plain] of [['/ricerca-ombrellone?day=2027-06-17&guests=2', '/ricerca-ombrellone'], ['/en/umbrella-search?place=mare', '/en/umbrella-search']] as const) {
   const response = await fetch(base + path, { redirect: 'manual' });
   const html = await response.text();
   const robotsMeta = attribute(tags(html, 'meta').find((tag) => attribute(tag, 'name') === 'robots') ?? '', 'content') ?? '';
@@ -125,13 +125,24 @@ for (const [path, plain] of [['/esplora?day=2027-06-17&guests=2', '/esplora'], [
 
 await expectStatus('/it', 308, '/');
 await expectStatus('/it/come-funziona', 308, '/come-funziona');
+
+// The renamed pages (D41): every old address answers 301 towards the address of today,
+// and a search carried by the old address is not lost.
+await expectStatus('/esplora', 301, `${base}/ricerca-ombrellone`);
+await expectStatus('/en/explore', 301, `${base}/en/umbrella-search`);
+await expectStatus('/per-gli-stabilimenti', 301, `${base}/gestore-stabilimento`);
+await expectStatus('/en/for-beach-clubs', 301, `${base}/en/beach-manager`);
+await expectStatus('/per-gli-stagionali', 301, `${base}/stagionale`);
+await expectStatus('/en/for-season-holders', 301, `${base}/en/season-holder`);
+await expectStatus('/esplora?day=2027-06-17&guests=2', 301, `${base}/ricerca-ombrellone?day=2027-06-17&guests=2`);
+
 await expectStatus('/pagina-che-non-esiste', 404);
 await expectStatus('/en/pagina-che-non-esiste', 404);
 await expectStatus('/en/come-funziona', 404);
 await expectStatus('/fr', 404);
 
 // An unknown address gets the site's own page, in the language of the address, readable without scripts.
-const notFound = { it: { heading: 'Pagina non trovata', home: '/', explore: '/esplora' }, en: { heading: 'Page not found', home: '/en', explore: '/en/explore' } };
+const notFound = { it: { heading: 'Pagina non trovata', home: '/', explore: '/ricerca-ombrellone' }, en: { heading: 'Page not found', home: '/en', explore: '/en/umbrella-search' } };
 for (const [path, lang] of [['/pagina-che-non-esiste', 'it'], ['/fr', 'it'], ['/una/pagina/molto/in/fondo', 'it'], ['/en/pagina-che-non-esiste', 'en'], ['/en/come-funziona', 'en'], ['/en/bagni/bagno-delle-dune', 'en']] as const) {
   const response = await fetch(base + path, { redirect: 'manual' });
   const html = await response.text();
@@ -180,7 +191,7 @@ const noticeEn = await noticeOf('/en', 'en');
 check(noticeIt.count <= 1 && noticeEn.count <= 1, 'notice: more than one notice at the top of the page');
 check(noticeIt.kind === noticeEn.kind && noticeIt.count === noticeEn.count, `notice: Italian shows "${noticeIt.kind}", English "${noticeEn.kind}"`);
 // Pages rendered at each request must show the same notice as the prerendered ones.
-for (const [path, lang] of [['/esplora', 'it'], ['/en/explore', 'en'], ['/area/accesso', 'it']] as const) {
+for (const [path, lang] of [['/ricerca-ombrellone', 'it'], ['/en/umbrella-search', 'en'], ['/area/accesso', 'it']] as const) {
   const notice = await noticeOf(path, lang);
   check(notice.kind === noticeIt.kind && notice.count === noticeIt.count, `notice: ${path} shows "${notice.kind}", the home page "${noticeIt.kind}"`);
 }

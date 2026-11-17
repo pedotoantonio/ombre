@@ -9,19 +9,40 @@ export function isLocale(value: string): value is Locale {
 export const htmlLang: Record<Locale, string> = { it: 'it', en: 'en' };
 export const ogLocale: Record<Locale, string> = { it: 'it_IT', en: 'en_GB' };
 
-export const pageIds = ['home', 'explore', 'howItWorks', 'forBeachClubs', 'forSeasonHolders', 'help'] as const;
+export const pageIds = ['home', 'search', 'guestGuide', 'seasonGuide', 'managerGuide', 'help'] as const;
 export type PageId = (typeof pageIds)[number];
 export type InnerPageId = Exclude<PageId, 'home'>;
 
 export const innerPageIds = pageIds.filter((id): id is InnerPageId => id !== 'home');
 
 export const slugs: Record<InnerPageId, Record<Locale, string>> = {
-  explore: { it: 'esplora', en: 'explore' },
-  howItWorks: { it: 'come-funziona', en: 'how-it-works' },
-  forBeachClubs: { it: 'per-gli-stabilimenti', en: 'for-beach-clubs' },
-  forSeasonHolders: { it: 'per-gli-stagionali', en: 'for-season-holders' },
+  search: { it: 'ricerca-ombrellone', en: 'umbrella-search' },
+  guestGuide: { it: 'come-funziona', en: 'how-it-works' },
+  seasonGuide: { it: 'stagionale', en: 'season-holder' },
+  managerGuide: { it: 'gestore-stabilimento', en: 'beach-manager' },
   help: { it: 'assistenza', en: 'help' },
 };
+
+/**
+ * Old addresses of the renamed pages (D41): «Esplora» became «Ricerca ombrellone» and the
+ * audience pages merged into the three «come funziona». Each answers 301, nothing is lost.
+ */
+export const legacySlugs: Record<Locale, Record<string, InnerPageId>> = {
+  it: { esplora: 'search', 'per-gli-stabilimenti': 'managerGuide', 'per-gli-stagionali': 'seasonGuide' },
+  en: { explore: 'search', 'for-beach-clubs': 'managerGuide', 'for-season-holders': 'seasonGuide' },
+};
+
+/** Address of today for an old first-level address, or null when nothing was renamed there. */
+export function legacyRedirect(pathname: string): string | null {
+  const parts = pathname.split('/').filter((part) => part !== '');
+  const prefix = parts[0];
+  const locale = prefix !== undefined && prefix !== defaultLocale && isLocale(prefix) ? prefix : defaultLocale;
+  const rest = locale === defaultLocale ? parts : parts.slice(1);
+  const first = rest[0];
+  if (rest.length !== 1 || first === undefined) return null;
+  const page = legacySlugs[locale][first];
+  return page === undefined ? null : pathFor(page, locale);
+}
 
 /** Public path of a page. The default locale has no prefix. */
 export function pathFor(page: PageId, locale: Locale): string {

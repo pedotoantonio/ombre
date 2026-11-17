@@ -37,10 +37,10 @@ export function buildMetadata(page: PageId, locale: Locale): Metadata {
   };
 }
 
-/** Label of a fixed page in the breadcrumb. Explore keeps the name it has in the navigation. */
+/** Label of a fixed page in the breadcrumb. The search keeps the name it has in the navigation. */
 export function crumbLabel(page: Exclude<PageId, 'home'>, locale: Locale): string {
   const dictionary = getDictionary(locale, config.brandName);
-  return page === 'explore' ? dictionary.nav.explore : dictionary.pages[page].h1;
+  return page === 'search' ? dictionary.nav.search : dictionary.pages[page].h1;
 }
 
 /**

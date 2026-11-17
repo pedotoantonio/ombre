@@ -75,7 +75,7 @@ export const loadBeach = cache(
 
 export function crumbsFor(locale: Locale, beach: ApiBeach, last?: string): Crumb[] {
   const t = getDictionary(locale, config.brandName);
-  const trail: Crumb[] = [{ label: t.nav.explore, href: pathFor('explore', locale) }];
+  const trail: Crumb[] = [{ label: t.nav.search, href: pathFor('search', locale) }];
   if (last) trail.push({ label: beach.name, href: beachPath(locale, beach.slug) }, { label: last });
   else trail.push({ label: beach.name });
   return trail;
@@ -932,7 +932,7 @@ export async function BeachView({ lang, section, slug, query }: { lang: string; 
   const alternateQuery = isDay(asked) ? `?day=${asked}${guests ? `&guests=${guests}` : ''}${selected ? `&spot=${selected.spotId}` : ''}` : '';
 
   return (
-    <PageShell locale={locale} page="explore" alternatePath={beachPath(otherLocale(locale), beach.slug) + alternateQuery} crumbs={crumbsFor(locale, beach)}>
+    <PageShell locale={locale} page="search" alternatePath={beachPath(otherLocale(locale), beach.slug) + alternateQuery} crumbs={crumbsFor(locale, beach)}>
       <PageHead title={beach.name} lead={t.beachLead(beach.locality)}>
         {site && texts ? (
           <p className="actions">
@@ -1214,7 +1214,7 @@ export async function BookView({ lang, section, slug, step, query }: { lang: str
   const alternate = `${bookPath(otherLocale(locale), beach.slug)}?spot=${spotId}&day=${day}`;
 
   return (
-    <PageShell locale={locale} page="explore" alternatePath={alternate} crumbs={crumbsFor(locale, beach, t.summaryTitle)}>
+    <PageShell locale={locale} page="search" alternatePath={alternate} crumbs={crumbsFor(locale, beach, t.summaryTitle)}>
       <PageHead title={t.bookTitle(beach.name)} lead={t.holdNote} />
       <DemoBadge locale={locale} beach={beach} />
       <section className="section">
@@ -1308,7 +1308,7 @@ export async function HoldView({ lang, section, slug, step, holdId }: { lang: st
   const alternate = `${beachPath(otherLocale(locale), beach.slug)}/${holdSegment[otherLocale(locale)]}/${holdId}`;
 
   return (
-    <PageShell locale={locale} page="explore" alternatePath={alternate} crumbs={crumbsFor(locale, beach, t.holdTitle)}>
+    <PageShell locale={locale} page="search" alternatePath={alternate} crumbs={crumbsFor(locale, beach, t.holdTitle)}>
       <PageHead
         title={active ? t.holdActiveTitle : t.holdEndedTitle}
         lead={active ? t.holdUntil(formatTime(held.expiresAt, locale, beach.timezone)) : t.holdEndedText}

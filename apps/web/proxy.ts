@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { notFoundSegment, readAddress } from '@ombre/shared';
+import { legacyRedirect, notFoundSegment, readAddress } from '@ombre/shared';
 
 /**
  * An address that matches no page gets the not-found page of its language, rendered on the
@@ -39,6 +39,9 @@ async function payLinkUsable(request: NextRequest, token: string): Promise<boole
 
 export async function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
+  // The renamed pages (D41): the old address answers 301 and keeps any search in the address.
+  const renamed = legacyRedirect(pathname);
+  if (renamed) return NextResponse.redirect(new URL(renamed + request.nextUrl.search, request.url), 301);
   const pay = payLink.exec(pathname);
   if (pay) {
     const locale = pathname.startsWith('/en/') ? 'en' : 'it';
