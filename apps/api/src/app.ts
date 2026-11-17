@@ -8,6 +8,7 @@ import {
   addElement,
   addExtrasToBooking,
   addRow,
+  addRows,
   addSpot,
   applyPaymentOutcome,
   cancelPaymentRequest,
@@ -346,6 +347,10 @@ const rentalTypeSchema = z.string().trim().min(1).max(rentalTypeMaxLength);
 const rentalNotesSchema = z.string().trim().min(1).max(rentalNotesMaxLength);
 const colSchema = z.number().int().min(1).max(maxColumns);
 const addRowSchema = z.object({ zone: zoneSchema, prefix: z.string().regex(/^[A-Z]{1,4}$/), count: z.number().int().min(1).max(50), typeId: z.uuid().optional(), ...equipmentFields });
+// Up to 10 rows of up to 50 spots, never more than 200 spots in one operation (D34).
+const addRowsSchema = z
+  .object({ zone: zoneSchema, prefix: z.string().regex(/^[A-Z]{1,4}$/), rows: z.number().int().min(1).max(10), perRow: z.number().int().min(1).max(50), typeId: z.uuid().optional(), ...equipmentFields })
+  .refine((bulk) => bulk.rows * bulk.perRow <= 200);
 const spotCodeSchema = z.string().regex(/^[A-Z0-9][A-Z0-9-]{0,9}$/);
 const addSpotSchema = z.object({
   zone: zoneSchema,
@@ -1083,6 +1088,11 @@ export function createApp(options: AppOptions): Hono {
   route({ method: 'post', path: '/v1/manage/beaches/:slug/layout/rows', summary: 'Add a row of spots to a zone', tag: 'Beach club', auth: 'session', request: addRowSchema, success: 201, errors: [400, 401, 403, 409] }, async (c) => {
     const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'layout.edit');
     return c.json(await addRow(db, actor, parse(addRowSchema, await body(c.req.raw), 'row')), 201);
+  });
+
+  route({ method: 'post', path: '/v1/manage/beaches/:slug/layout/rows/bulk', summary: 'Add several rows of spots in one transaction, numbered with one prefix across the rows', tag: 'Beach club', auth: 'session', request: addRowsSchema, success: 201, errors: [400, 401, 403, 409] }, async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'layout.edit');
+    return c.json(await addRows(db, actor, parse(addRowsSchema, await body(c.req.raw), 'rows')), 201);
   });
 
   route({ method: 'put', path: '/v1/manage/beaches/:slug/layout/rows/rental', summary: 'Apply one rental label and notes to a whole row', tag: 'Beach club', auth: 'session', request: rowRentalSchema, success: 200, errors: [400, 401, 403, 404] }, async (c) => {

@@ -238,6 +238,81 @@ export async function addRow(db: Database, actor: Actor, input: NewRow): Promise
   }
 }
 
+export const bulkRowsMaxRows = 10;
+export const bulkRowsMaxPerRow = 50;
+export const bulkRowsMaxSpots = 200;
+
+export interface NewRows extends Equipment {
+  zone: SpotZone;
+  /** One prefix across every row: 3×10 with A gives A01–A10, A11–A20, A21–A30. */
+  prefix: string;
+  /** How many whole rows, appended after the last one of the zone. */
+  rows: number;
+  /** Spots in each row. */
+  perRow: number;
+  /** Spot type whose defaults the new spots copy; the builtin of the zone when left out. */
+  typeId?: string;
+}
+
+/**
+ * Adds several whole rows in one transaction (spec §4, D34). The numbering runs
+ * with a single prefix across the rows, its leading zeroes sized by the total
+ * the way addRow sizes them by the row. A code collision with an existing spot
+ * fails the whole operation: no row is created. One audit event carries the counts.
+ */
+export async function addRows(db: Database, actor: Actor, input: NewRows): Promise<{ rowNumbers: number[]; spotIds: string[]; firstCode: string; lastCode: string }> {
+  if (!Number.isInteger(input.rows) || input.rows < 1 || input.rows > bulkRowsMaxRows) throw new RangeError(`rows must be between 1 and ${bulkRowsMaxRows}`);
+  if (!Number.isInteger(input.perRow) || input.perRow < 1 || input.perRow > bulkRowsMaxPerRow) throw new RangeError(`perRow must be between 1 and ${bulkRowsMaxPerRow}`);
+  const total = input.rows * input.perRow;
+  if (total > bulkRowsMaxSpots) throw new RangeError(`rows × perRow must not exceed ${bulkRowsMaxSpots} spots`);
+  const width = Math.max(2, String(total).length);
+  const codeOf = (index: number) => `${input.prefix}${String(index + 1).padStart(width, '0')}`;
+  try {
+    return await withActor(db, actor.beachId, actor.userId, async (tx) => {
+      const type = await resolveType(tx, input.zone, input.typeId);
+      const equipment = fillEquipment(type, input);
+      assertEquipment(equipment);
+      const [last] = await tx.select({ max: sql<number>`coalesce(max(${spot.rowNumber}), 0)::int` }).from(spot).where(eq(spot.zone, input.zone));
+      const firstRow = (last?.max ?? 0) + 1;
+      const created = await tx
+        .insert(spot)
+        .values(
+          Array.from({ length: total }, (_, index) => ({
+            beachId: actor.beachId,
+            code: codeOf(index),
+            zone: input.zone,
+            rowNumber: firstRow + Math.floor(index / input.perRow),
+            col: (index % input.perRow) + 1,
+            typeId: type.id,
+            umbrellas: equipment.umbrellas,
+            sunbeds: equipment.sunbeds,
+            maxGuests: equipment.maxGuests,
+          })),
+        )
+        .returning({ id: spot.id });
+      await audit(tx, actor, 'layout.rows-add', `${input.zone}/${firstRow}-${firstRow + input.rows - 1}`, {
+        prefix: input.prefix,
+        rows: input.rows,
+        perRow: input.perRow,
+        spots: total,
+        firstCode: codeOf(0),
+        lastCode: codeOf(total - 1),
+        typeId: type.id,
+        typeName: type.name,
+        ...equipment,
+      });
+      return {
+        rowNumbers: Array.from({ length: input.rows }, (_, row) => firstRow + row),
+        spotIds: created.map((row) => row.id),
+        firstCode: codeOf(0),
+        lastCode: codeOf(total - 1),
+      };
+    });
+  } catch (error) {
+    duplicateSpot(error);
+  }
+}
+
 export interface NewSpot extends Equipment {
   zone: SpotZone;
   code: string;
