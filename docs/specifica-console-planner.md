@@ -140,6 +140,43 @@ kit })` in `packages/db/src/layout.ts`, transazionale, riusa la logica di
 `addRow`; API `POST /v1/manage/beaches/:slug/layout/rows/bulk` (permesso come
 `addRow`); azione web `spiaggia-file` nel route delle azioni.
 
+## 4bis. Repertorio ampliato del disegno (C4)
+
+Il committente ha fornito tre tavole di soggetti per la scena
+([1](grafica/riferimento-repertorio-1.jpg),
+[2](grafica/riferimento-repertorio-2.jpg),
+[3](grafica/riferimento-repertorio-3.jpg)). Come per la console: si prendono
+**i soggetti, mai i disegni** — ogni segno è ridisegnato in vettoriale nello
+stile Solar & Fresh, coerente col repertorio esistente dei tipi di
+postazione, nei colori dei gettoni di `portal.css`.
+
+- **Decorazioni del disegno**: nuovo genere di elemento accanto a passerelle,
+  strutture e blocchi cabine — una cella con segno dal repertorio ed
+  etichetta facoltativa, senza numerazione né vendita. Soggetti da coprire:
+  palma, chiosco/bar, doccia, bandiera, salvagente, cartello, cestino,
+  amaca, altalena, giochi/gonfiabile, tavolino, grill, distributore
+  d'acqua, armadietti, campo (volley/bocce), tavolo da ping pong.
+- **Segni per i tipi di postazione**: al repertorio esistente si aggiungono
+  sdraio, gazebo a telo, canoa, SUP (tavola), pedalò, moto d'acqua — utili
+  come tipi personalizzati a noleggio.
+- Le decorazioni compaiono nell'editor, nella planimetria pubblica e nella
+  scena della console, sempre distinguibili dalle postazioni (nessuno stato,
+  non cliccabili, esposte con `aria-hidden` o etichetta descrittiva).
+- La legenda degli stati resta quella di Ombrè (D20): la tavola degli
+  «stati postazione» è già coperta dagli stati operativi esistenti; nella
+  scheda della postazione (§2) compare anche il tipo di affitto
+  («Stagionale», «Albergo», personalizzato) già presente sul modello.
+- Se serve una migrazione (genere `decoration` e segno sugli elementi), si
+  scrive come le altre: SQL a mano, GRANT/RLS invariati sugli oggetti nuovi.
+
+Criterio di accettazione aggiuntivo:
+
+5. **Repertorio**: una decorazione per ciascun soggetto collocabile
+   dall'editor senza JavaScript, resa coerente nelle tre viste (editor,
+   planimetria pubblica, console), mai confondibile con una postazione;
+   i segni nuovi selezionabili per i tipi personalizzati; `pnpm check`,
+   test e fumo verdi.
+
 ## 5. Vincoli di sempre
 
 - Tutte le pagine funzionano senza JavaScript; in console l'arricchimento

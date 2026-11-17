@@ -319,3 +319,15 @@ conteggi. Il trascinamento libero, la rotazione e il ridimensionamento
 proposti dall'analisi esterna restano fuori: l'editor è a celle per scelta
 (D25). Le altre proposte rifiutate o rinviate sono motivate nella
 [specifica](specifica-console-planner.md) §1.
+
+## D35 — Repertorio ampliato dalle tavole del committente — accettata (17/11/2026)
+
+Le tre tavole fornite dal committente (in docs/grafica) dettano i soggetti,
+non i disegni: ogni segno nuovo è ridisegnato in vettoriale nello stile
+Solar & Fresh. Il disegno guadagna le **decorazioni** — elementi a una cella
+con segno ed etichetta facoltativa, senza numerazione, stato né vendita —
+rese in editor, planimetria pubblica e console e mai confondibili con le
+postazioni; il repertorio dei tipi si estende ai soggetti a noleggio
+(sdraio, gazebo a telo, canoa, SUP, pedalò, moto d'acqua). La legenda degli
+stati resta quella di D20; il tipo di affitto compare nella scheda della
+postazione (D32).
