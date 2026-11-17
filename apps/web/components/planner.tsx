@@ -12,7 +12,7 @@ import {
   type SpotMark as SpotMarkKind,
   type SpotZone,
 } from '@ombre/shared';
-import { api, apiCall, dayPattern, formatDay, isDay, slugPattern, today } from '@/lib/api';
+import { api, apiCall, dayPattern, formatDay, formatPeriod, isDay, slugPattern, today } from '@/lib/api';
 import { Notice, requireMe } from './account';
 import { SpotMark } from './beach';
 import { ManageShell } from './manage-shell';
@@ -38,6 +38,8 @@ interface PlannerCell {
   state: PlannerCellState;
   bookingCode: string | null;
   guestName: string | null;
+  /** The dal–al period of the booking group of a booked cell (D38); null elsewhere. */
+  period: { from: string; to: string } | null;
 }
 
 interface PlannerSpot {
@@ -283,14 +285,16 @@ function PlannerCellView({
   const p = getDictionary(locale, config.brandName).planner;
   const classes = `planner-cell planner-cell--${cell.state}`;
   if (cell.state === 'booked') {
+    // Il periodo del gruppo nel `title` (D38): i codici uguali su giorni adiacenti si leggono da sé.
+    const period = cell.period && cell.period.from !== cell.period.to ? formatPeriod(cell.period.from, cell.period.to, locale) : null;
     const who = cell.guestName ?? cell.bookingCode ?? p.states.booked;
     const label = cell.guestName ? initialsOf(cell.guestName) : (cell.bookingCode ?? p.abbrev.booked);
-    const full = [cell.guestName, cell.bookingCode].filter(Boolean).join(' · ') || p.states.booked;
+    const full = [cell.guestName, cell.bookingCode, period].filter(Boolean).join(' · ') || p.states.booked;
     return (
       <td className={classes}>
         <a href={consoleHref(cell.day, spot.code)} title={full}>
           <span aria-hidden="true">{label}</span>
-          <span className="visually-hidden">{p.cellBooked(who)}</span>
+          <span className="visually-hidden">{p.cellBooked(period ? `${who}, ${period}` : who)}</span>
         </a>
       </td>
     );

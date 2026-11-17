@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation';
 import { config, formatMoney, getDictionary, pathFor, payPath, type Locale } from '@ombre/shared';
-import { api, apiCall, formatDay, formatInstant, type ApiBeach } from '@/lib/api';
+import { api, apiCall, formatDay, formatInstant, formatPeriod, periodDays, type ApiBeach } from '@/lib/api';
 import { Hidden } from './account';
 import { DemoBadge, otherLocale } from './beach';
 import { PageHead, PageShell } from './PageShell';
@@ -19,6 +19,9 @@ interface PayRequestSummary {
   status: 'pending';
   beach: { slug: string; name: string };
   day: string;
+  /** The whole dal–al period of the booking group (D38); from = to = day for one day. */
+  from: string;
+  to: string;
   spotCode: string;
   amountCents: number;
   expiresAt: string;
@@ -94,9 +97,14 @@ export function PayView({ locale, token, query, data }: { locale: Locale; token:
               <dt>{p.beachRow}</dt>
               <dd>{summary.beach.name}</dd>
             </div>
+            {/* Il periodo del gruppo nel riepilogo (D38): una giornata resta «Giorno». */}
             <div>
-              <dt>{b.dayRow}</dt>
-              <dd>{formatDay(summary.day, locale)}</dd>
+              <dt>{summary.from !== summary.to ? b.periodRow : b.dayRow}</dt>
+              <dd>
+                {summary.from !== summary.to
+                  ? b.periodValue(formatPeriod(summary.from, summary.to, locale), periodDays(summary.from, summary.to))
+                  : formatDay(summary.day, locale)}
+              </dd>
             </div>
             <div>
               <dt>{b.spotRow}</dt>

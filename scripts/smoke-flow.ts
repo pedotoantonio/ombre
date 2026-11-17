@@ -36,7 +36,7 @@ const titleOf = (html: string): string => /<title>([^<]*)<\/title>/.exec(html)?.
 const home = await page('/');
 const form = /<form class="portal-search"[^>]*>[^]*?<\/form>/.exec(home.html)?.[0] ?? '';
 check(/method="get"/.test(form) && /action="\/ricerca-ombrellone#risultati"/.test(form) && /role="search"/.test(form), 'home: no search form that opens the explore page at its results');
-for (const name of ['place', 'day', 'guests', 'shared']) check(form.includes(`name="${name}"`), `home: the search has no "${name}" field`);
+for (const name of ['place', 'day', 'to', 'guests', 'shared']) check(form.includes(`name="${name}"`), `home: the search has no "${name}" field`);
 // The home page is prerendered, so its form carries no date limit; the explore page, rendered per request, does.
 const exploreForm = /<form class="portal-search"[^>]*>[^]*?<\/form>/.exec((await page('/ricerca-ombrellone')).html)?.[0] ?? '';
 const firstDay = /name="day"[^>]*min="(\d{4}-\d{2}-\d{2})"|min="(\d{4}-\d{2}-\d{2})"[^>]*name="day"/.exec(exploreForm);
@@ -70,6 +70,11 @@ check((await page('/ricerca-ombrellone?place=Rimini')).html.includes('Nessuno st
 check((await page(`/ricerca-ombrellone?place=pomposa&day=${demoDay}`)).html.includes('8 postazioni libere'), 'search: the place is not matched without regard to case');
 const past = await page('/ricerca-ombrellone?day=2020-06-17&guests=2');
 check(past.html.includes('già passato') && past.html.includes('Bagno delle Dune') && !past.html.includes('da 30,00'), 'search: a past day is not explained');
+// A refused dal–al period (D39) must come back in words, not as a bare error.
+const backwards = await page(`/ricerca-ombrellone?day=2027-06-18&to=${demoDay}&guests=2`);
+check(backwards.status === 200 && backwards.html.includes('viene prima della data'), 'search: a backwards period is not explained in words');
+const tooLong = await page(`/ricerca-ombrellone?day=${demoDay}&to=2027-07-20&guests=2`);
+check(tooLong.status === 200 && tooLong.html.includes('supera le 31 giornate'), 'search: a period over 31 days is not explained in words');
 const searchedEnglish = await page(`/en/umbrella-search?day=${demoDay}&guests=2`);
 check(searchedEnglish.html.includes('8 free spots') && searchedEnglish.html.includes(`href="/en/beach-clubs/bagno-delle-dune?day=${demoDay}"`), 'english search: results not served in English');
 

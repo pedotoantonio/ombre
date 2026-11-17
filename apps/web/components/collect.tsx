@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { accountPath, can, config, formatMoney, getDictionary, locales, manageCollectPath, type Locale } from '@ombre/shared';
-import { api, apiCall, formatDay, formatInstant, slugPattern, type ApiExtraService } from '@/lib/api';
+import { api, apiCall, formatDay, formatInstant, formatPeriod, periodDays, slugPattern, type ApiExtraService } from '@/lib/api';
 import { Hidden, Notice, requireMe } from './account';
 import { ExtraQuantityFields } from './beach';
 import { ManageShell } from './manage-shell';
@@ -40,6 +40,9 @@ interface BookingDetail {
   beachName: string;
   timezone: string;
   day: string;
+  /** The dal–al period of the booking group (D38); from = to = day for one day. */
+  from: string;
+  to: string;
   spotCode: string;
   totalCents: number;
   paidCents: number;
@@ -139,9 +142,14 @@ export async function CollectView({ locale, beachSlug, query }: { locale: Locale
                     <dt>{x.guestRow}</dt>
                     <dd>{booking.guestName}</dd>
                   </div>
+                  {/* Il periodo del gruppo (D38): totale, pagato e residuo valgono sull'intero dal–al. */}
                   <div>
-                    <dt>{t.booking.dayRow}</dt>
-                    <dd>{formatDay(booking.day, locale)}</dd>
+                    <dt>{booking.from !== booking.to ? t.booking.periodRow : t.booking.dayRow}</dt>
+                    <dd>
+                      {booking.from !== booking.to
+                        ? t.booking.periodValue(formatPeriod(booking.from, booking.to, locale), periodDays(booking.from, booking.to))
+                        : formatDay(booking.day, locale)}
+                    </dd>
                   </div>
                   <div>
                     <dt>{t.booking.spotRow}</dt>

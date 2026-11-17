@@ -36,7 +36,7 @@ import {
   type Locale,
   type SpotZone,
 } from '@ombre/shared';
-import { api, apiCall, dayPattern, formatDate, formatDay, formatPeriod, localName, slugPattern, uuidPattern, type ApiExtraService, type ApiLocalName } from '@/lib/api';
+import { api, apiCall, dayPattern, formatDate, formatDay, formatPeriod, localName, periodDays, slugPattern, uuidPattern, type ApiExtraService, type ApiLocalName } from '@/lib/api';
 import { ExtraQuantityFields } from './beach';
 import { BeachLayoutView } from './beach-layout';
 import { CabinHolderView, CabinsManageView, CabinsTodayPanel } from './cabins';
@@ -350,6 +350,10 @@ interface BookingRow {
   presence: 'expected' | 'inside' | 'outside_reentry_allowed' | 'ended';
   guestName: string;
   spotCode: string;
+  /** The dal–al period of the booking group (D38); from = to for a single day. */
+  from: string;
+  to: string;
+  /** Total of the whole GROUP (D38), like the payment aggregate below. */
   totalCents: number;
   /** The payment aggregate: the shown state derives from the balance (spec §4.3, D31). */
   paidCents: number;
@@ -381,7 +385,8 @@ interface DeskConvention {
 async function ManageView({ locale, beachSlug, query }: { locale: Locale; beachSlug: string; query: Query }) {
   if (!slugPattern.test(beachSlug)) notFound();
   const t = getDictionary(locale, config.brandName).account;
-  const extraLine = getDictionary(locale, config.brandName).booking.extraLine;
+  const b = getDictionary(locale, config.brandName).booking;
+  const extraLine = b.extraLine;
   const { me, token } = await requireMe(locale);
   const membership = me.memberships.find((entry) => entry.beachSlug === beachSlug);
   if (!membership) notFound();
@@ -583,6 +588,12 @@ async function ManageView({ locale, beachSlug, query }: { locale: Locale; beachS
                           ))}
                         </select>
                       </div>
+                      {/* «Al» facoltativo (D39): al banco si prenota per periodo come online. */}
+                      <div className="field">
+                        <label htmlFor="banco-al">{t.deskTo}</label>
+                        <input id="banco-al" type="date" name="to" min={day} aria-describedby="banco-al-nota" />
+                        <p className="field__hint" id="banco-al-nota">{t.deskToHint}</p>
+                      </div>
                       <div className="field">
                         <label htmlFor="banco-ospite">{t.deskGuest}</label>
                         <input id="banco-ospite" name="name" maxLength={120} required />
@@ -638,11 +649,15 @@ async function ManageView({ locale, beachSlug, query }: { locale: Locale; beachS
               {bookings.data.bookings.length === 0 ? (
                 <p className="prose">{t.noBookings}</p>
               ) : (
-                <DataTable label={t.bookingsTitle} columns={[t.code, t.spot, t.guest, t.colExtras, t.booking, t.colPayment, t.presence, t.actions].map((label) => ({ label }))}>
+                <DataTable label={t.bookingsTitle} columns={[t.code, t.spot, t.colPeriod, t.guest, t.colExtras, t.booking, t.colPayment, t.presence, t.actions].map((label) => ({ label }))}>
                   {bookings.data.bookings.map((row) => (
                     <Row key={row.code}>
                       <Cell label={t.code}>{row.code}</Cell>
                       <Cell label={t.spot}>{row.spotCode}</Cell>
+                      {/* Il periodo del gruppo (D38): per un giorno solo, la data della giornata. */}
+                      <Cell label={t.colPeriod}>
+                        {row.from === row.to ? formatDate(row.from, locale) : b.periodValue(formatPeriod(row.from, row.to, locale), periodDays(row.from, row.to))}
+                      </Cell>
                       <Cell label={t.guest}>{row.guestName}</Cell>
                       {/* The extras to hand over with the spot (spec §4.2). */}
                       <Cell label={t.colExtras}>
@@ -671,9 +686,14 @@ async function ManageView({ locale, beachSlug, query }: { locale: Locale; beachS
                         ) : null}
                         {row.status === 'confirmed' && can(role, 'bookings.cancel') ? (
                           <form method="post" action="/azioni/gestione-annulla" className="inline-form">
-                            <Hidden values={{ ...common, code: row.code }} />
+                            {/* L'annullamento tratta l'intero periodo (D40): il tasto lo dice, l'esito lo conferma con le giornate. */}
+                            <Hidden values={{ ...common, code: row.code, from: row.from, to: row.to }} />
                             <button className="button button--secondary button--small" type="submit">
-                              {t.cancelBooking} <span className="visually-hidden">{row.code}</span>
+                              {row.from === row.to ? t.cancelBooking : t.cancelPeriod}{' '}
+                              <span className="visually-hidden">
+                                {row.code}
+                                {row.from === row.to ? '' : `, ${formatPeriod(row.from, row.to, locale)}, ${t.cancelPeriodWarning(periodDays(row.from, row.to))}`}
+                              </span>
                             </button>
                           </form>
                         ) : null}

@@ -51,7 +51,6 @@ export function makeEn(brand: string): Dictionary {
     search: {
       title: 'Search for a day at the beach',
       place: 'Place or beach club',
-      day: 'Day',
       guests: 'Guests',
       sharedOnly: 'Shared days only',
       sharedHint: "Days offered by the Season holders, with the Beach manager's approval.",
@@ -83,7 +82,6 @@ export function makeEn(brand: string): Dictionary {
       beachDescription: (name: string, locality: string) =>
         `Free spots, equipment and day price at ${name}, ${locality}. Choose the date and hold your spot.`,
       beachLead: (locality: string) => `Beach club in ${locality}. Choose the day and see the free spots.`,
-      dayLabel: 'Day',
       // ---- The dal–al period (D39) ----
       dayFromLabel: 'From day',
       dayToLabel: 'To day (optional)',
@@ -263,6 +261,8 @@ export function makeEn(brand: string): Dictionary {
         request_invalid: 'Request not created: the amount exceeds the balance, or the booked day is already over.',
         request_closed: 'The request is no longer pending: it has already been paid, has expired or was cancelled.',
         extras_add_invalid: 'Extras not added: valid quantities are needed on a confirmed booking of a day not yet over.',
+        period_too_long: 'The period exceeds 31 days. Shorten it: beyond that there are season passes.',
+        period_backwards: 'The "to" date comes before the "from" date. Swap or correct the dates.',
       },
       twoFactorTitle: 'Two-step verification',
       twoFactorOn: 'On: every sign-in also needs the code from the app.',
@@ -332,6 +332,10 @@ export function makeEn(brand: string): Dictionary {
       deskTitle: 'Front desk booking',
       deskLead: 'For guests who arrive without a booking and pay at the front desk. It uses the same inventory as the website.',
       deskGuest: 'Guest name',
+      // ---- The dal–al period at the desk too (D39) ----
+      deskTo: 'To (optional)',
+      deskToHint: 'Last day of the period; empty: a single day. Total and "to collect" cover the whole group.',
+      colPeriod: 'Period',
       deskBook: 'Book at the desk',
       deskDone: (code: string) => `Booking ${code} registered.`,
       deskGuestsLabel: 'Guests (optional: highlights the recommended spot)',
@@ -359,6 +363,10 @@ export function makeEn(brand: string): Dictionary {
       moveTo: 'Move to',
       move: 'Move',
       cancelBooking: 'Cancel',
+      // The manager's cancellation treats the whole period (D40): the button and the outcome say so.
+      cancelPeriod: 'Cancel the period',
+      cancelPeriodWarning: (days: number) => `cancels all ${days} days of the period`,
+      cancelledPeriod: (period: string, days: number) => `The whole period ${period} was cancelled: all ${days} days, with the compensating reversals and the refunds due.`,
       cancelReason: 'Cancelled by the beach club',
       checkTitle: 'Pass check',
       credential: 'QR text or short code',
@@ -785,6 +793,9 @@ export function makeEn(brand: string): Dictionary {
       channel: 'Channel',
       totalLabel: 'Total',
       collectedLabel: 'Collected',
+      // ---- The booking group on the card (D38) ----
+      groupTitle: 'Booking group',
+      dayTotalLabel: 'Total of the day',
       remainingLabel: 'Outstanding',
       bookAtDesk: 'Book at the desk',
       collectAction: 'Collect',
@@ -1000,7 +1011,7 @@ export function makeEn(brand: string): Dictionary {
       pickCode: 'Booking code',
       pickOpen: 'Open',
       pickBad: 'Invalid code: the format is OM-123456-789.',
-      lead: 'Total, paid and balance of the booking, with the collection at the desk, the payment requests with the link to send, and the extras added after the sale.',
+      lead: 'Total, paid and balance of the booking group — the whole dal–al period — with the collection at the desk, the payment requests with the link to send, and the extras added after the sale.',
       forbiddenTitle: 'Reserved page',
       forbiddenText: 'Collections can only be read with the booking-reading permission of the beach club.',
       summaryTitle: 'Summary',
@@ -1012,7 +1023,7 @@ export function makeEn(brand: string): Dictionary {
       remainingRow: 'Balance',
       stateRow: 'Payment state',
       collectTitle: 'Collect at the desk',
-      collectLead: 'Records an amount received at the front desk, up to the balance.',
+      collectLead: 'Records an amount received at the front desk, up to the balance of the group.',
       amountLabel: 'Amount in euro',
       collectButton: 'Record the collection',
       collectDone: (remaining: string) => `Collection recorded. Balance: ${remaining}.`,
@@ -1020,7 +1031,7 @@ export function makeEn(brand: string): Dictionary {
       requestLead: 'Creates a temporary /pay link for a deposit or for the balance, to send to the guest.',
       noteLabel: 'Note (optional)',
       hoursLabel: 'Expiry in hours (empty: 72)',
-      hoursHint: 'From 1 to 240 hours; the expiry never passes the end of the booked day in the time zone of the beach club.',
+      hoursHint: 'From 1 to 240 hours; the expiry never passes the end of the last booked day of the group, in the time zone of the beach club.',
       requestButton: 'Create the request',
       requestDone: (notified: boolean) =>
         notified ? 'Request created. The notification with the full text is queued.' : 'Request created. No contact: copy the link or the text below.',

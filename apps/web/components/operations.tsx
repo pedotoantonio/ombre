@@ -19,7 +19,7 @@ import {
   type SpotMark as SpotMarkKind,
   type SpotZone,
 } from '@ombre/shared';
-import { api, apiCall, dayPattern, formatDay, slugPattern, today, type ApiLayoutElement, type ApiResult, type ApiZoneGaps } from '@/lib/api';
+import { api, apiCall, dayPattern, formatDay, formatPeriod, slugPattern, today, type ApiLayoutElement, type ApiResult, type ApiZoneGaps } from '@/lib/api';
 import { Hidden, Notice, requireMe } from './account';
 import { PlanCanvas, planGapRem, planLaneRem, planSize, SpotMark } from './beach';
 import { ManageShell } from './manage-shell';
@@ -97,10 +97,22 @@ interface SpotCardData {
     guestName: string;
     source: string;
     presence: 'expected' | 'inside' | 'outside_reentry_allowed' | 'ended';
+    /** Price of THIS day; the money of the whole period lives in `group` (D38). */
     totalCents: number;
     paidCents: number;
     remainingCents: number;
     paymentState: 'paid' | 'partial' | 'to_collect';
+    /** The booking group of the day: one code, one period, one balance (D38). */
+    group: {
+      code: string;
+      from: string;
+      to: string;
+      days: number;
+      totalCents: number;
+      paidCents: number;
+      remainingCents: number;
+      paymentState: 'paid' | 'partial' | 'to_collect';
+    };
   } | null;
 }
 
@@ -384,22 +396,59 @@ function SpotCardPanel({
               <dd>{t.account.presences[booking.presence]}</dd>
             </div>
             <div>
-              <dt>{o.totalLabel}</dt>
+              {/* Per un gruppo di più giornate questo è il prezzo della sola giornata (D38). */}
+              <dt>{booking.group.days > 1 ? o.dayTotalLabel : o.totalLabel}</dt>
               <dd>{formatMoney(booking.totalCents, locale)}</dd>
             </div>
-            <div>
-              <dt>{o.collectedLabel}</dt>
-              <dd>{formatMoney(booking.paidCents, locale)}</dd>
-            </div>
-            <div>
-              <dt>{o.remainingLabel}</dt>
-              <dd>{formatMoney(booking.remainingCents, locale)}</dd>
-            </div>
-            <div>
-              <dt>{t.account.colPayment}</dt>
-              <dd>{t.account.paymentStates[booking.paymentState]}</dd>
-            </div>
+            {booking.group.days > 1 ? null : (
+              <>
+                <div>
+                  <dt>{o.collectedLabel}</dt>
+                  <dd>{formatMoney(booking.paidCents, locale)}</dd>
+                </div>
+                <div>
+                  <dt>{o.remainingLabel}</dt>
+                  <dd>{formatMoney(booking.remainingCents, locale)}</dd>
+                </div>
+                <div>
+                  <dt>{t.account.colPayment}</dt>
+                  <dd>{t.account.paymentStates[booking.paymentState]}</dd>
+                </div>
+              </>
+            )}
           </dl>
+          {/* Il blocco del gruppo (D38): codice, periodo, totale, incassato, residuo e stato in parole. */}
+          {booking.group.days > 1 ? (
+            <>
+              <h3>{o.groupTitle}</h3>
+              <dl className="ops-card__grid">
+                <div>
+                  <dt>{t.account.code}</dt>
+                  <dd>{booking.group.code}</dd>
+                </div>
+                <div>
+                  <dt>{t.booking.periodRow}</dt>
+                  <dd>{t.booking.periodValue(formatPeriod(booking.group.from, booking.group.to, locale), booking.group.days)}</dd>
+                </div>
+                <div>
+                  <dt>{o.totalLabel}</dt>
+                  <dd>{formatMoney(booking.group.totalCents, locale)}</dd>
+                </div>
+                <div>
+                  <dt>{o.collectedLabel}</dt>
+                  <dd>{formatMoney(booking.group.paidCents, locale)}</dd>
+                </div>
+                <div>
+                  <dt>{o.remainingLabel}</dt>
+                  <dd>{formatMoney(booking.group.remainingCents, locale)}</dd>
+                </div>
+                <div>
+                  <dt>{t.account.colPayment}</dt>
+                  <dd>{t.account.paymentStates[booking.group.paymentState]}</dd>
+                </div>
+              </dl>
+            </>
+          ) : null}
         </>
       ) : null}
       {canDesk || canBlockForm || canCollect || canMove || booking !== null ? (

@@ -1,5 +1,5 @@
 import { accountPath, beachLayoutPath, beachPath, bookingPath, bookPath, decorationSigns, holdPath, isLocale, manageCabinsPath, manageCollectPath, manageDealsPath, manageExtrasPath, manageTodayPath, parseEuro, payPath, type Locale } from '@ombre/shared';
-import { api, apiCall, dayPattern, sandboxNotify, slugPattern, uuidPattern } from '@/lib/api';
+import { api, apiCall, dayPattern, formatPeriod, periodDays, sandboxNotify, slugPattern, uuidPattern } from '@/lib/api';
 import { clearSessionCookieHeader, sessionCookie, sessionCookieHeader } from '@/lib/session';
 
 // Every form of the site posts here. Each action checks its input, calls the API and
@@ -294,6 +294,15 @@ const actions: Record<string, (request: Request, form: Form, lang: Locale) => Pr
     // Optional contacts and the collection choice: «later» confirms «da incassare» (spec §4.3, D31).
     const email = form('email').trim();
     const phone = form('phone').trim();
+    // «Al» facoltativo (D39): al banco si prenota per periodo come online. I periodi
+    // scritti male tornano in parole prima di chiamare l'API, senza ambiguità di codici.
+    const day = form('day');
+    const toAsked = form('to').trim();
+    if (toAsked !== '' && !dayPattern.test(toAsked)) return bad();
+    const to = toAsked !== '' && toAsked !== day ? toAsked : undefined;
+    const back = `${accountPath(lang, 'manage', form('beach'))}?day=${day}`;
+    if (to && to < day) return { to: back, err: 'period_backwards' };
+    if (to && periodDays(day, to) > 31) return { to: back, err: 'period_too_long' };
     return manage(
       request,
       form,
@@ -302,7 +311,8 @@ const actions: Record<string, (request: Request, form: Form, lang: Locale) => Pr
       'POST',
       {
         spotId: form('spot'),
-        day: form('day'),
+        day,
+        ...(to ? { to } : {}),
         guestName: form('name'),
         ...(email ? { guestEmail: email } : {}),
         ...(phone ? { guestPhone: phone } : {}),
@@ -391,11 +401,25 @@ const actions: Record<string, (request: Request, form: Form, lang: Locale) => Pr
     if (!delivered) return { to: withQuery(back, { esito: 'errore' }) };
     return { to: withQuery(back, { esito: outcome === 'succeeded' ? 'ok' : 'fallito' }) };
   },
+  // «Sposta» resta per giornata (D38): il corpo porta la giornata corrente della riga o della scheda.
   'banco-sposta': (request, form, lang) =>
-    manage(request, form, lang, `/bookings/${encodeURIComponent(form('code'))}/move`, 'POST', { spotId: form('spot') }),
+    manage(request, form, lang, `/bookings/${encodeURIComponent(form('code'))}/move`, 'POST', { spotId: form('spot'), day: form('day') }),
+  // L'annullamento tratta l'intero periodo (D40): l'esito lo dice con le giornate interessate.
   'gestione-annulla': async (request, form, lang) => {
     const { getDictionary, config } = await import('@ombre/shared');
-    return manage(request, form, lang, `/bookings/${encodeURIComponent(form('code'))}/cancel`, 'POST', { reason: getDictionary(lang, config.brandName).account.cancelReason });
+    const t = getDictionary(lang, config.brandName).account;
+    const from = form('from');
+    const to = form('to');
+    const period = dayPattern.test(from) && dayPattern.test(to) && to !== from ? { from, to } : null;
+    return manage(
+      request,
+      form,
+      lang,
+      `/bookings/${encodeURIComponent(form('code'))}/cancel`,
+      'POST',
+      { reason: t.cancelReason },
+      period ? () => t.cancelledPeriod(formatPeriod(period.from, period.to, lang), periodDays(period.from, period.to)) : undefined,
+    );
   },
   // Position of the beach club on the public map. A refused value comes back next to its field.
   async 'gestione-posizione'(request, form, lang) {

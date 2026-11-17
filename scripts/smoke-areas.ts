@@ -170,6 +170,42 @@ check((await manager.post('gestione-annulla', { lang: 'it', beach, day: newDay, 
 check(((await guest.get(`/bagni/${beach}?day=${newDay}`)).html.match(/class="spot__code"/g) ?? []).length === 7, 'public page: a cancelled booking did not free its spot');
 check((await manager.get(`/area/gestione/${beach}?day=${newDay}`)).html.includes('Annullata'), 'management: the cancellation is not shown');
 
+// ---- Dal–al period (D39): three published days, the whole guest path, group management ----
+const periodDays = ['2027-06-24', '2027-06-25', '2027-06-26'] as const;
+for (const periodDay of periodDays) {
+  check((await manager.post('gestione-pubblica', { lang: 'it', beach, day: periodDay, price: '32,50' })).includes('ok=1'), `period: the day ${periodDay} was not published`);
+}
+const periodQuery = `day=${periodDays[0]}&to=${periodDays[2]}`;
+const periodSearch = await guest.get(`/ricerca-ombrellone?${periodQuery}&guests=2`);
+check(periodSearch.html.includes('da 97,50') && periodSearch.html.includes('Periodo di 3 giornate'), 'period search: no total "from" price of the three days');
+check(periodSearch.html.includes(`href="/bagni/${beach}?${periodQuery}"`), 'period search: the card loses the period on the way to the club');
+const periodClub = await guest.get(`/bagni/${beach}?${periodQuery}`);
+check(periodClub.html.includes('Postazioni libere dal 24 al 26 giugno 2027') && periodClub.html.includes('97,50'), 'period club page: no period title or total price');
+const periodLink = /href="(\/bagni\/bagno-delle-dune\/prenota\?spot=([0-9a-f-]{36})&day=2027-06-24&to=2027-06-26)"/.exec(periodClub.html);
+check(periodLink !== null, 'period club page: no link to the period summary');
+const periodSummary = await guest.get(periodLink![1]!);
+check(periodSummary.html.includes('Dal 24 al 26 giugno 2027, 3 giornate'), 'period summary: the period with its days is not written');
+check((periodSummary.html.match(/32,50/g) ?? []).length >= 3 && periodSummary.html.includes('97,50'), 'period summary: the three day lines or the single total are missing');
+const periodKey = /name="key" value="(web-[0-9a-f-]{36})"/.exec(periodSummary.html)?.[1] ?? '';
+const periodHold = await guest.post('riserva', { lang: 'it', beach, spot: periodLink![2]!, day: periodDays[0], to: periodDays[2], key: periodKey });
+const periodHoldPage = await guest.get(periodHold);
+check(periodHoldPage.html.includes('Riserva attiva') && periodHoldPage.html.includes('Dal 24 al 26 giugno 2027, 3 giornate'), 'period hold: not active or without the period');
+const periodBookingUrl = await guest.post('prenotazione', { lang: 'it', beach, hold: periodHold.split('/').at(-1)!, name: 'Ospite del Periodo', email: 'periodo@example.org' });
+const [, periodBookingId = '', periodToken = ''] = /\/prenotazione\/([0-9a-f-]{36})\?t=(.+)$/.exec(periodBookingUrl) ?? [];
+await guest.post('pagamento-prova', { lang: 'it', beach, booking: periodBookingId, t: periodToken, outcome: 'succeeded' });
+const periodPaid = await guest.get(periodBookingUrl);
+const periodCode = /OM-270624-\d{3}/.exec(periodPaid.html)?.[0] ?? '';
+check(periodCode !== '' && periodPaid.html.includes('Il tuo pass'), 'period booking: no pass with the group code after payment');
+check(periodPaid.html.includes('valido dal 24 al 26 giugno 2027'), 'period pass: it does not say it is valid on every day of the period');
+check(periodPaid.html.includes('97,50') && periodPaid.html.includes('Saldata'), 'period booking: no single total or group payment state');
+// The day list of the middle day shows the period and the group totals; the cancellation treats the whole period.
+const periodManage = await manager.get(`/area/gestione/${beach}?day=${periodDays[1]}`);
+check(periodManage.html.includes(periodCode) && periodManage.html.includes('Dal 24 al 26 giugno 2027, 3 giornate'), 'period management: the middle day does not show the dal–al of the group');
+check(periodManage.html.includes('Annulla il periodo'), 'period management: the cancel button does not name the period');
+const periodCancel = await manager.post('gestione-annulla', { lang: 'it', beach, day: periodDays[1], code: periodCode, from: periodDays[0], to: periodDays[2] });
+check(decodeURIComponent(periodCancel.replaceAll('+', ' ')).includes("Annullato l'intero periodo dal 24 al 26 giugno 2027"), `period management: the cancellation outcome does not name the whole period (${periodCancel})`);
+check(JSON.stringify(await mapOf(periodDays[1])) === JSON.stringify({ free: 8, taken: 0 }), 'period management: the cancelled days are not back on sale');
+
 // ---- Season holder: propose, wait for approval, withdraw ----
 const holder = new Visitor();
 await holder.signIn('stagionale@bagnodelledune.example');

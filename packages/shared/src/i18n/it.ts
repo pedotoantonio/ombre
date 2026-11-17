@@ -63,7 +63,6 @@ export function makeIt(brand: string) {
     search: {
       title: 'Cerca una giornata al mare',
       place: 'Località o stabilimento',
-      day: 'Giorno',
       guests: 'Ospiti',
       sharedOnly: 'Solo giornate condivise',
       sharedHint: "Sono le giornate offerte dagli Stagionali, con l'autorizzazione del Gestore stabilimento.",
@@ -95,7 +94,6 @@ export function makeIt(brand: string) {
       beachDescription: (name: string, locality: string) =>
         `Postazioni libere, dotazione e prezzo per giornata a ${name}, ${locality}. Scegli la data e riserva la tua postazione.`,
       beachLead: (locality: string) => `Stabilimento balneare a ${locality}. Scegli il giorno e guarda le postazioni libere.`,
-      dayLabel: 'Giorno',
       // ---- Periodo dal–al (D39) ----
       dayFromLabel: 'Dal giorno',
       dayToLabel: 'Al giorno (facoltativo)',
@@ -275,6 +273,8 @@ export function makeIt(brand: string) {
         request_invalid: 'Richiesta non creata: importo oltre il residuo oppure giornata prenotata già conclusa.',
         request_closed: 'La richiesta non è più in attesa: è già pagata, scaduta o annullata.',
         extras_add_invalid: 'Extra non aggiunti: servono quantità valide su una prenotazione confermata di una giornata non conclusa.',
+        period_too_long: 'Il periodo supera le 31 giornate. Accorcialo: oltre ci sono gli abbonamenti stagionali.',
+        period_backwards: 'La data «al» viene prima della data «dal». Scambia o correggi le date.',
       },
       twoFactorTitle: 'Verifica in due passaggi',
       twoFactorOn: 'Attiva: a ogni accesso serve anche il codice dell\'app.',
@@ -344,6 +344,10 @@ export function makeIt(brand: string) {
       deskTitle: 'Prenotazione al banco',
       deskLead: 'Per chi arriva senza prenotazione e paga alla reception. Usa lo stesso inventario del sito.',
       deskGuest: 'Nome dell\'ospite',
+      // ---- Periodo dal–al anche al banco (D39) ----
+      deskTo: 'Al (facoltativo)',
+      deskToHint: 'Ultima giornata del periodo; vuota: una sola giornata. Totale e «da incassare» valgono sull\'intero gruppo.',
+      colPeriod: 'Periodo',
       deskBook: 'Prenota al banco',
       deskDone: (code: string) => `Prenotazione ${code} registrata.`,
       deskGuestsLabel: 'Ospiti (facoltativo: evidenzia la postazione consigliata)',
@@ -371,6 +375,10 @@ export function makeIt(brand: string) {
       moveTo: 'Sposta in',
       move: 'Sposta',
       cancelBooking: 'Annulla',
+      // L'annullamento del gestore tratta l'intero periodo (D40): il tasto e l'esito lo dicono.
+      cancelPeriod: 'Annulla il periodo',
+      cancelPeriodWarning: (days: number) => `annulla tutte le ${days} giornate del periodo`,
+      cancelledPeriod: (period: string, days: number) => `Annullato l'intero periodo ${period}: tutte le ${days} giornate, con gli storni e i rimborsi dovuti.`,
       cancelReason: 'Annullata dallo stabilimento',
       checkTitle: 'Verifica del pass',
       credential: 'Testo del QR o codice breve',
@@ -798,6 +806,9 @@ export function makeIt(brand: string) {
       totalLabel: 'Totale',
       collectedLabel: 'Incassato',
       remainingLabel: 'Residuo',
+      // ---- Il gruppo di prenotazione nella scheda (D38) ----
+      groupTitle: 'Gruppo di prenotazione',
+      dayTotalLabel: 'Totale della giornata',
       bookAtDesk: 'Prenota al banco',
       collectAction: 'Incassa',
       receptionLink: 'Reception',
@@ -1012,7 +1023,7 @@ export function makeIt(brand: string) {
       pickCode: 'Codice prenotazione',
       pickOpen: 'Apri',
       pickBad: 'Codice non valido: il formato è OM-123456-789.',
-      lead: 'Totale, pagato e residuo della prenotazione, con l\'incasso al banco, le richieste di pagamento con il collegamento da inviare e gli extra aggiunti a vendita fatta.',
+      lead: 'Totale, pagato e residuo del gruppo di prenotazione — l\'intero periodo dal–al — con l\'incasso al banco, le richieste di pagamento con il collegamento da inviare e gli extra aggiunti a vendita fatta.',
       forbiddenTitle: 'Pagina riservata',
       forbiddenText: 'Gli incassi si leggono solo con il permesso di lettura delle prenotazioni dello stabilimento.',
       summaryTitle: 'Riepilogo',
@@ -1024,7 +1035,7 @@ export function makeIt(brand: string) {
       remainingRow: 'Residuo',
       stateRow: 'Stato del pagamento',
       collectTitle: 'Incassa al banco',
-      collectLead: 'Registra un incasso ricevuto alla reception, fino al residuo.',
+      collectLead: 'Registra un incasso ricevuto alla reception, fino al residuo del gruppo.',
       amountLabel: 'Importo in euro',
       collectButton: 'Registra l\'incasso',
       collectDone: (remaining: string) => `Incasso registrato. Residuo: ${remaining}.`,
@@ -1032,7 +1043,7 @@ export function makeIt(brand: string) {
       requestLead: 'Crea un collegamento /paga temporaneo per un acconto o per il saldo, da inviare all\'ospite.',
       noteLabel: 'Nota (facoltativa)',
       hoursLabel: 'Scadenza in ore (vuota: 72)',
-      hoursHint: 'Da 1 a 240 ore; la scadenza non supera comunque la fine del giorno prenotato nel fuso dello stabilimento.',
+      hoursHint: 'Da 1 a 240 ore; la scadenza non supera comunque la fine dell\'ultima giornata prenotata del gruppo, nel fuso dello stabilimento.',
       requestButton: 'Crea la richiesta',
       requestDone: (notified: boolean): string =>
         notified ? 'Richiesta creata. La notifica con il testo completo è in coda.' : 'Richiesta creata. Nessun recapito: copia il collegamento o il testo qui sotto.',
