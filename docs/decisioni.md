@@ -331,3 +331,25 @@ postazioni; il repertorio dei tipi si estende ai soggetti a noleggio
 (sdraio, gazebo a telo, canoa, SUP, pedalò, moto d'acqua). La legenda degli
 stati resta quella di D20; il tipo di affitto compare nella scheda della
 postazione (D32).
+
+## D36 — Layout «applicazione» dell'area di gestione — accettata (17/11/2026)
+
+L'area di gestione (gestore e reception) adotta una barra superiore fissa
+(stabilimento, ricerca, giorno, «Prenota al banco», profilo) e una
+navigazione laterale compatta a icone con etichetta e voce attiva; a
+larghezza telefono la navigazione passa in basso. Tutto servito dal server,
+senza JavaScript; icone vettoriali del progetto. Le aree dell'ospite e
+dello stagionale restano come sono. Dal secondo prompt del committente si
+scartano, con motivo in specifica (§4ter): mappa a coordinate libere in
+React/Konva, trascinamento con rotazione e ridimensionamento, modulo cassa
+fiscale e CRM separato (fase successiva).
+
+## D37 — Console: filtri, sintesi fissa e scala a scatti — accettata (17/11/2026)
+
+La console guadagna filtri GET per zona e stato (restringono scena e
+tabella, mai i totali), una riga di sintesi sempre visibile (totale,
+libere, occupate, arrivi previsti = attese, partenze previste = presenti,
+percentuale di occupazione; nel modello una prenotazione dura un giorno) e
+la scala della scena a scatti via query string, con «adatta» calcolata dal
+server sulla larghezza del disegno. Nessuno script: la deroga D28 resta
+confinata agli arricchimenti già esistenti.

@@ -177,6 +177,54 @@ Criterio di accettazione aggiuntivo:
    i segni nuovi selezionabili per i tipi personalizzati; `pnpm check`,
    test e fumo verdi.
 
+## 4ter. Layout applicazione e rifiniture della console (C5–C6)
+
+Dal secondo prompt fornito dal committente (stessa matrice di §1 per ciò che
+esiste già o è rifiutato; in più si scartano con motivo: riscrittura in
+React/Konva con mappa a coordinate libere — contraria all'architettura
+collaudata e a D25; trascinamento con rotazione e ridimensionamento — idem;
+modulo cassa fiscale e CRM clienti — fase successiva, §7 della specifica del
+confronto). Due incrementi nuovi, solo frontend:
+
+**C5 — Layout «applicazione» dell'area di gestione** (gestore e reception,
+non l'area dell'ospite né dello stagionale):
+
+- barra superiore fissa: nome dello stabilimento, ricerca (cognome o codice,
+  riusa la ricerca della console/gestione), selettore del giorno, azione
+  «Prenota al banco», collegamento al profilo/uscita;
+- navigazione laterale compatta a icone con etichetta — Oggi (console),
+  Planner, Prenotazioni (gestione), Incassi, Statistiche, Spiaggia (mappa e
+  zone), Disegno, Sito/Impostazioni — voce attiva evidenziata non solo dal
+  colore; icone SVG in linea nello stile del progetto;
+- a larghezza telefono la navigazione passa in basso (o menu compatto in
+  testa), senza JavaScript; la barra non copre i contenuti né i focus.
+
+**C6 — Console: filtri, sintesi fissa e scala**:
+
+- filtri via GET per zona e per stato operativo, combinabili con viste e
+  ricerca esistenti; i conteggi del riepilogo restano quelli dell'intero
+  giorno (il filtro restringe la scena e la tabella, non i totali);
+- sintesi sempre visibile (riga compatta `position: sticky` sotto la barra
+  della console): totale, libere, occupate, **arrivi previsti** (= attese:
+  prenotate non ancora entrate) e **partenze previste** (= presenti, che
+  usciranno entro fine giornata — nel modello una prenotazione dura un
+  giorno), percentuale di occupazione; si aggiorna al cambio del giorno
+  perché è derivata dagli stessi dati; il pannello di riepilogo esteso
+  resta;
+- scala della scena a scatti via query string (`?scala=` compatta | normale
+  | ampia | adatta): il server imposta la variabile CSS della cella —
+  «adatta» calcola la dimensione dalla larghezza del disegno; niente
+  script, i link di scala stanno con i selettori di vista.
+
+Criteri di accettazione aggiuntivi:
+
+6. **Layout**: barra e navigazione presenti e coerenti su tutte le pagine
+   dell'area di gestione, voce attiva giusta pagina per pagina, telefono
+   leggibile, nessuna regressione degli URL; tutto senza JavaScript.
+7. **Console**: filtri zona/stato corretti anche combinati con ricerca e
+   viste; sintesi fissa coi sei numeri giusti su un giorno con prenotazioni
+   in tutti gli stati; scala a scatti e «adatta» leggibili; stampa invariata.
+
 ## 5. Vincoli di sempre
 
 - Tutte le pagine funzionano senza JavaScript; in console l'arricchimento
