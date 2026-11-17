@@ -418,6 +418,9 @@ async function ManageView({ locale, beachSlug, query }: { locale: Locale; beachS
   const suggested = guests
     ? suggestSpot(freeSpots.flatMap((row) => (row.priceCents === null ? [] : [{ ...row, priceCents: row.priceCents }])), guests)
     : null;
+  // A spot preselected by the console card (spec §2): its code travels in the query string.
+  const spotAsked = (first(query.postazione) ?? '').trim().toUpperCase();
+  const prefill = spotAsked === '' ? undefined : freeSpots.find((row) => row.code.toUpperCase() === spotAsked);
   const euro = (cents: number | null) => (cents === null ? '' : (cents / 100).toFixed(2).replace('.', locale === 'it' ? ',' : '.'));
 
   return (
@@ -548,7 +551,7 @@ async function ManageView({ locale, beachSlug, query }: { locale: Locale; beachS
               </form>
               {can(role, 'bookings.create') && inventory?.ok ? (
                 <>
-                  <h2>{t.deskTitle}</h2>
+                  <h2 id="banco">{t.deskTitle}</h2>
                   <p className="prose">{t.deskLead}</p>
                   {freeSpots.length === 0 ? (
                     <p className="prose">{t.noFreeSpots}</p>
@@ -557,7 +560,7 @@ async function ManageView({ locale, beachSlug, query }: { locale: Locale; beachS
                       <Hidden values={common} />
                       <div className="field">
                         <label htmlFor="banco-postazione">{t.spot}</label>
-                        <select id="banco-postazione" name="spot" required defaultValue={suggested?.spotId}>
+                        <select id="banco-postazione" name="spot" required defaultValue={prefill?.spotId ?? suggested?.spotId}>
                           {freeSpots.map((row) => (
                             <option key={row.spotId} value={row.spotId}>
                               {`${row.code} · ${row.priceCents === null ? '' : formatMoney(row.priceCents, locale)}${row.spotId === suggested?.spotId ? ` · ${t.deskSuggested}` : ''}`}

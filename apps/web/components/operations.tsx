@@ -8,14 +8,16 @@ import {
   formatMoney,
   getDictionary,
   locales,
+  manageCollectPath,
   manageStatsPath,
   manageTodayPath,
   type Locale,
+  type MembershipRole,
   type SeaSide,
   type SpotMark as SpotMarkKind,
   type SpotZone,
 } from '@ombre/shared';
-import { api, apiCall, dayPattern, formatDay, slugPattern, today, type ApiLayoutElement, type ApiZoneGaps } from '@/lib/api';
+import { api, apiCall, dayPattern, formatDay, slugPattern, today, type ApiLayoutElement, type ApiResult, type ApiZoneGaps } from '@/lib/api';
 import { Hidden, Notice, requireMe } from './account';
 import { PlanCanvas, planSize, SpotMark } from './beach';
 import { PageHead, PageShell } from './PageShell';
@@ -66,6 +68,40 @@ interface OpsCanvas {
   elements: ApiLayoutElement[];
 }
 
+/** The card of one spot on the day (spec §2, D32), as the operations/spot route answers it. */
+interface SpotCardData {
+  currency: string;
+  day: string;
+  spotId: string;
+  code: string;
+  zone: SpotZone;
+  rowNumber: number;
+  col: number;
+  typeName: string;
+  typeMark: SpotMarkKind;
+  umbrellas: number;
+  sunbeds: number;
+  maxGuests: number;
+  state: OperationalState;
+  notForSale: 'never_published' | 'withdrawn' | null;
+  blockedReason: string | null;
+  shared: boolean;
+  priceCents: number | null;
+  booking: {
+    code: string;
+    guestName: string;
+    source: string;
+    presence: 'expected' | 'inside' | 'outside_reentry_allowed' | 'ended';
+    totalCents: number;
+    paidCents: number;
+    remainingCents: number;
+    paymentState: 'paid' | 'partial' | 'to_collect';
+  } | null;
+}
+
+/** The code of a spot, as the layout writes it: the only shape the card is asked for. */
+const spotCodePattern = /^[A-Z0-9][A-Z0-9-]{0,9}$/;
+
 /** The three explicit views; null is the automatic one: full on wide screens, numbers on phones. */
 const viewIds = ['completa', 'numeri', 'dotazioni'] as const;
 type ViewId = (typeof viewIds)[number];
@@ -113,8 +149,8 @@ function TileBadges({ locale, spot }: { locale: Locale; spot: OpsSpot }) {
   );
 }
 
-/** One card of the scene: a link to its table row, or the whole selection checkbox in selection mode. */
-function OpsTile({ locale, spot, selecting, hit }: { locale: Locale; spot: OpsSpot; selecting: boolean; hit: boolean }) {
+/** One card of the scene: a link to the spot card (spec §2), or the whole selection checkbox in selection mode. */
+function OpsTile({ locale, spot, selecting, hit, cardHref }: { locale: Locale; spot: OpsSpot; selecting: boolean; hit: boolean; cardHref: string }) {
   const t = getDictionary(locale, config.brandName);
   const o = t.ops;
   const classes = `ops-tile ops-tile--${spot.state}${hit ? ' ops-tile--hit' : ''}`;
@@ -154,9 +190,9 @@ function OpsTile({ locale, spot, selecting, hit }: { locale: Locale; spot: OpsSp
   }
   return (
     <li>
-      <a className={classes} href={`#riga-${spot.code}`}>
+      <a className={classes} href={cardHref}>
         {content}
-        <span className="visually-hidden"> {o.openRow(spot.code)}</span>
+        <span className="visually-hidden"> {o.openCard(spot.code)}</span>
       </a>
     </li>
   );
@@ -190,6 +226,202 @@ function OpsLegend({ locale }: { locale: Locale }) {
         </li>
       ))}
     </ul>
+  );
+}
+
+/**
+ * The spot card panel (spec §2, D32): the data of the day, the booking with its paid and
+ * outstanding amounts, and only the actions that fit state and permissions. It is part of
+ * the page, rendered by the server between the scene and the table: no script involved.
+ */
+function SpotCardPanel({
+  locale,
+  role,
+  code,
+  result,
+  freeSpots,
+  common,
+  closeHref,
+  manageHref,
+  view,
+  search,
+}: {
+  locale: Locale;
+  role: MembershipRole;
+  code: string;
+  result: ApiResult<SpotCardData> | null;
+  freeSpots: OpsSpot[];
+  common: { lang: Locale; beach: string; day: string };
+  closeHref: string;
+  manageHref: string;
+  view: ViewId | null;
+  search: string;
+}) {
+  const t = getDictionary(locale, config.brandName);
+  const o = t.ops;
+  const closeLink = (
+    <a className="button button--secondary button--small" href={closeHref}>
+      {o.cardClose}
+    </a>
+  );
+  if (!result?.ok) {
+    // An unknown code or an unpublished day: a polite message in the page, never a bare 404.
+    const unreachable = result !== null && result.status !== 404 && result.status !== 400;
+    return (
+      <aside id="scheda" className="panel ops-card" aria-labelledby="scheda-titolo">
+        <div className="ops-card__head">
+          <h2 id="scheda-titolo">{o.cardTitle(code)}</h2>
+          {closeLink}
+        </div>
+        <p className="prose">{unreachable ? o.unavailableText : o.cardNotFound(code)}</p>
+      </aside>
+    );
+  }
+  const card = result.data;
+  const booking = card.booking;
+  const hidden = { ...common, ...(view ? { vista: view } : {}), ...(search ? { q: search } : {}), postazione: card.code };
+  const canDesk = card.state === 'free' && can(role, 'bookings.create');
+  const canBlockForm = (card.state === 'free' || card.state === 'blocked') && can(role, 'inventory.block');
+  const canCollect = booking !== null && booking.remainingCents > 0 && can(role, 'bookings.create');
+  const canMove = booking !== null && can(role, 'bookings.move') && freeSpots.length > 0;
+  return (
+    <aside id="scheda" className="panel ops-card" aria-labelledby="scheda-titolo">
+      <div className="ops-card__head">
+        <h2 id="scheda-titolo">{o.cardTitle(card.code)}</h2>
+        {closeLink}
+      </div>
+      <dl className="ops-card__grid">
+        <div>
+          <dt>{t.account.spot}</dt>
+          <dd>
+            {card.code}
+            {card.shared ? <span className="badge">{t.account.sharedMark}</span> : null}
+          </dd>
+        </div>
+        <div>
+          <dt>{o.colZone}</dt>
+          <dd>{`${t.booking.zones[card.zone]} · ${t.booking.row(card.rowNumber)}`}</dd>
+        </div>
+        <div>
+          <dt>{o.colType}</dt>
+          <dd>
+            <span className={`ops-swatch ops-tile--${card.state}`}>
+              <SpotMark mark={card.typeMark} status={markStatus(card.state)} />
+            </span>
+            {card.typeName}
+          </dd>
+        </div>
+        <div>
+          <dt>{o.colEquipment}</dt>
+          <dd>{`${t.booking.equipment(card.umbrellas, card.sunbeds)}, ${t.booking.guests(card.maxGuests).toLowerCase()}`}</dd>
+        </div>
+        <div>
+          <dt>{t.account.price}</dt>
+          <dd>{card.priceCents === null ? '—' : formatMoney(card.priceCents, locale)}</dd>
+        </div>
+        <div>
+          <dt>{t.account.state}</dt>
+          <dd>{`${o.states[card.state]}${card.notForSale ? ` (${o.notForSale[card.notForSale]})` : ''}`}</dd>
+        </div>
+        {card.state === 'blocked' ? (
+          <div>
+            <dt>{o.blockedReasonLabel}</dt>
+            <dd>{card.blockedReason ?? o.noReason}</dd>
+          </div>
+        ) : null}
+      </dl>
+      {booking ? (
+        <>
+          <h3>{o.colBooking}</h3>
+          <dl className="ops-card__grid">
+            <div>
+              <dt>{t.account.code}</dt>
+              <dd>{booking.code}</dd>
+            </div>
+            <div>
+              <dt>{o.colGuest}</dt>
+              <dd>{booking.guestName}</dd>
+            </div>
+            <div>
+              <dt>{o.channel}</dt>
+              <dd>{booking.source === 'desk' ? t.stats.channels.desk : t.stats.channels.online}</dd>
+            </div>
+            <div>
+              <dt>{t.account.presence}</dt>
+              <dd>{t.account.presences[booking.presence]}</dd>
+            </div>
+            <div>
+              <dt>{o.totalLabel}</dt>
+              <dd>{formatMoney(booking.totalCents, locale)}</dd>
+            </div>
+            <div>
+              <dt>{o.collectedLabel}</dt>
+              <dd>{formatMoney(booking.paidCents, locale)}</dd>
+            </div>
+            <div>
+              <dt>{o.remainingLabel}</dt>
+              <dd>{formatMoney(booking.remainingCents, locale)}</dd>
+            </div>
+            <div>
+              <dt>{t.account.colPayment}</dt>
+              <dd>{t.account.paymentStates[booking.paymentState]}</dd>
+            </div>
+          </dl>
+        </>
+      ) : null}
+      {canDesk || canBlockForm || canCollect || canMove || booking !== null ? (
+        <div className="ops-card__actions">
+          {canDesk ? (
+            <Link className="button" href={`${manageHref}&postazione=${encodeURIComponent(card.code)}#banco`}>
+              {o.bookAtDesk}
+            </Link>
+          ) : null}
+          {canBlockForm ? (
+            <form method="post" action="/azioni/console-blocco" className="ops-card__form">
+              <Hidden values={{ ...hidden, spot: card.spotId }} />
+              {card.state === 'free' ? (
+                <div className="field">
+                  <label htmlFor="scheda-nota">{o.noteLabel}</label>
+                  <input id="scheda-nota" name="reason" maxLength={200} autoComplete="off" />
+                </div>
+              ) : null}
+              <button className="button button--secondary" type="submit" name="op" value={card.state === 'free' ? 'block' : 'unblock'}>
+                {card.state === 'free' ? t.account.block : t.account.unblock}
+              </button>
+            </form>
+          ) : null}
+          {booking && canCollect ? (
+            <Link className="button" href={`${manageCollectPath(locale, common.beach)}?code=${encodeURIComponent(booking.code)}`}>
+              {o.collectAction}
+              <span className="visually-hidden"> {booking.code}</span>
+            </Link>
+          ) : null}
+          {booking && canMove ? (
+            <form method="post" action="/azioni/banco-sposta" className="inline-form">
+              <Hidden values={{ ...common, code: booking.code }} />
+              <label className="visually-hidden" htmlFor="scheda-sposta">
+                {t.account.moveTo}
+              </label>
+              <select id="scheda-sposta" name="spot" required>
+                {freeSpots.map((free) => (
+                  <option key={free.spotId} value={free.spotId}>
+                    {free.code}
+                  </option>
+                ))}
+              </select>
+              <button className="button button--secondary" type="submit">
+                {t.account.move} <span className="visually-hidden">{booking.code}</span>
+              </button>
+            </form>
+          ) : null}
+          {booking ? (
+            <Link className="button button--secondary" href={manageHref}>
+              {o.receptionLink}
+            </Link>
+          ) : null}
+        </div>
+      ) : null}
+    </aside>
   );
 }
 
@@ -242,19 +474,25 @@ export async function OperationsView({ locale, beachSlug, query }: { locale: Loc
   const view = readView(first(query.vista));
   const selecting = first(query.selezione) === '1' && can(role, 'inventory.block');
   const search = (first(query.q) ?? '').trim().slice(0, 80);
+  // The open spot card (spec §2, D32): a code in the query string, rendered by the server.
+  const cardAsked = (first(query.postazione) ?? '').trim().toUpperCase();
+  const cardCode = spotCodePattern.test(cardAsked) ? cardAsked : undefined;
 
-  const [ops, canvasResult] = await Promise.all([
+  const [ops, canvasResult, cardResult] = await Promise.all([
     apiCall<OpsData>('GET', `/v1/manage/beaches/${beachSlug}/operations?day=${day}`, { token }),
     // The drawing of the scene: the console reuses the editor's canvas, never a second layout.
     can(role, 'layout.gaps') ? apiCall<OpsCanvas>('GET', `/v1/manage/beaches/${beachSlug}/layout`, { token }) : null,
+    cardCode ? apiCall<SpotCardData>('GET', `/v1/manage/beaches/${beachSlug}/operations/spot?day=${day}&code=${encodeURIComponent(cardCode)}`, { token }) : null,
   ]);
   const canvas: OpsCanvas = canvasResult?.ok ? canvasResult.data : { seaSide: 'top', shoreGapRows: 1, landGapRows: 1, elements: [] };
   const gaps: ApiZoneGaps = { shoreGapRows: canvas.shoreGapRows, landGapRows: canvas.landGapRows };
 
   const base = manageTodayPath(locale, beachSlug);
-  const state = { day, vista: view ?? undefined, selezione: selecting ? '1' : undefined, q: search || undefined };
+  const state = { day, vista: view ?? undefined, selezione: selecting ? '1' : undefined, q: search || undefined, postazione: cardCode };
   const href = (over: Partial<typeof state>) => withQuery(base, { ...state, ...over });
   const alternate = withQuery(manageTodayPath(other, beachSlug), state);
+  /** The address that opens the card of one spot, keeping day, view and search. */
+  const cardHrefOf = (code: string) => `${href({ postazione: code })}#scheda`;
 
   const spots = ops.ok ? ops.data.spots : [];
   const summary = ops.ok ? ops.data.summary : null;
@@ -268,6 +506,8 @@ export async function OperationsView({ locale, beachSlug, query }: { locale: Loc
   const size = planSize(spots, canvas.elements);
   const common = { lang: locale, beach: beachSlug, day };
   const manageHref = `${accountPath(locale, 'manage', beachSlug)}?day=${day}`;
+  // The free spots of the day feed the «Sposta» dropdown of the card: no extra query.
+  const freeSpots = spots.filter((spot) => spot.state === 'free');
 
   const scene = (
     <div
@@ -289,7 +529,7 @@ export async function OperationsView({ locale, beachSlug, query }: { locale: Loc
         spots={spots}
         idPrefix="scena"
         cellRem={opsCellRem}
-        renderSpot={(spot) => <OpsTile locale={locale} spot={spot} selecting={selecting} hit={matches(spot)} />}
+        renderSpot={(spot) => <OpsTile locale={locale} spot={spot} selecting={selecting} hit={matches(spot)} cardHref={cardHrefOf(spot.code)} />}
       />
     </div>
   );
@@ -411,7 +651,7 @@ export async function OperationsView({ locale, beachSlug, query }: { locale: Loc
             <>
               {selecting ? (
                 <form method="post" action="/azioni/console-blocco" id="selezione">
-                  <Hidden values={{ ...common, ...(view ? { vista: view } : {}), ...(search ? { q: search } : {}) }} />
+                  <Hidden values={{ ...common, selezione: '1', ...(view ? { vista: view } : {}), ...(search ? { q: search } : {}), ...(cardCode ? { postazione: cardCode } : {}) }} />
                   <div className="ops-actions">
                     <div className="field">
                       <label htmlFor="nota-blocco">{o.noteLabel}</label>
@@ -432,6 +672,22 @@ export async function OperationsView({ locale, beachSlug, query }: { locale: Loc
               )}
               {selecting ? <script dangerouslySetInnerHTML={{ __html: quickSelectionScript }} /> : null}
 
+              {/* The card of one spot (spec §2, D32), between the scene and the table. */}
+              {cardCode ? (
+                <SpotCardPanel
+                  locale={locale}
+                  role={role}
+                  code={cardCode}
+                  result={cardResult}
+                  freeSpots={freeSpots}
+                  common={common}
+                  closeHref={href({ postazione: undefined })}
+                  manageHref={manageHref}
+                  view={view}
+                  search={search}
+                />
+              ) : null}
+
               {/* The summary of the day: counts, guests and, only with reports.read, the takings. */}
               {summary ? (
                 <div className="panel ops-summary">
@@ -451,6 +707,18 @@ export async function OperationsView({ locale, beachSlug, query }: { locale: Loc
                       <dt>{o.presentGuests}</dt>
                       <dd>{summary.presentGuests}</dd>
                     </div>
+                    {/* Occupancy (spec §2): occupied over sellable, omitted when nothing is sellable. */}
+                    {(() => {
+                      const occupied = summary.counts.reserved + summary.counts.expected + summary.counts.present + summary.counts.departed;
+                      const sellable = spots.length - summary.counts.blocked - summary.counts.not_for_sale;
+                      if (sellable <= 0) return null;
+                      return (
+                        <div>
+                          <dt>{o.occupancy}</dt>
+                          <dd>{`${Math.round((occupied / sellable) * 100)}%`}</dd>
+                        </div>
+                      );
+                    })()}
                     {summary.revenueCents === null ? null : (
                       <div className="ops-summary__revenue">
                         <dt>{o.revenue}</dt>
@@ -498,6 +766,9 @@ export async function OperationsView({ locale, beachSlug, query }: { locale: Loc
                       <Cell label={o.colGuest}>{spot.guestName}</Cell>
                       <Cell label={o.colBooking}>{spot.bookingCode}</Cell>
                       <Cell label={t.account.actions}>
+                        <a href={cardHrefOf(spot.code)}>
+                          {o.cardLink} <span className="visually-hidden">{spot.code}</span>
+                        </a>{' '}
                         {spot.bookingCode && can(role, 'bookings.move') ? (
                           <Link href={manageHref}>
                             {o.moveAtDesk} <span className="visually-hidden">{spot.bookingCode}</span>

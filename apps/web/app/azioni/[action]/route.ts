@@ -734,11 +734,13 @@ const actions: Record<string, (request: Request, form: Form, lang: Locale) => Pr
     if (!slugPattern.test(beach) || !dayPattern.test(day) || (op !== 'block' && op !== 'unblock')) return bad();
     const spotIds = form('spots').split(',').filter((value) => uuidPattern.test(value));
     const reason = form('reason').trim().slice(0, 200);
+    // The card posts a single spot outside selection mode: each context comes back as it was.
     const keep: Record<string, string | undefined> = {
       day,
       vista: form('vista') || undefined,
-      selezione: '1',
+      selezione: form('selezione') === '1' ? '1' : undefined,
       q: form('q') || undefined,
+      postazione: form('postazione') || undefined,
     };
     const back = manageTodayPath(lang, beach);
     const { getDictionary, config } = await import('@ombre/shared');

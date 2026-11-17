@@ -1788,6 +1788,74 @@ a.ops-tile:active {
   font-weight: 700;
 }
 
+/* ---- Scheda della postazione (§2, D32): pannello servito dal server tra scena e tabella.
+   Stessa tavolozza delle tessere; leggibile a larghezza telefono grazie alla griglia fluida. */
+.ops-card__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spazio-2) var(--spazio-3);
+}
+
+.ops-card__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+  gap: var(--spazio-3);
+  margin: var(--spazio-3) 0 0;
+}
+
+.ops-card__grid dt {
+  color: var(--testo-secondario);
+  font-size: var(--testo-piccolo);
+}
+
+.ops-card__grid dd {
+  display: flex;
+  align-items: center;
+  gap: var(--spazio-1);
+  margin: 0;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.ops-card__grid .ops-swatch {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border: 1.5px solid var(--bordo);
+  border-radius: var(--raggio-piccolo);
+  background: var(--carta);
+}
+
+.ops-card__grid .ops-swatch .plan-mark {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.ops-card h3 {
+  margin-top: var(--spazio-4);
+}
+
+.ops-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--spazio-3);
+  margin-top: var(--spazio-4);
+  padding-top: var(--spazio-3);
+  border-top: 1px solid var(--bordo);
+}
+
+.ops-card__form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--spazio-2);
+}
+
 /* ---- Riepilogo del giorno ---- */
 .ops-summary__grid {
   display: grid;
