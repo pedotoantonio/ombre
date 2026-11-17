@@ -1,6 +1,6 @@
 # Stato del progetto
 
-Aggiornato al 16/11/2026.
+Aggiornato al 17/11/2026.
 
 ## Dove siamo
 
@@ -63,6 +63,21 @@ indicizzato.
   incassare» con pass subito, richieste di pagamento con link temporaneo
   `/paga/{token}` sul fornitore di prova, coda delle comunicazioni col testo
   pronto e pagina «Comunicazioni».
+- Terza iterazione dal confronto (17/11/2026), su due prompt e tre tavole del
+  committente, specifica e prompt in
+  [specifica-console-planner.md](specifica-console-planner.md) e
+  [prompt-console-planner.md](prompt-console-planner.md), decisioni D32–D37:
+  scheda della postazione nella console (dati del giorno,
+  totale/incassato/residuo, tipo di affitto, azioni per stato e permesso),
+  planner a griglia su 7/14/31 giorni con filtro zona e celle collegate alle
+  console dei giorni, generazione in blocco delle file dall'editor
+  (numerazione progressiva, tetto di 200 per operazione), repertorio ampliato
+  dalle tavole (16 decorazioni e 6 segni a noleggio ridisegnati in
+  vettoriale), layout «applicazione» dell'area di gestione (barra fissa e
+  navigazione a icone, in basso a telefono) e console con filtri zona/stato,
+  sintesi sempre visibile e scala della scena a scatti. Le proposte esterne
+  in contrasto con l'architettura (mappa a coordinate libere, trascinamento,
+  cassa, CRM) sono scartate con motivo in specifica.
 - Prenotazione dell'ospite: scelta della postazione, riepilogo con codice promozionale,
   riserva, dati, pagamento di prova, pass con codice QR e codice breve.
 - Reception: verifica del pass con ingresso, uscita e rientro, prenotazione al banco,
@@ -87,10 +102,12 @@ indicizzato.
   pagamento sono già modellati sul fornitore di prova).
 - Invio reale della posta e delle notifiche (la coda con i testi pronti c'è;
   manca il fornitore).
-- Dal confronto col gestionale di mercato, registrati e non costruiti: planner
-  a linea temporale, cassa fiscale, bar/ristorante, app mobile, marketplace di
-  esperienze, gestionale piscina, convenzioni con fattura mensile alla
-  struttura (vedi §7 della specifica del confronto).
+- Dal confronto col gestionale di mercato, registrati e non costruiti: cassa
+  fiscale, bar/ristorante, app mobile, marketplace di esperienze, gestionale
+  piscina, convenzioni con fattura mensile alla struttura, CRM, automazioni
+  WhatsApp, prezzi dinamici, storico per postazione, aggiornamento in tempo
+  reale della console (vedi §7 della specifica del confronto e §4ter della
+  specifica console/planner).
 - Inviti e recupero della password: oggi gli accessi li crea l'amministratore da riga di
   comando.
 - Console centrale della piattaforma, gruppi e cooperative, piani in `plan_feature`.
@@ -132,6 +149,14 @@ HTTP sui criteri 4–7 più 15 a database, tutte superate; un difetto trovato e
 corretto (la pagina cortese di `/paga` arrivava vuota senza JavaScript). In
 coda, i tag `canonical`/`hreflang`/`og:url` sono omessi quando l'indirizzo
 pubblico non è configurato (prima puntavano al segnaposto `localhost`).
+
+Il 17/11/2026, iterazione console/planner/repertorio (scheda, planner,
+generazione in blocco, decorazioni, layout applicazione, filtri e scala):
+192 test con database (contratto a 96 rotte), 479 controlli fumo, 171
+verifiche sui criteri 0–7 della nuova specifica, tutti superati; un difetto
+trovato e corretto nelle sole suite di verifica (cercavano la vecchia barra
+dell'account sulle pagine col layout nuovo). Ambiente di collaudo
+ricostruito dal codice corrente e lasciato acceso.
 
 Limiti noti del codice: la Content-Security-Policy ammette gli script in linea, perché
 il framework scrive in linea i dati delle pagine; i limiti alle richieste vivono nella
