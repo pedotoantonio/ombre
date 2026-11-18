@@ -211,7 +211,8 @@ export const membership = pgTable('membership', {
 
 export const auditEvent = pgTable('audit_event', {
   id: uuid('id').primaryKey().defaultRandom(),
-  beachId: uuid('beach_id').notNull(),
+  /** NULL for platform events (D45): account actions belong to no beach club. */
+  beachId: uuid('beach_id'),
   actorUserId: uuid('actor_user_id').notNull(),
   action: text('action').notNull(),
   target: text('target'),
@@ -234,6 +235,8 @@ export const bookingGroup = pgTable('booking_group', {
   id: uuid('id').primaryKey().defaultRandom(),
   beachId: uuid('beach_id').notNull(),
   code: text('code').notNull(),
+  /** The account that owns the stay (D47); filled by account_relink or at a signed-in purchase. */
+  userId: uuid('user_id'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -392,14 +395,16 @@ export const ledgerEntry = pgTable('ledger_entry', {
 });
 
 export const outbox = pgTable('outbox', {
-  beachId: uuid('beach_id').notNull(),
+  /** NULL for platform work (D45): the account mails belong to no beach club. */
+  beachId: uuid('beach_id'),
   kind: text('kind').notNull(),
   payload: jsonb('payload').notNull().default({}),
 });
 
 export const notification = pgTable('notification', {
   id: uuid('id').primaryKey().defaultRandom(),
-  beachId: uuid('beach_id').notNull(),
+  /** NULL for platform notifications (D45), invisible to every beach-scoped listing. */
+  beachId: uuid('beach_id'),
   bookingId: uuid('booking_id'),
   template: text('template').notNull(),
   locale: text('locale').notNull(),

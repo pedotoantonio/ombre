@@ -1,4 +1,5 @@
 export * from './client';
+export * from './account';
 export * from './auth';
 export * from './bookings';
 export * from './cabins';

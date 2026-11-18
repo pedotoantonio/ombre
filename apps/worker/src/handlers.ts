@@ -16,6 +16,8 @@ export function createHandler({ db, brand, siteUrl, signingSecret, mail }: Handl
     if (item.kind !== 'booking.confirmed') return;
     const bookingId = item.payload.bookingId;
     if (!bookingId) throw new Error('booking.confirmed without bookingId');
+    // Platform work (NULL beach, D45) never carries this kind.
+    if (!item.beachId) throw new Error('booking.confirmed without beach club');
     const data = await bookingMailData(db, item.beachId, bookingId);
     if (!data) throw new Error('booking not found');
     // A booking taken at the front desk has no address to write to.

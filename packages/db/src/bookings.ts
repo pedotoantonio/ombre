@@ -21,7 +21,7 @@ function sameText(left: string, right: string): boolean {
 }
 
 export const bookingAccessToken = (secret: string, bookingId: string): string => sign(secret, 'booking', bookingId);
-const passCredential = (secret: string, passId: string): string => `${passId}.${sign(secret, 'pass', passId).slice(0, 32)}`;
+export const passCredential = (secret: string, passId: string): string => `${passId}.${sign(secret, 'pass', passId).slice(0, 32)}`;
 
 // ---- The payment aggregate (D31 at group level, D38, spec ruoli-periodo §2) ----
 // The residual is defined once: total of the group's days that are not cancelled

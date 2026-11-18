@@ -6,7 +6,8 @@ import { withUser, type Database } from './client';
 import { DomainError } from './inventory';
 import { beach, membership } from './schema';
 
-function hashToken(token: string): string {
+/** Session tokens are stored only as hashes; account.ts signs in the same way. */
+export function hashToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');
 }
 
@@ -37,14 +38,30 @@ export interface SessionUser {
   name: string;
   platformRole: 'none' | 'admin';
   twoFactor: boolean;
+  /** True until the generated password is changed (D44): the API gates the area on it. */
+  mustChangePassword: boolean;
 }
 
 export async function resolveSession(db: Database, token: string): Promise<SessionUser | null> {
-  const result = await db.execute<{ o_user_id: string; o_email: string; o_name: string; o_platform_role: 'none' | 'admin'; o_totp_enabled: boolean }>(
-    sql`select * from auth_session(${hashToken(token)})`,
-  );
+  const result = await db.execute<{
+    o_user_id: string;
+    o_email: string;
+    o_name: string;
+    o_platform_role: 'none' | 'admin';
+    o_totp_enabled: boolean;
+    o_must_change_password: boolean;
+  }>(sql`select * from auth_session(${hashToken(token)})`);
   const row = result.rows[0];
-  return row ? { userId: row.o_user_id, email: row.o_email, name: row.o_name, platformRole: row.o_platform_role, twoFactor: row.o_totp_enabled } : null;
+  return row
+    ? {
+        userId: row.o_user_id,
+        email: row.o_email,
+        name: row.o_name,
+        platformRole: row.o_platform_role,
+        twoFactor: row.o_totp_enabled,
+        mustChangePassword: row.o_must_change_password,
+      }
+    : null;
 }
 
 /** Starts two-step setup. Returns the secret to load into an authenticator app, or null if already active. */

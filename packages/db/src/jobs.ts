@@ -3,10 +3,10 @@ import { withBeach, type Database, type Transaction } from './client';
 import { closeDay } from './ledger';
 import { beach, booking, hold, inventoryDay, notification, outbox, promotion, spot } from './schema';
 
-export type OutboxKind = 'booking.confirmed' | 'booking.cancelled' | 'refund.due';
+export type OutboxKind = 'booking.confirmed' | 'booking.cancelled' | 'refund.due' | 'account.created' | 'account.exists';
 
-/** Adds work to the queue inside the transaction that makes it necessary. */
-export async function enqueue(tx: Transaction, beachId: string, kind: OutboxKind, payload: Record<string, string>): Promise<void> {
+/** Adds work to the queue inside the transaction that makes it necessary. A NULL beach is platform work (D45). */
+export async function enqueue(tx: Transaction, beachId: string | null, kind: OutboxKind, payload: Record<string, string>): Promise<void> {
   await tx.insert(outbox).values({ beachId, kind, payload });
 }
 
@@ -47,7 +47,8 @@ export async function runMaintenance(db: Database): Promise<{ holdsReleased: num
 
 export interface OutboxItem {
   id: string;
-  beachId: string;
+  /** NULL for platform work (D45). */
+  beachId: string | null;
   kind: string;
   payload: Record<string, string>;
   attempts: number;
@@ -60,7 +61,7 @@ export type OutboxHandler = (item: OutboxItem) => Promise<void>;
  * failure leaves the row in the queue for a later attempt.
  */
 export async function processOutbox(db: Database, handle: OutboxHandler, limit = 20): Promise<{ done: number; failed: number }> {
-  const claimed = await db.execute<{ o_id: string; o_beach_id: string; o_kind: string; o_payload: Record<string, string>; o_attempts: number }>(
+  const claimed = await db.execute<{ o_id: string; o_beach_id: string | null; o_kind: string; o_payload: Record<string, string>; o_attempts: number }>(
     sql`select * from worker_claim_outbox(${limit})`,
   );
   let done = 0;
@@ -122,4 +123,12 @@ export function recordNotification(
   return withBeach(db, beachId, async (tx) => {
     await tx.insert(notification).values({ beachId, ...entry });
   });
+}
+
+/** A platform notification (D45): no beach club, written outside any beach context. */
+export async function recordPlatformNotification(
+  db: Database,
+  entry: { template: string; locale: string; recipient: string; status: 'queued' | 'sent' | 'skipped'; provider: string; body?: string | null },
+): Promise<void> {
+  await db.insert(notification).values({ beachId: null, ...entry });
 }
