@@ -395,3 +395,18 @@ holder / Beach manager): un test sui dizionari it/en e un controllo fumo
 sulle pagine rese vietano le vecchie formule («Per gli stabilimenti», «Per
 gli stagionali», «condividi giornate» come etichetta e varianti). Titolare
 di cabina e contabilità restano nomi interni dell'area riservata.
+
+## D43 — Fotografie vere nel repertorio dimostrativo — accettata (18/11/2026)
+
+Le nove illustrazioni dimostrative (`/demo/*.svg`) lasciano il posto a nove
+fotografie vere, scattate da persone, con licenza libera accertata alla
+fonte (pubblico dominio o CC0 in testa; mai immagini generate o con persone
+riconoscibili in primo piano, insegne leggibili di attività vere). Ogni
+foto è registrata in `docs/immagini-reali.md` con fonte, autore, licenza ed
+eventuale obbligo di attribuzione; se una licenza chiede l'attribuzione,
+questa compare dove serve, altrimenti si sceglie un'altra foto. Le chiavi
+del repertorio (`demoMedia`) restano le stesse: copertina e galleria degli
+stabilimenti e l'editor del sito non cambiano forma. Il Bagno delle Dune
+riceve nel seme un sito pubblicato con copertina e galleria, come il Lido
+Aurora. Restano com'erano la fotografia della costa del committente, il
+marchio, le icone e le schermate vere del gestionale.

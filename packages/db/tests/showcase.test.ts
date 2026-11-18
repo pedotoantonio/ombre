@@ -120,7 +120,7 @@ describe.skipIf(!testAdminUrl)('showcase beach club', () => {
       [beachId],
     );
     const content = site.rows[0]!.content;
-    expect(content.it.images.cover).toEqual({ src: '/demo/copertina.svg', alt: 'Veduta della spiaggia con file di ombrelloni e il mare' });
+    expect(content.it.images.cover).toEqual({ src: '/demo/copertina.jpg', alt: 'La spiaggia dall\'alto, con le file di ombrelloni e il mare' });
     expect(content.it.images.gallery).toHaveLength(6);
     expect(content.en.tagline).toMatch(/pine wood/);
   });

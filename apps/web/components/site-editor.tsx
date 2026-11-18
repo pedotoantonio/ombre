@@ -1,5 +1,5 @@
 import { notFound, redirect } from 'next/navigation';
-import { accountPath, can, config, demoMedia, getDictionary, locales, siteTemplates, siteTextLimits, type DemoMediaId, type Locale, type SiteContent, type SiteTemplate, type SiteTexts } from '@ombre/shared';
+import { accountPath, can, config, demoImageSrc, demoMedia, getDictionary, locales, siteTemplates, siteTextLimits, type DemoMediaId, type Locale, type SiteContent, type SiteTemplate, type SiteTexts } from '@ombre/shared';
 import { apiCall, slugPattern } from '@/lib/api';
 import { signedIn } from '@/lib/session';
 import { ManageShell } from './manage-shell';
@@ -78,7 +78,7 @@ export async function SiteEditorView({ locale, beachSlug, query }: { locale: Loc
   const errors = dictionary.account.errors as Record<string, string>;
   const preview = state.data.draft ? state.data.draft.content[locale] : null;
   const library = Object.keys(demoMedia) as DemoMediaId[];
-  const idOf = (src: string | undefined) => library.find((id) => src === `/demo/${id}.svg`) ?? '';
+  const idOf = (src: string | undefined) => library.find((id) => src === demoImageSrc(id)) ?? '';
   const coverId = idOf(content.it.images?.cover?.src);
   const galleryIds = (content.it.images?.gallery ?? []).map((image) => idOf(image.src));
 
@@ -131,7 +131,7 @@ export async function SiteEditorView({ locale, beachSlug, query }: { locale: Loc
                     <label key={id}>
                       <input type="checkbox" name="gallery" value={id} defaultChecked={galleryIds.includes(id)} />
                       {/* The label text already describes the picture. */}
-                      <img className="checks__thumb" src={`/demo/${id}.svg`} alt="" width={72} height={48} loading="lazy" />
+                      <img className="checks__thumb" src={demoImageSrc(id)} alt="" width={72} height={48} loading="lazy" />
                       <span>{demoMedia[id][locale]}</span>
                     </label>
                   ))}

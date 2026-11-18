@@ -60,10 +60,12 @@ const version = async (visitor: Visitor) => /name="version" value="(\d*)"/.exec(
 
 const opened = await manager.get(editor);
 const brand = process.env.OMBRE_BRAND_NAME?.trim() || 'Ombrè';
-check(opened.includes('Nessuna bozza in corso'), 'editor: does not open empty');
+// The demo beach club starts with its seeded, published website (D43) and no draft.
+check(opened.includes('Nessuna bozza in corso'), 'editor: does not open without a draft');
+check((await manager.get(`/bagni/${beach}`)).includes('site-cover'), 'public page: the seeded website has no cover picture');
 check((/<title>([^<]*)<\/title>/.exec(opened)?.[1] ?? '') === `Sito dello stabilimento · Bagno delle Dune | ${brand}`, 'editor: the page has no title naming the beach club');
 check(opened.includes('<legend>Testi in inglese</legend>') && opened.includes('Facoltativi: se li lasci vuoti'), 'editor: the English group has a long legend, or its note is missing');
-check((opened.match(/<img class="checks__thumb" src="\/demo\/[a-z]+\.svg"/g) ?? []).length === (opened.match(/name="gallery"/g) ?? []).length && opened.includes('name="gallery"'), 'editor: a gallery option has no thumbnail');
+check((opened.match(/<img class="checks__thumb" src="\/demo\/[a-z]+\.jpg"/g) ?? []).length === (opened.match(/name="gallery"/g) ?? []).length && opened.includes('name="gallery"'), 'editor: a gallery option has no thumbnail');
 // The editor lives in the application frame of the management area (D36): the top bar
 // says who is signed in and offers the way out.
 check(opened.includes('class="manage-top"') && opened.includes('Gestore dimostrativo') && opened.includes('action="/azioni/uscita"'), 'editor: no bar with who is signed in');
@@ -71,7 +73,7 @@ const fields = { lang: 'it', beach, template: 'riviera', ...italian, ...blankEng
 check((await manager.post('sito-salva', { ...fields, version: '' })).includes('ok=1'), 'editor: the first draft was not saved');
 
 const drafted = await manager.get(editor);
-check(drafted.includes('Bozza numero 1') && drafted.includes('Anteprima della bozza') && drafted.includes(italian.it_tagline), 'editor: no preview of the draft');
+check(drafted.includes('Bozza numero 2') && drafted.includes('Anteprima della bozza') && drafted.includes(italian.it_tagline), 'editor: no preview of the draft');
 check(!(await manager.get(`/bagni/${beach}`)).includes(italian.it_tagline), 'public page: shows a draft that was never published');
 
 check((await manager.post('sito-pubblica', { lang: 'it', beach, version: await version(manager) })).includes('ok=1'), 'editor: the draft was not published');
@@ -99,7 +101,7 @@ const history = await manager.get(editor);
 const firstRevision = [...history.matchAll(/name="revision" value="([0-9a-f-]{36})"/g)].at(-1)?.[1] ?? '';
 check((await manager.post('sito-ripristina', { lang: 'it', beach, revision: firstRevision })).includes('ok=1'), 'editor: the revision was not restored');
 const restored = await manager.get(editor);
-check(restored.includes('Bozza numero 3') && (restored.match(/<td[^>]*>Archiviata<\/td>/g) ?? []).length === 1, 'editor: restore did not create draft 3 or changed the history');
+check(restored.includes('Bozza numero 4') && (restored.match(/<td[^>]*>Archiviata<\/td>/g) ?? []).length === 2, 'editor: restore did not create draft 4 or changed the history');
 check((await manager.get(`/bagni/${beach}`)).includes('tpl-boutique'), 'public page: a restore changed the site before publication');
 
 const reception = new Visitor();

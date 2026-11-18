@@ -1,4 +1,5 @@
 import pg from 'pg';
+import { demoImage, type DemoMediaId, type Locale, type SiteContent, type SiteTexts } from '@ombre/shared';
 
 export const demoBeach = {
   slug: 'bagno-delle-dune',
@@ -24,6 +25,39 @@ export const demoAccounts = [
  * Fictional beach club used across the project documents: spots A01-A04 and B01-B04
  * on 17 June 2027 at 30.00 euro, with the MARE10 promotion. Marked as demo data.
  */
+// The seeded website of the demo beach club: cover and gallery from the demo
+// library (real photographs since D43), fictional texts matching the smoke data.
+function demoSiteTexts(locale: Locale): SiteTexts {
+  const gallery: DemoMediaId[] = ['riva', 'passerella', 'ombrelloni', 'docce', 'chiosco', 'tramonto'];
+  const images = { cover: demoImage('dune', locale), gallery: gallery.map((id) => demoImage(id, locale)) };
+  if (locale === 'en') {
+    return {
+      tagline: 'Fine sand between the pine wood and the sea',
+      description:
+        'Bagno delle Dune is a fictional, family-run beach club created to try the system: fine sand, a pine wood behind and two rows of umbrellas. Every name, price and picture here is sample data.',
+      services: ['Bar', 'Hot showers', 'Play area'],
+      openingPeriod: 'From 15 May to 20 September',
+      openingHours: 'Every day from 8:30 to 19:30',
+      address: 'Viale Mare Adriatico 1, Lido di Pomposa (fictional address)',
+      phone: '+39 000 000 0000',
+      accessibility: 'Walkway to the first row and beach wheelchair on request.',
+      images,
+    };
+  }
+  return {
+    tagline: 'Sabbia fine tra la pineta e il mare',
+    description:
+      'Il Bagno delle Dune è uno stabilimento di fantasia a conduzione familiare, creato per provare il sistema: sabbia fine, la pineta alle spalle e due file di ombrelloni. Nomi, prezzi e immagini sono dati di esempio.',
+    services: ['Bar e ristoro', 'Docce calde', 'Area giochi'],
+    openingPeriod: 'Dal 15 maggio al 20 settembre',
+    openingHours: 'Tutti i giorni dalle 8:30 alle 19:30',
+    address: 'Viale Mare Adriatico 1, Lido di Pomposa (indirizzo di fantasia)',
+    phone: '+39 000 000 0000',
+    accessibility: 'Passerella fino alla prima fila e sedia da mare su richiesta.',
+    images,
+  };
+}
+
 export async function seedDemo(adminUrl: string): Promise<{ beachId: string }> {
   const client = new pg.Client({ connectionString: adminUrl });
   await client.connect();
@@ -81,6 +115,21 @@ export async function seedDemo(adminUrl: string): Promise<{ beachId: string }> {
       [contractId, spotId, demoBeach.day],
     );
     await client.query('UPDATE beach SET shared_price_cents = $2 WHERE id = $1 AND shared_price_cents IS NULL', [beachId, demoBeach.priceCents]);
+    // The published website with cover and gallery (D43). The manager account is
+    // created here with a random password: sign-in comes when a demo password is set.
+    const manager = demoAccounts.find((account) => account.role === 'manager')!;
+    const managerUser = await client.query<{ id: string }>(
+      `INSERT INTO app_user (email, name, password_hash) VALUES ($1, $2, crypt(gen_random_uuid()::text, gen_salt('bf', 6)))
+       ON CONFLICT (email) DO UPDATE SET name = app_user.name RETURNING id`,
+      [manager.email, manager.name],
+    );
+    const siteContent: SiteContent = { it: demoSiteTexts('it'), en: demoSiteTexts('en') };
+    await client.query(
+      `INSERT INTO site_revision (beach_id, number, status, template, content, created_by, published_at)
+       SELECT $1, 1, 'published', 'boutique', $2, $3, now()
+       WHERE NOT EXISTS (SELECT 1 FROM site_revision WHERE beach_id = $1)`,
+      [beachId, JSON.stringify(siteContent), managerUser.rows[0]!.id],
+    );
     // Illustrative percentages from the project documents: 50 / 40 / 10.
     await client.query(
       `INSERT INTO split_rule (beach_id, season_holder_bps, beach_club_bps, platform_bps)
