@@ -441,9 +441,13 @@ svg {
     content: none;
   }
 
+  /* Centered while it fits, scrollable from the first item when it does not:
+     centering with auto margins never cuts the edges like justify-content would. */
   .site-nav ul {
-    justify-content: center;
-    padding-inline: 0;
+    width: max-content;
+    max-width: 100%;
+    margin-inline: auto;
+    padding-inline: var(--spazio-1);
   }
 }
 
