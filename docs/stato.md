@@ -102,6 +102,30 @@ indicizzato.
   Dune ha ora nel seme un sito pubblicato con copertina e galleria, come il Lido
   Aurora. Restano com'erano la fotografia della costa del committente (diritti
   da confermare), il marchio, le icone e le schermate del gestionale.
+- Iterazione «carrello, conto dell'Ospite e accesso con Google» (18/11/2026),
+  specifica in [specifica-carrello-conto.md](specifica-carrello-conto.md)
+  ([prompt](prompt-carrello-conto-ospite.md)), decisioni D44–D48: carrello nel
+  server di un solo stabilimento (più postazioni su periodi diversi, extra e
+  intestatario per voce, biglietto firmato in cookie per chi non ha un conto,
+  fusione all'accesso), conferma tutta o niente che produce un ordine
+  `ORD-…` con una prenotazione e un pass per voce e un pagamento solo;
+  conto dell'Ospite (utente senza appartenenze) con registrazione a nome ed
+  email, password generata e spedita dalla coda di piattaforma, cambio
+  obbligato al primo accesso, «Il mio conto» con prossimi arrivi, spesa,
+  «Le mie prenotazioni» (ricollegate per email, lettura col ruolo di
+  proprietario nella RLS), aggiunta di periodi e servizi dalle proprie
+  prenotazioni; «Entra con Google» in OpenID Connect sul fornitore di prova
+  configurabile, aggancio del conto per email. La prenotazione rapida senza
+  conto è rimasta identica.
+- Perizia d'usabilità dell'informazione del sito pubblico (18/11/2026, su
+  segnalazione della famiglia): rapporto dell'esperto esterno in
+  [perizia-usabilita.md](perizia-usabilita.md) — 65 blocchi censiti con le
+  cinque domande, 47 tenuti. Applicati: eliminato il pannello della prima
+  pagina «Tutto in un posto solo» (falso e interamente duplicato dai tre
+  tasti, dalla ricerca e da «Tre passi»), 17 riscritture nelle due lingue
+  (il periodo dal–al nominato negli otto punti che dicevano solo «giorno»,
+  i ruoli per esteso nel glossario e nei passi, «parola d'ordine» diventata
+  «password» nelle email del conto).
 - Prenotazione dell'ospite: scelta della postazione, riepilogo con codice promozionale,
   riserva, dati, pagamento di prova, pass con codice QR e codice breve.
 - Reception: verifica del pass con ingresso, uscita e rientro, prenotazione al banco,
@@ -136,8 +160,15 @@ indicizzato.
   carrello con più postazioni, spostamento dell'intero periodo, annullamento
   di singole giornate di un gruppo, sconti soggiorno, statistiche per gruppo,
   periodi non consecutivi.
-- Inviti e recupero della password: oggi gli accessi li crea l'amministratore da riga di
-  comando.
+- Recupero della password dimenticata (oggi passa da un nuovo invio
+  dell'amministratore); inviti del personale: gli accessi di gestore,
+  reception e contabilità li crea ancora l'amministratore da riga di comando
+  (l'Ospite ora si registra da sé).
+- Dal carrello e dal conto, rimandati e scritti (§8 della specifica):
+  carrello su più stabilimenti, smentita del ricollegamento per email,
+  eliminazione del conto, console di piattaforma per le comunicazioni senza
+  stabilimento, altri fornitori OIDC; le chiavi vere di Google sono del
+  committente (dipendenza aperta).
 - Console centrale della piattaforma, gruppi e cooperative, piani in `plan_feature`.
 - Annullamento da parte dell'ospite: aspetta le condizioni di cancellazione.
 - Chiusura di un'intera giornata con annullamento di tutte le prenotazioni.
@@ -177,6 +208,18 @@ HTTP sui criteri 4–7 più 15 a database, tutte superate; un difetto trovato e
 corretto (la pagina cortese di `/paga` arrivava vuota senza JavaScript). In
 coda, i tag `canonical`/`hreflang`/`og:url` sono omessi quando l'indirizzo
 pubblico non è configurato (prima puntavano al segnaposto `localhost`).
+
+Il 18/11/2026 (sera), iterazione «carrello, conto dell'Ospite e accesso con
+Google» più perizia d'usabilità applicata: 235 test con database (contratto a
+112 rotte), 813 controlli fumo con la suite nuova `smoke:conto` (139
+controlli: registrazione, OIDC di prova per intero, ricollegamento dello
+storico, carrello a due voci fino all'ordine pagato coi pass per voce) e il
+censimento dei nomi allargato alle pagine nuove; i tredici criteri delle due
+commesse (8 + 5) tutti superati; nessun difetto del prodotto. Lacune
+dichiarate nel rapporto: nessun seed pubblica extra, Google vero non
+esercitato (chiavi del committente), comunicazioni di piattaforma leggibili
+solo in coda. Ambiente di collaudo ricostruito col fornitore OIDC di prova e
+lasciato acceso.
 
 Il 18/11/2026, incremento «fotografie vere» (D43): lint, tipi e tutti i test
 con database verdi (contratto fermo a 96 rotte), 633 controlli fumo
@@ -237,6 +280,9 @@ avvio. Vedi la decisione D19.
 
 ## Dipendenze esterne aperte
 
+- Chiavi OAuth di Google del committente per «Entra con Google» (client id e
+  segreto): finché mancano, il flusso gira sul fornitore di prova
+  configurabile (`OMBRE_OIDC_PROVIDER=test`), collaudato per intero.
 - Verifica di disponibilità del marchio "Ombrè" e dei domini.
 - Validazione del provider di pagamento sul modello a tre beneficiari.
 - Pareri professionali: fiscalità delle quote, privacy, contratti degli stabilimenti.
