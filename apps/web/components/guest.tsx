@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import QRCode from 'qrcode';
-import { accountPath, beachPath, config, formatMoney, getDictionary, locales, type Locale } from '@ombre/shared';
+import { accountPath, beachPath, cartPath, config, formatMoney, getDictionary, locales, type Locale } from '@ombre/shared';
 import { api, apiCall, formatDate, formatPeriod, localName, type ApiExtraService, type ApiLocalName } from '@/lib/api';
 import { signedIn, type Me } from '@/lib/session';
 import { Hidden, Notice, requireMe } from './account';
@@ -124,8 +124,12 @@ export async function GuestOverview({
 }) {
   const t = getDictionary(locale, config.brandName);
   const a = t.account;
-  const result = await apiCall<MyBookings>('GET', '/v1/account/bookings', { token });
+  const [result, cartsResult] = await Promise.all([
+    apiCall<MyBookings>('GET', '/v1/account/bookings', { token }),
+    apiCall<{ carts: { cartId: string; beachSlug: string; beachName: string; items: number }[] }>('GET', '/v1/account/carts', { token }),
+  ]);
   const bookings: MyBookings = result.ok ? result.data : { nextArrivals: 0, totalSpentCents: 0, upcoming: [], past: [] };
+  const carts = cartsResult.ok ? cartsResult.data.carts : [];
   // The extra services of each beach club with an upcoming stay, asked once per club (D46 §5).
   const slugs = [...new Set(bookings.upcoming.filter((group) => group.status === 'confirmed').map((group) => group.beachSlug))];
   const catalogues = new Map(
@@ -167,6 +171,23 @@ export async function GuestOverview({
               </>
             ) : null}
           </div>
+          {carts.length > 0 ? (
+            <div className="panel">
+              <h2>{a.myCartsTitle}</h2>
+              <ul className="cards">
+                {carts.map((row) => (
+                  <li className="card" key={row.cartId}>
+                    <h3>{row.beachName}</h3>
+                    <p>{a.cartLine(row.items)}</p>
+                    <Link className="card__link" href={cartPath(locale, row.beachSlug)}>
+                      {a.openCart}
+                      <span className="visually-hidden">{` · ${row.beachName}`}</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
           {contracts.length > 0 ? (
             <div className="panel">
               <h2>{a.contractsTitle}</h2>

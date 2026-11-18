@@ -151,7 +151,7 @@ export interface ApiHold extends ApiQuote {
   spot: { code: string; rowNumber: number; umbrellas: number; sunbeds: number };
 }
 
-export type ApiResult<T> = { ok: true; data: T } | { ok: false; status: number; code: string };
+export type ApiResult<T> = { ok: true; data: T } | { ok: false; status: number; code: string; message?: string };
 
 function baseUrl(): string {
   return (process.env.OMBRE_API_URL ?? 'http://127.0.0.1:3211').replace(/\/+$/, '');
@@ -179,8 +179,8 @@ async function call<T>(path: string, init?: RequestInit): Promise<ApiResult<T>> 
     const text = await response.text();
     const body = (text ? JSON.parse(text) : null) as unknown;
     if (response.ok) return { ok: true, data: body as T };
-    const code = (body as { error?: { code?: string } } | null)?.error?.code ?? 'unknown';
-    return { ok: false, status: response.status, code };
+    const failure = (body as { error?: { code?: string; message?: string } } | null)?.error;
+    return { ok: false, status: response.status, code: failure?.code ?? 'unknown', ...(failure?.message ? { message: failure.message } : {}) };
   } catch {
     return { ok: false, status: 0, code: 'unreachable' };
   }

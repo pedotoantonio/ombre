@@ -1,8 +1,9 @@
 import type { Metadata } from 'next';
-import { bookingSegment, isLocale } from '@ombre/shared';
+import { bookingSegment, isLocale, orderSegment } from '@ombre/shared';
 import { accountMetadata, AccountRoute, isAccountSection } from '@/components/account';
 import { HoldView, stepMetadata } from '@/components/beach';
 import { BookingView } from '@/components/booking';
+import { OrderPage } from '@/components/cart';
 
 interface Props {
   params: Promise<{ lang: string; slug: string; beach: string; step: string; hold: string }>;
@@ -22,6 +23,11 @@ export default async function Page({ params, searchParams }: Props) {
   if (isLocale(lang) && step === bookingSegment[lang]) {
     const token = query.t;
     return <BookingView lang={lang} section={slug} slug={beach} step={step} bookingId={hold} token={Array.isArray(token) ? token[0] : token} />;
+  }
+  // The single order summary (D46), behind the signed ticket handed out at confirmation.
+  if (isLocale(lang) && step === orderSegment[lang]) {
+    const token = query.t;
+    return <OrderPage lang={lang} section={slug} slug={beach} step={step} orderId={hold} token={Array.isArray(token) ? token[0] : token} />;
   }
   return <HoldView lang={lang} section={slug} slug={beach} step={step} holdId={hold} />;
 }

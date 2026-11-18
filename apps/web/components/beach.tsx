@@ -8,12 +8,14 @@ import {
   bookingSegment,
   bookPath,
   bookSegment,
+  cartSegment,
   config,
   formatMoney,
   getDictionary,
   holdSegment,
   isLocale,
   locales,
+  orderSegment,
   pathFor,
   spotZones,
   type Locale,
@@ -109,11 +111,20 @@ export async function beachMetadata(lang: string, section: string, slug: string,
   };
 }
 
-/** Title of the pages after the beach page: summary, hold, booking. Never indexed. */
+/** Title of the pages after the beach page: summary, hold, booking, cart, order. Never indexed. */
 export async function stepMetadata(lang: string, section: string, slug: string, step: string): Promise<Metadata> {
   const { locale, beach } = await loadBeach(lang, section, slug);
   const t = getDictionary(locale, config.brandName);
-  const page = step === bookSegment[locale] ? t.booking.summaryTitle : step === bookingSegment[locale] ? t.account.booking : t.booking.holdTitle;
+  const page =
+    step === bookSegment[locale]
+      ? t.booking.summaryTitle
+      : step === bookingSegment[locale]
+        ? t.account.booking
+        : step === cartSegment[locale]
+          ? t.cart.metaTitle
+          : step === orderSegment[locale]
+            ? t.order.metaTitle
+            : t.booking.holdTitle;
   return privateMetadata(locale, page, { club: beach.name, follow: true });
 }
 
@@ -894,6 +905,7 @@ function BeachMap({
 /** Bottom bar with the chosen spot and the one step forward. It stays in the flow of the page, so it never hides its end. */
 function SelectionBar({ locale, beach, spot, day, to }: { locale: Locale; beach: ApiBeach; spot: ApiMapSpot & { priceCents: number }; day: string; to?: string }) {
   const t = getDictionary(locale, config.brandName).booking;
+  const c = getDictionary(locale, config.brandName).cart;
   return (
     <aside className="plan-bar" id="scelta" aria-label={t.barLabel}>
       <div className="container plan-bar__inner">
@@ -909,6 +921,17 @@ function SelectionBar({ locale, beach, spot, day, to }: { locale: Locale; beach:
         <Link className="button plan-bar__go" href={`${bookPath(locale, beach.slug)}?spot=${spot.spotId}&day=${day}${to ? `&to=${to}` : ''}`}>
           {t.barContinue}
         </Link>
+        {/* «Aggiungi al carrello» (D46), next to the quick path, which stays as it is. */}
+        <form method="post" action="/azioni/carrello-aggiungi" className="inline-form">
+          <input type="hidden" name="lang" value={locale} />
+          <input type="hidden" name="beach" value={beach.slug} />
+          <input type="hidden" name="spot" value={spot.spotId} />
+          <input type="hidden" name="day" value={day} />
+          {to ? <input type="hidden" name="to" value={to} /> : null}
+          <button className="button button--secondary" type="submit">
+            {c.addButton} <span className="visually-hidden">{spot.code}</span>
+          </button>
+        </form>
       </div>
     </aside>
   );
@@ -1341,6 +1364,19 @@ export async function BookView({ lang, section, slug, step, query }: { lang: str
                 <input type="hidden" name="key" value={`web-${crypto.randomUUID()}`} />
                 <button className="button button--block" type="submit">
                   {t.holdButton}
+                </button>
+              </form>
+              {/* «Aggiungi al carrello» (D46): same hidden fields, no reserve taken. */}
+              <form method="post" action="/azioni/carrello-aggiungi">
+                <input type="hidden" name="lang" value={locale} />
+                <input type="hidden" name="beach" value={beach.slug} />
+                <input type="hidden" name="spot" value={spotId} />
+                <input type="hidden" name="day" value={day} />
+                {to ? <input type="hidden" name="to" value={to} /> : null}
+                <input type="hidden" name="promo" value={quote.data.promoCode ?? ''} />
+                <ExtrasHidden chosen={chosen} />
+                <button className="button button--secondary button--block" type="submit">
+                  {getDictionary(locale, config.brandName).cart.addButton}
                 </button>
               </form>
             </div>

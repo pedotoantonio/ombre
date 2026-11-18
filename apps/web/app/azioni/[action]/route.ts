@@ -1,6 +1,6 @@
-import { accountPath, beachLayoutPath, beachPath, bookingPath, bookPath, decorationSigns, holdPath, isLocale, manageCabinsPath, manageCollectPath, manageDealsPath, manageExtrasPath, manageTodayPath, parseEuro, payPath, type Locale } from '@ombre/shared';
+import { accountPath, beachLayoutPath, beachPath, bookingPath, bookPath, cartPath, decorationSigns, holdPath, isLocale, manageCabinsPath, manageCollectPath, manageDealsPath, manageExtrasPath, manageTodayPath, orderPath, parseEuro, payPath, type Locale } from '@ombre/shared';
 import { api, apiCall, dayPattern, formatPeriod, periodDays, sandboxNotify, slugPattern, uuidPattern } from '@/lib/api';
-import { clearSessionCookieHeader, sessionCookie, sessionCookieHeader } from '@/lib/session';
+import { cartCookie, cartCookieHeader, clearCartCookieHeader, clearSessionCookieHeader, parseCartTicket, sessionCookie, sessionCookieHeader, type CartTicket } from '@/lib/session';
 
 // Every form of the site posts here. Each action checks its input, calls the API and
 // answers with a redirect to a page chosen by the server, never by the form.
@@ -21,6 +21,20 @@ function withQuery(path: string, values: Record<string, string | undefined>): st
 function cookieToken(request: Request): string | undefined {
   const match = new RegExp(`(?:^|; )${sessionCookie}=([A-Za-z0-9_-]+)`).exec(request.headers.get('cookie') ?? '');
   return match?.[1];
+}
+
+/** The anonymous cart ticket of the request (D46), or null when there is none. */
+function readCartTicket(request: Request): CartTicket | null {
+  const match = new RegExp(`(?:^|; )${cartCookie}=([^;]+)`).exec(request.headers.get('cookie') ?? '');
+  return parseCartTicket(match?.[1]);
+}
+
+/** Who may touch this cart: the session when there is one, else the matching ticket. */
+function cartBearer(request: Request, cartId: string): string | undefined {
+  const session = cookieToken(request);
+  if (session) return session;
+  const ticket = readCartTicket(request);
+  return ticket && ticket.cartId === cartId ? ticket.accessToken : undefined;
 }
 
 const bad = (): Response => new Response('Bad request', { status: 400 });
@@ -242,6 +256,131 @@ const actions: Record<string, (request: Request, form: Form, lang: Locale) => Pr
     return { to: back };
   },
 
+  // ---- The cart (D46): add, change, remove, confirm — the quick path stays as it is ----
+
+  // «Aggiungi al carrello»: ensures a cart at this beach club (created when there is
+  // none), adds the item and lands on the cart page. Signed in, the cart is the
+  // account's one; otherwise it lives behind the ticket cookie.
+  async 'carrello-aggiungi'(request, form, lang) {
+    const beach = form('beach');
+    const spotId = form('spot');
+    const day = form('day');
+    const toAsked = form('to');
+    const promo = form('promo').trim();
+    const extras = chosenExtras(form);
+    if (!slugPattern.test(beach) || !uuidPattern.test(spotId) || !dayPattern.test(day)) return bad();
+    if (toAsked !== '' && !dayPattern.test(toAsked)) return bad();
+    const to = toAsked !== '' && toAsked !== day ? toAsked : undefined;
+    const back = cartPath(lang, beach);
+    const session = cookieToken(request);
+    let cartId: string;
+    let bearer: string;
+    let setCookie: string | undefined;
+    if (session) {
+      const opened = await apiCall<{ cartId: string; accessToken: string }>('POST', '/v1/carts', { body: { beachSlug: beach }, token: session });
+      if (!opened.ok) {
+        if (opened.status === 401) return { to: accountPath(lang, 'signIn') };
+        return { to: back, err: opened.status === 0 ? 'unavailable' : opened.code };
+      }
+      cartId = opened.data.cartId;
+      bearer = session;
+    } else {
+      const ticket = readCartTicket(request);
+      if (ticket && ticket.beachSlug === beach) {
+        cartId = ticket.cartId;
+        bearer = ticket.accessToken;
+      } else {
+        // No ticket, or a ticket of another beach club: a new cart replaces the cookie (D46).
+        const opened = await apiCall<{ cartId: string; accessToken: string }>('POST', '/v1/carts', { body: { beachSlug: beach } });
+        if (!opened.ok) return { to: back, err: opened.status === 0 ? 'unavailable' : opened.code };
+        cartId = opened.data.cartId;
+        bearer = opened.data.accessToken;
+        setCookie = cartCookieHeader({ cartId, beachSlug: beach, accessToken: bearer });
+      }
+    }
+    const added = await apiCall('POST', `/v1/carts/${cartId}/items`, {
+      body: { spotId, day, ...(to ? { to } : {}), ...(promo ? { promoCode: promo } : {}), ...(extras.length > 0 ? { extras } : {}) },
+      token: bearer,
+    });
+    const headers: Record<string, string> = setCookie ? { 'Set-Cookie': setCookie } : {};
+    if (added.ok) return redirect(back, headers);
+    const code = added.status === 0 ? 'unavailable' : added.code;
+    return redirect(withQuery(back, { err: code }), headers);
+  },
+
+  // The inline item form of the cart page: «per chi è» and the extra quantities.
+  async 'carrello-voce'(request, form, lang) {
+    const beach = form('beach');
+    const cartId = form('cart');
+    const itemId = form('item');
+    if (!slugPattern.test(beach) || !uuidPattern.test(cartId) || !uuidPattern.test(itemId)) return bad();
+    const back = cartPath(lang, beach);
+    const bearer = cartBearer(request, cartId);
+    if (!bearer) return { to: back };
+    const result = await apiCall('PUT', `/v1/carts/${cartId}/items/${itemId}`, {
+      body: { guestName: form('name').trim(), extras: chosenExtras(form) },
+      token: bearer,
+    });
+    if (result.ok) return { to: back, ok: '1' };
+    return { to: back, err: result.status === 0 ? 'unavailable' : result.code };
+  },
+
+  async 'carrello-rimuovi'(request, form, lang) {
+    const beach = form('beach');
+    const cartId = form('cart');
+    const itemId = form('item');
+    if (!slugPattern.test(beach) || !uuidPattern.test(cartId) || !uuidPattern.test(itemId)) return bad();
+    const back = cartPath(lang, beach);
+    const bearer = cartBearer(request, cartId);
+    if (!bearer) return { to: back };
+    const result = await apiCall('DELETE', `/v1/carts/${cartId}/items/${itemId}`, { token: bearer });
+    if (result.ok) return { to: back, ok: '1' };
+    return { to: back, err: result.status === 0 ? 'unavailable' : result.code };
+  },
+
+  // «Conferma e paga» (D46): all the reserves in one transaction, then the order page.
+  async 'carrello-conferma'(request, form, lang) {
+    const beach = form('beach');
+    const cartId = form('cart');
+    if (!slugPattern.test(beach) || !uuidPattern.test(cartId)) return bad();
+    const back = cartPath(lang, beach);
+    const bearer = cartBearer(request, cartId);
+    if (!bearer) return { to: back };
+    const result = await apiCall<{ orderId: string; accessToken: string }>('POST', `/v1/carts/${cartId}/confirm`, {
+      body: { guestName: form('name'), guestEmail: form('email'), locale: lang },
+      token: bearer,
+    });
+    if (result.ok) {
+      // The anonymous ticket is spent with the cart: the cookie goes home.
+      const ticket = readCartTicket(request);
+      const headers: Record<string, string> = ticket && ticket.cartId === cartId ? { 'Set-Cookie': clearCartCookieHeader() } : {};
+      return redirect(`${orderPath(lang, beach, result.data.orderId)}?t=${encodeURIComponent(result.data.accessToken)}`, headers);
+    }
+    if (result.code === 'order_item_unavailable') {
+      // The refusal names the culprit: spot code and period come back next to the message.
+      const named = /^Spot (\S+) is no longer available for (\d{4}-\d{2}-\d{2})(?:–(\d{4}-\d{2}-\d{2}))?/.exec(result.message ?? '');
+      return { to: withQuery(back, { vspot: named?.[1], vdal: named?.[2], val: named?.[3] }), err: 'order_item_unavailable' };
+    }
+    return { to: back, err: result.status === 0 ? 'unavailable' : result.code };
+  },
+
+  // The test payment of an ORDER (D46): same mechanics as the booking one — the
+  // reference comes from the order itself, read with its signed ticket.
+  async 'ordine-prova'(_request, form, lang) {
+    const secret = process.env.OMBRE_SANDBOX_WEBHOOK_SECRET;
+    const beach = form('beach');
+    const orderId = form('order');
+    const token = form('t');
+    const outcome = form('outcome');
+    if (!secret) return new Response('Not found', { status: 404 });
+    if (!slugPattern.test(beach) || !uuidPattern.test(orderId) || (outcome !== 'succeeded' && outcome !== 'failed')) return bad();
+    const back = `${orderPath(lang, beach, orderId)}?t=${encodeURIComponent(token)}`;
+    const order = await apiCall<{ payment: { reference: string } | null }>('GET', `/v1/beaches/${beach}/orders/${orderId}`, { token });
+    if (!order.ok || !order.data.payment) return new Response('Not found', { status: 404 });
+    await sandboxNotify(order.data.payment.reference, outcome, secret);
+    return { to: back };
+  },
+
   // «Aggiungi servizi» from «Il mio conto» (D46 §5): the owner adds extras to an own
   // confirmed booking; the balance becomes a payment request and the page goes straight
   // to its public payment address.
@@ -286,11 +425,20 @@ const actions: Record<string, (request: Request, form: Form, lang: Locale) => Pr
     return { to: back, err: code };
   },
 
-  async accesso(_request, form, lang) {
+  async accesso(request, form, lang) {
     const code = form('code').trim();
     const result = await apiCall<{ token: string; expiresAt: string }>('POST', '/v1/auth/login', { body: { email: form('email'), password: form('password'), ...(code ? { code } : {}) } });
     if (!result.ok) return { to: accountPath(lang, 'signIn'), err: result.status === 0 ? 'unavailable' : result.status === 400 ? 'invalid_credentials' : result.code };
-    return redirect(accountPath(lang, 'overview'), { 'Set-Cookie': sessionCookieHeader(result.data.token, result.data.expiresAt) });
+    const headers = new Headers({ Location: accountPath(lang, 'overview') });
+    headers.append('Set-Cookie', sessionCookieHeader(result.data.token, result.data.expiresAt));
+    // The anonymous cart joins the account at sign-in (D46). The cookie goes home once
+    // the cart is claimed or gone; a claim refused (say, pending password change) keeps it.
+    const ticket = readCartTicket(request);
+    if (ticket) {
+      const claimed = await apiCall('POST', `/v1/carts/${ticket.cartId}/claim`, { body: { accessToken: ticket.accessToken }, token: result.data.token });
+      if (claimed.ok || claimed.status === 404) headers.append('Set-Cookie', clearCartCookieHeader());
+    }
+    return new Response(null, { status: 303, headers });
   },
 
   async 'verifica-conferma'(request, form, lang) {

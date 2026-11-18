@@ -86,6 +86,20 @@ export function bookingPath(locale: Locale, beachSlug: string, bookingId: string
   return `${beachPath(locale, beachSlug)}/${bookingSegment[locale]}/${bookingId}`;
 }
 
+/** The cart of one beach club (D46): a public localized segment under the beach page. */
+export const cartSegment: Record<Locale, string> = { it: 'carrello', en: 'cart' };
+
+export function cartPath(locale: Locale, beachSlug: string): string {
+  return `${beachPath(locale, beachSlug)}/${cartSegment[locale]}`;
+}
+
+/** The order summary (D46): the public page of a confirmed cart, behind its signed ticket. */
+export const orderSegment: Record<Locale, string> = { it: 'ordine', en: 'order' };
+
+export function orderPath(locale: Locale, beachSlug: string, orderId: string): string {
+  return `${beachPath(locale, beachSlug)}/${orderSegment[locale]}/${orderId}`;
+}
+
 export const accountSection: Record<Locale, string> = { it: 'area', en: 'account' };
 export const accountPages = {
   signIn: { it: 'accesso', en: 'sign-in' },
@@ -217,8 +231,8 @@ export function readAddress(pathname: string): { locale: Locale; known: boolean 
   if (first === beachSection[locale]) {
     const known =
       rest.length === 2 ||
-      (rest.length === 3 && third === bookSegment[locale]) ||
-      (rest.length === 4 && (third === holdSegment[locale] || third === bookingSegment[locale]));
+      (rest.length === 3 && (third === bookSegment[locale] || third === cartSegment[locale])) ||
+      (rest.length === 4 && (third === holdSegment[locale] || third === bookingSegment[locale] || third === orderSegment[locale]));
     return { locale, known };
   }
   if (first === accountSection[locale]) {
