@@ -1,6 +1,6 @@
 # Stato del progetto
 
-Aggiornato al 17/11/2026.
+Aggiornato al 18/11/2026.
 
 ## Dove siamo
 
@@ -78,6 +78,21 @@ indicizzato.
   sintesi sempre visibile e scala della scena a scatti. Le proposte esterne
   in contrasto con l'architettura (mappa a coordinate libere, trascinamento,
   cassa, CRM) sono scartate con motivo in specifica.
+- Iterazione «tre ruoli e ricerca per periodo» (18/11/2026), dal prompt del
+  committente e del figlio, specifica in
+  [specifica-ruoli-periodo.md](specifica-ruoli-periodo.md)
+  ([prompt](prompt-ruoli-periodo.md)), decisioni D38–D42: ricerca e
+  prenotazione per periodo dal–al (gruppo di giornate consecutive, al
+  massimo 31, con un codice, un pass valido ogni giornata e un totale;
+  riserva tutta o niente; pagamenti, richieste e annullamento sul gruppo;
+  extra una volta per periodo; un giorno resta il caso minimo e le
+  prenotazioni esistenti sono gruppi di un giorno); prima pagina a tre
+  tasti di pari peso (Ospite, Stagionale, Gestore stabilimento), barra
+  pubblica fissa, menu a bottoni senza voce mappa, «Esplora» diventa
+  «Ricerca ombrellone» con 301 dai vecchi indirizzi, «Come funziona» in tre
+  pagine per ruolo (quella del Gestore con le schermate vere e l'accesso in
+  due tocchi), i tre nomi ovunque con controllo automatico nei test e nelle
+  suite fumo.
 - Prenotazione dell'ospite: scelta della postazione, riepilogo con codice promozionale,
   riserva, dati, pagamento di prova, pass con codice QR e codice breve.
 - Reception: verifica del pass con ingresso, uscita e rientro, prenotazione al banco,
@@ -108,6 +123,10 @@ indicizzato.
   WhatsApp, prezzi dinamici, storico per postazione, aggiornamento in tempo
   reale della console (vedi §7 della specifica del confronto e §4ter della
   specifica console/planner).
+- Dal periodo dal–al, rimandati e scritti (§7 della specifica ruoli/periodo):
+  carrello con più postazioni, spostamento dell'intero periodo, annullamento
+  di singole giornate di un gruppo, sconti soggiorno, statistiche per gruppo,
+  periodi non consecutivi.
 - Inviti e recupero della password: oggi gli accessi li crea l'amministratore da riga di
   comando.
 - Console centrale della piattaforma, gruppi e cooperative, piani in `plan_feature`.
@@ -149,6 +168,14 @@ HTTP sui criteri 4–7 più 15 a database, tutte superate; un difetto trovato e
 corretto (la pagina cortese di `/paga` arrivava vuota senza JavaScript). In
 coda, i tag `canonical`/`hreflang`/`og:url` sono omessi quando l'indirizzo
 pubblico non è configurato (prima puntavano al segnaposto `localhost`).
+
+Il 18/11/2026, iterazione «tre ruoli e ricerca per periodo»: 209 test con
+database (contratto a 96 rotte), 633 controlli fumo (col percorso completo
+di un periodo di tre giornate, in italiano e in inglese), 86 verifiche
+dedicate ai sette criteri del committente più 35 su HTML/CSS serviti e 175
+scansioni automatiche dei nomi di ruolo, tutte superate; nessun difetto del
+prodotto (una sola asserzione del giro di collaudo corretta). Ambiente di
+collaudo ricostruito (migrazioni fino alla 018) e lasciato acceso.
 
 Il 17/11/2026, iterazione console/planner/repertorio (scheda, planner,
 generazione in blocco, decorazioni, layout applicazione, filtri e scala):
