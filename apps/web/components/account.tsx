@@ -51,7 +51,7 @@ import { privateMetadata } from '@/lib/seo';
 import { signedIn, type Me } from '@/lib/session';
 import { ManageShell } from './manage-shell';
 import { PageHead, PageShell } from './PageShell';
-import { PasswordView, RegisterView } from './guest';
+import { GuestOverview, PasswordView, RegisterView } from './guest';
 import { SiteEditorView } from './site-editor';
 import { Cell, DataTable, Row, RowHead } from './table';
 
@@ -225,12 +225,15 @@ async function SignInView({ locale, query }: { locale: Locale; query: Query }) {
   );
 }
 
-async function OverviewView({ locale }: { locale: Locale }) {
+async function OverviewView({ locale, query }: { locale: Locale; query: Query }) {
   const t = getDictionary(locale, config.brandName).account;
   const { me, token } = await requireMe(locale);
   const [contracts, cabins] = await Promise.all([ownContracts(token), apiCall<{ assignments: unknown[] }>('GET', '/v1/my/cabins', { token })]);
   const mine = contracts.ok ? contracts.data.contracts : [];
   const myCabins = cabins.ok ? cabins.data.assignments.length : 0;
+  // Whoever has no memberships is a guest (D44): their overview is «Il mio conto».
+  // Season passes and cabins, when they exist, keep their panels inside it.
+  if (me.memberships.length === 0) return <GuestOverview locale={locale} me={me} token={token} query={query} contracts={mine} cabinsCount={myCabins} />;
   return (
     <PageShell locale={locale} page="help" highlight={false} alternatePath={accountPath(other(locale), 'overview')} crumbs={[{ label: t.overviewTitle }]} signedInAs={me.user.name}>
       <PageHead title={t.overviewTitle} lead={t.hello(me.user.name)} />
@@ -1005,7 +1008,7 @@ async function SeasonView({ locale, contractId, query }: { locale: Locale; contr
 export async function AccountRoute({ locale, segments, query }: { locale: Locale; segments: string[]; query: Query }) {
   const page = pageFromSegment(locale, segments[0] ?? '');
   if (segments.length === 1 && page === 'signIn') return <SignInView locale={locale} query={query} />;
-  if (segments.length === 1 && page === 'overview') return <OverviewView locale={locale} />;
+  if (segments.length === 1 && page === 'overview') return <OverviewView locale={locale} query={query} />;
   if (segments.length === 1 && page === 'twoFactor') return <TwoFactorView locale={locale} query={query} />;
   if (segments.length === 1 && page === 'cabins') return <CabinHolderView locale={locale} query={query} />;
   if (segments.length === 1 && page === 'register') return <RegisterView locale={locale} query={query} />;

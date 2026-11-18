@@ -242,6 +242,28 @@ const actions: Record<string, (request: Request, form: Form, lang: Locale) => Pr
     return { to: back };
   },
 
+  // «Aggiungi servizi» from «Il mio conto» (D46 §5): the owner adds extras to an own
+  // confirmed booking; the balance becomes a payment request and the page goes straight
+  // to its public payment address.
+  async 'conto-extra'(request, form, lang) {
+    const group = form('group');
+    if (!uuidPattern.test(group)) return bad();
+    const extras = chosenExtras(form);
+    const back = accountPath(lang, 'overview');
+    if (extras.length === 0) return { to: back, err: 'invalid_request' };
+    const result = await apiCall<{ paymentRequest: { payUrl: string } | null }>('POST', `/v1/account/bookings/${group}/extras`, {
+      body: { extras },
+      token: cookieToken(request),
+    });
+    if (result.ok) {
+      if (result.data.paymentRequest) return redirect(result.data.paymentRequest.payUrl);
+      return { to: back, ok: '1' };
+    }
+    if (result.status === 401) return { to: accountPath(lang, 'signIn') };
+    const code = result.status === 0 ? 'unavailable' : result.code === 'invalid_state' ? 'extras_add_invalid' : result.code;
+    return { to: back, err: code };
+  },
+
   // «Crea un conto» (D44): whatever happened — new account or existing email — the
   // answer is the same neutral notice: the page never tells whether an email has a conto.
   async registrazione(_request, form, lang) {
