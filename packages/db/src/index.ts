@@ -3,6 +3,7 @@ export * from './account';
 export * from './auth';
 export * from './bookings';
 export * from './cabins';
+export * from './cart';
 export * from './conventions';
 export * from './extras';
 export * from './spot-types';

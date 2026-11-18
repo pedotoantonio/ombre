@@ -237,6 +237,50 @@ export const bookingGroup = pgTable('booking_group', {
   code: text('code').notNull(),
   /** The account that owns the stay (D47); filled by account_relink or at a signed-in purchase. */
   userId: uuid('user_id'),
+  /** The order this group was born from (D46); NULL for the quick purchase and the desk. */
+  orderId: uuid('order_id'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** A server-side cart (D46): one beach club, at most ten items, no reserve. */
+export const cart = pgTable('cart', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  beachId: uuid('beach_id').notNull(),
+  /** NULL while the cart lives behind the signed ticket alone; set at the claim. */
+  userId: uuid('user_id'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const cartItem = pgTable('cart_item', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  cartId: uuid('cart_id').notNull(),
+  spotId: uuid('spot_id').notNull(),
+  dayFrom: date('day_from', { mode: 'string' }).notNull(),
+  dayTo: date('day_to', { mode: 'string' }).notNull(),
+  /** «Per chi è»: free text, empty means the orderer (D46). */
+  guestName: text('guest_name').notNull().default(''),
+  promoCode: text('promo_code'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const cartItemExtra = pgTable('cart_item_extra', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  cartItemId: uuid('cart_item_id').notNull(),
+  serviceId: uuid('service_id').notNull(),
+  quantity: smallint('quantity').notNull(),
+});
+
+/** The order (D46): one booking group per cart item, one payment on the whole. */
+export const orderGroup = pgTable('order_group', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  beachId: uuid('beach_id').notNull(),
+  code: text('code').notNull(),
+  guestName: text('guest_name').notNull(),
+  guestEmail: text('guest_email').notNull(),
+  userId: uuid('user_id'),
+  locale: text('locale').notNull().default('it'),
+  totalCents: integer('total_cents').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -270,10 +314,12 @@ export const booking = pgTable('booking', {
 export const payment = pgTable('payment', {
   id: uuid('id').primaryKey().defaultRandom(),
   beachId: uuid('beach_id').notNull(),
-  /** First day of the group, for the ledger; the aggregate lives on the group. */
-  bookingId: uuid('booking_id').notNull(),
-  /** The payment belongs to the group (D31 at group level, D38). */
-  groupId: uuid('group_id').notNull(),
+  /** First day of the group, for the ledger; NULL only for an order payment (D46). */
+  bookingId: uuid('booking_id'),
+  /** The payment belongs to the group (D31 at group level, D38) or to the order (D46). */
+  groupId: uuid('group_id'),
+  /** Set exactly for an order payment: the order it settles (D46). */
+  orderId: uuid('order_id'),
   provider: text('provider').notNull(),
   providerRef: text('provider_ref').notNull(),
   status: paymentStatus('status').notNull().default('not_started'),
