@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from 'node:crypto';
+import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { Hono, type Context } from 'hono';
 import { sql } from 'drizzle-orm';
 import { z } from 'zod';
@@ -48,6 +48,7 @@ import {
   getSharingSettings,
   getSiteState,
   holderStatement,
+  identityLogin,
   listActiveBeaches,
   listActiveExtras,
   listCabins,
@@ -159,6 +160,11 @@ export interface AppOptions {
   signingSecret: string;
   /** Shared with the test payment provider. Without it the test provider is switched off. */
   sandboxWebhookSecret?: string;
+  /**
+   * Sign-in with an external identity (D48). Absent: the link does not exist,
+   * the callback answers 503. Every secret stays here, on the API side.
+   */
+  oidc?: { provider: 'test'; testSecret: string } | { provider: 'google'; clientId: string; clientSecret: string; redirectUrl: string };
   /** Public address of the website, for the /paga/{token} links in the messages. */
   siteUrl?: string;
   /** Shared counter of requests. A new one is created when not given. */
@@ -643,6 +649,117 @@ export function createApp(options: AppOptions): Hono {
   route({ method: 'get', path: '/v1/account/bookings', summary: "«Le mie prenotazioni»: the person's stays across beach clubs, upcoming and past, with totals and passes", tag: 'Account', auth: 'session', success: 200, errors: [401, 403] }, async (c) => {
     const user = await currentUser(c.req.header('Authorization'));
     return c.json({ currency: 'EUR', ...(await listMyBookings(db, user.userId, signingSecret)) });
+  });
+
+  // ---- Sign-in with an external identity (D48) ----
+  const hmacHex = (secret: string, text: string) => createHmac('sha256', secret).update(text).digest('hex');
+  const sameSignature = (left: string, right: string) => left.length === right.length && timingSafeEqual(Buffer.from(left), Buffer.from(right));
+
+  /** Anti-forgery state: HMAC over timestamp and nonce, fresh for ten minutes. */
+  function mintState(): string {
+    const payload = `${Date.now().toString(36)}.${randomBytes(16).toString('base64url')}`;
+    return `${payload}.${hmacHex(signingSecret, `oidc-state:${payload}`)}`;
+  }
+
+  function stateIsValid(state: string): boolean {
+    const parts = state.split('.');
+    if (parts.length !== 3) return false;
+    const payload = `${parts[0]}.${parts[1]}`;
+    if (!sameSignature(hmacHex(signingSecret, `oidc-state:${payload}`), parts[2]!)) return false;
+    const age = Date.now() - parseInt(parts[0]!, 36);
+    return Number.isFinite(age) && age > -60_000 && age <= 10 * 60 * 1000;
+  }
+
+  /** The «code» of the test provider: a signed payload the consent page carries back. */
+  function mintTestCode(email: string, name: string, secret: string): string {
+    const payload = Buffer.from(JSON.stringify({ email, name, exp: Date.now() + 10 * 60 * 1000 }), 'utf8').toString('base64url');
+    return `${payload}.${hmacHex(secret, `oidc-code:${payload}`)}`;
+  }
+
+  function readTestCode(code: string, secret: string): { email: string; name: string } | null {
+    const parts = code.split('.');
+    if (parts.length !== 2 || !sameSignature(hmacHex(secret, `oidc-code:${parts[0]}`), parts[1]!)) return null;
+    try {
+      const data = JSON.parse(Buffer.from(parts[0]!, 'base64url').toString('utf8')) as { email?: unknown; name?: unknown; exp?: unknown };
+      if (typeof data.email !== 'string' || typeof data.name !== 'string' || typeof data.exp !== 'number' || data.exp < Date.now()) return null;
+      return { email: data.email, name: data.name };
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Exchanges the code with Google and reads the identity from the id_token. The
+   * token arrives straight from Google over TLS, so the JWT signature is not
+   * re-checked against the JWKS; iss, aud, exp and email_verified are.
+   */
+  async function googleIdentity(code: string, google: { clientId: string; clientSecret: string; redirectUrl: string }): Promise<{ subject: string; email: string; name: string }> {
+    const refused = () => new HttpError(401, 'invalid_code', 'The identity provider refused the code');
+    const response = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ code, client_id: google.clientId, client_secret: google.clientSecret, redirect_uri: google.redirectUrl, grant_type: 'authorization_code' }).toString(),
+    });
+    if (!response.ok) throw refused();
+    const data = (await response.json()) as { id_token?: string };
+    const segments = (data.id_token ?? '').split('.');
+    if (segments.length !== 3) throw refused();
+    let claims: { iss?: unknown; aud?: unknown; exp?: unknown; email?: unknown; email_verified?: unknown; sub?: unknown; name?: unknown };
+    try {
+      claims = JSON.parse(Buffer.from(segments[1]!, 'base64url').toString('utf8')) as typeof claims;
+    } catch {
+      throw refused();
+    }
+    if (claims.iss !== 'https://accounts.google.com' && claims.iss !== 'accounts.google.com') throw refused();
+    if (claims.aud !== google.clientId) throw refused();
+    if (typeof claims.exp !== 'number' || claims.exp * 1000 < Date.now()) throw refused();
+    if (claims.email_verified !== true || typeof claims.email !== 'string' || typeof claims.sub !== 'string') throw refused();
+    return { subject: claims.sub, email: claims.email, name: typeof claims.name === 'string' && claims.name.trim() ? claims.name : claims.email };
+  }
+
+  route({ method: 'get', path: '/v1/auth/oidc/providers', summary: 'The configured identity provider, with the state and address the sign-in link needs', tag: 'Sign-in', auth: 'none', success: 200, errors: [] }, async (c) => {
+    const oidc = options.oidc;
+    if (!oidc) return c.json({ provider: null });
+    const state = mintState();
+    if (oidc.provider === 'test') return c.json({ provider: 'test', state });
+    const authorizeUrl = `https://accounts.google.com/o/oauth2/v2/auth?${new URLSearchParams({
+      client_id: oidc.clientId,
+      redirect_uri: oidc.redirectUrl,
+      response_type: 'code',
+      scope: 'openid email profile',
+      state,
+    }).toString()}`;
+    return c.json({ provider: 'google', state, authorizeUrl });
+  });
+
+  const testCodeSchema = z.object({ email: z.email().max(200), name: z.string().trim().min(1).max(120) });
+  route({ method: 'post', path: '/v1/auth/oidc/test-code', summary: 'Test provider only: mints the signed code the local consent page carries back', tag: 'Sign-in', auth: 'none', request: testCodeSchema, success: 201, errors: [400, 503] }, async (c) => {
+    const oidc = options.oidc;
+    if (oidc?.provider !== 'test') throw new HttpError(503, 'integration_unavailable', 'The test identity provider is not configured');
+    const consent = parse(testCodeSchema, await body(c.req.raw), 'consent');
+    return c.json({ code: mintTestCode(consent.email, consent.name, oidc.testSecret) }, 201);
+  });
+
+  const oidcCallbackSchema = z.object({ code: z.string().min(1).max(4096), state: z.string().min(1).max(300) });
+  route({ method: 'post', path: '/v1/auth/oidc/callback', summary: 'Closes the sign-in with the external identity: verifies state and code, opens the session', tag: 'Sign-in', auth: 'none', request: oidcCallbackSchema, success: 200, errors: [400, 401, 503] }, async (c) => {
+    const oidc = options.oidc;
+    if (!oidc) throw new HttpError(503, 'integration_unavailable', 'No identity provider is configured');
+    const request = parse(oidcCallbackSchema, await body(c.req.raw), 'callback');
+    if (!stateIsValid(request.state)) throw new HttpError(401, 'invalid_state', 'The state is not valid or has expired');
+    let identity: { subject: string; email: string; name: string };
+    if (oidc.provider === 'test') {
+      const read = readTestCode(request.code, oidc.testSecret);
+      if (!read) throw new HttpError(401, 'invalid_code', 'The code is not valid or has expired');
+      // The test provider has no subject of its own: the email, lowered, is the subject.
+      identity = { subject: read.email.toLowerCase(), email: read.email, name: read.name };
+    } else {
+      identity = await googleIdentity(request.code, oidc);
+    }
+    const session = await identityLogin(db, { provider: oidc.provider, ...identity }, sessionSeconds);
+    // Orphan stays with this email join the account, like at a password sign-in (D47).
+    await relinkBookings(db, session.user.userId, identity.email);
+    const { email, name, platformRole, twoFactor, mustChangePassword } = session.user;
+    return c.json({ token: session.token, expiresAt: session.expiresAt.toISOString(), user: { email, name, platformRole, twoFactor, mustChangePassword } });
   });
 
   route({ method: 'get', path: '/v1/manage/beaches/:slug/inventory', summary: 'Every spot of a day with its state and price', tag: 'Beach club', auth: 'session', query: { day: 'YYYY-MM-DD' }, success: 200, errors: [400, 401, 403] }, async (c) => {

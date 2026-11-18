@@ -73,6 +73,15 @@ services:
       OMBRE_BRAND_NAME: ${OMBRE_BRAND_NAME:-Ombrè}
       # Empty switches the test payment provider off.
       OMBRE_SANDBOX_WEBHOOK_SECRET: ${OMBRE_SANDBOX_WEBHOOK_SECRET:-}
+      # Needed to derive the OIDC redirect address when OMBRE_OIDC_REDIRECT_URL is empty.
+      OMBRE_SITE_URL: ${OMBRE_SITE_URL:-}
+      # Sign-in with an external identity (D48): empty for no link, "test" for the
+      # local consent page (needs OMBRE_OIDC_TEST_SECRET), "google" with real keys.
+      OMBRE_OIDC_PROVIDER: ${OMBRE_OIDC_PROVIDER:-}
+      OMBRE_OIDC_TEST_SECRET: ${OMBRE_OIDC_TEST_SECRET:-}
+      OMBRE_GOOGLE_CLIENT_ID: ${OMBRE_GOOGLE_CLIENT_ID:-}
+      OMBRE_GOOGLE_CLIENT_SECRET: ${OMBRE_GOOGLE_CLIENT_SECRET:-}
+      OMBRE_OIDC_REDIRECT_URL: ${OMBRE_OIDC_REDIRECT_URL:-}
     depends_on:
       migrate:
         condition: service_completed_successfully
