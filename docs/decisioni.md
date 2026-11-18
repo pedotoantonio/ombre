@@ -410,3 +410,57 @@ stabilimenti e l'editor del sito non cambiano forma. Il Bagno delle Dune
 riceve nel seme un sito pubblicato con copertina e galleria, come il Lido
 Aurora. Restano com'erano la fotografia della costa del committente, il
 marchio, le icone e le schermate vere del gestionale.
+
+## D44 — Il conto dell'Ospite — accettata (18/11/2026)
+
+L'Ospite con conto è una riga di `app_user` senza appartenenze. La
+registrazione chiede nome ed email; la parola d'ordine la genera il sistema
+e viaggia nell'email in coda; `must_change_password` obbliga al cambio al
+primo accesso (almeno 12 caratteri). Difese di oggi: blocco dei tentativi,
+limiti di frequenza, impronte bcrypt; due passaggi disponibili. L'area di
+chi non ha appartenenze diventa «Il mio conto». Risposte identiche per
+email nuova ed esistente: nessuna enumerazione dei conti.
+
+## D45 — Comunicazioni e registro di piattaforma — accettata (18/11/2026)
+
+`notification.beach_id`, `outbox.beach_id` e `audit_event.beach_id`
+diventano annullabili: le righe senza stabilimento sono «di piattaforma»
+(email del conto, azioni del conto). Il testo resta pronto e copiabile
+nella coda come oggi; nessuna pagina le elenca ancora (console della
+piattaforma rimandata). Generi nuovi: `account.created`, `account.exists`.
+
+## D46 — Carrello e ordine — accettata (18/11/2026)
+
+Carrello nel server, di un solo stabilimento, al più 10 voci (postazione,
+dal–al entro i 31 giorni, intestatario libero, promozione, extra per voce);
+senza conto vive dietro un biglietto firmato in cookie e all'accesso si
+fonde col carrello del conto. Mettere nel carrello non riserva nulla; la
+conferma prende tutte le riserve in una transazione, tutta o niente. Nasce
+l'ordine (`ORD-AAMMGG-NNN`): un gruppo D38 per voce, ciascuno con codice e
+pass, un pagamento solo sull'ordine (`payment.order_id`), conferma e
+annullamento di tutti i gruppi insieme all'esito, ripartizione contabile
+invariata per giornata. Annullamento per voce = per gruppo (D40), rimborsi
+dai pagamenti dell'ordine. Riepilogo d'ordine pubblico col biglietto
+firmato. «Aggiungi al carrello» accanto al percorso rapido, che resta
+identico.
+
+## D47 — Storico e ricollegamento per email — accettata (18/11/2026)
+
+`booking_group.user_id`: valorizzato alla conferma da connessi e, per i
+gruppi con la stessa `guest_email` e `user_id` nullo, alla registrazione e
+a ogni accesso. Lettura attraverso gli stabilimenti con la politica RLS del
+proprietario (`app.user_id`), in sola lettura, su gruppi, prenotazioni,
+pass, pagamenti, ordini ed extra. «Le mie prenotazioni»: prossimi e
+passati, prossimi arrivi e spesa in testa. Gestore e reception vedono ciò
+che vedono oggi.
+
+## D48 — Accesso con Google (OpenID Connect) — accettata (18/11/2026)
+
+Flusso code con `state` firmato in cookie, avvio da un'àncora (la CSP non
+cambia), verifica dell'`id_token` con `email_verified`. `user_identity`
+(fornitore + subject unici) aggancia per email il conto esistente o ne crea
+uno con parola d'ordine casuale sconosciuta e nessun cambio obbligato; la
+pagina d'accesso dice che chi entra con Google non ha parola d'ordine
+locale. Fornitore di prova `OMBRE_OIDC_PROVIDER=test` con pagina locale di
+consenso e codice firmato, come il fornitore di prova dei pagamenti; le
+chiavi vere del committente sono una dipendenza esterna aperta.
