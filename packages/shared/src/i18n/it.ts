@@ -72,11 +72,11 @@ export function makeIt(brand: string) {
       submit: 'Cerca',
     },
     map: {
-      homeTitle: 'Trova i lidi sulla mappa',
-      homeLead: 'Ogni segnaposto è uno stabilimento attivo. Apri la scheda per andare alla pagina del lido; la ricerca e «Ricerca ombrellone» restano la via a elenco.',
+      homeTitle: 'Trova gli stabilimenti sulla mappa',
+      homeLead: 'Ogni segnaposto è uno stabilimento attivo: aprilo per andare alla sua pagina.',
       searchTitle: 'I risultati sulla mappa',
-      searchLead: 'Gli stessi stabilimenti della lista, con un segnaposto ciascuno. Chi non ha ancora una posizione resta solo in lista.',
-      inviteSearch: 'Tutti gli stabilimenti sono in «Ricerca ombrellone», con ricerca per località, giorno e ospiti.',
+      searchLead: "Gli stessi stabilimenti dell'elenco, con un segnaposto ciascuno. Gli stabilimenti senza posizione sulla mappa restano solo nell'elenco.",
+      inviteSearch: "Preferisci l'elenco? In «Ricerca ombrellone» trovi gli stessi stabilimenti, con la ricerca per località, periodo e ospiti.",
       inviteList: "L'elenco completo dei risultati è qui sotto.",
       goSearch: 'Apri la ricerca ombrellone',
       goList: "Vai all'elenco",
@@ -89,11 +89,11 @@ export function makeIt(brand: string) {
     booking: {
       demoBadge: 'Stabilimento dimostrativo: dati di esempio',
       demoBadgeShort: 'Demo: dati di esempio',
-      chooseCta: 'Scegli il giorno e la postazione',
+      chooseCta: 'Vai alla scelta della postazione',
       beachTitle: (name: string, locality: string) => `${name} a ${locality}: ombrelloni e prenotazione`,
       beachDescription: (name: string, locality: string) =>
         `Postazioni libere, dotazione e prezzo per giornata a ${name}, ${locality}. Scegli la data e riserva la tua postazione.`,
-      beachLead: (locality: string) => `Stabilimento balneare a ${locality}. Scegli il giorno e guarda le postazioni libere.`,
+      beachLead: (locality: string) => `Stabilimento balneare a ${locality}. Scegli un giorno o un periodo e guarda le postazioni libere.`,
       // ---- Periodo dal–al (D39) ----
       dayFromLabel: 'Dal giorno',
       dayToLabel: 'Al giorno (facoltativo)',
@@ -156,7 +156,7 @@ export function makeIt(brand: string) {
       holdEndedTitle: 'Riserva terminata',
       holdEndedText: 'Il tempo della riserva è scaduto oppure la riserva è stata rilasciata. La postazione è tornata disponibile.',
       planTitle: 'Planimetria',
-      planLead: 'Ogni ombrellone è una postazione. Scegli una postazione libera per vedere il riepilogo e continuare.',
+      planLead: 'Ogni simbolo della planimetria è una postazione: ombrellone, lettino, gazebo o tenda. Scegli una postazione libera per vedere il riepilogo e continuare.',
       planRegion: 'Planimetria, fila per fila',
       planScrollHint: 'Scorri di lato per vedere tutta la fila.',
       planSea: 'Mare',
@@ -204,7 +204,7 @@ export function makeIt(brand: string) {
       mapSpot: (type: string, code: string, status: string, price?: string) => `${type} ${code}. ${status}${price ? `. ${price}` : ''}`,
       toList: "Vai all'elenco delle postazioni libere",
       listTitle: 'Elenco delle postazioni libere',
-      unavailableList: (codes: string) => `Non disponibili in questo giorno: ${codes}.`,
+      unavailableList: (codes: string) => `Non disponibili per questa ricerca: ${codes}.`,
       selectedNotice: (code: string) => `Hai scelto la postazione ${code}.`,
       toBar: 'Vai alla barra di riepilogo',
       selectionGone: "La postazione scelta non è più libera in questo giorno. Scegline un'altra.",
@@ -1128,19 +1128,11 @@ export function makeIt(brand: string) {
           season: 'Affitto il mio ombrellone',
           manager: 'Gestisco uno stabilimento',
         },
-        featuresTitle: 'Tutto in un posto solo',
-        features: [
-          { title: 'Ricerca postazione', text: 'Per località, giorno e numero di ospiti.' },
-          { title: 'Mappa spiaggia', text: 'Scegli la postazione sulla planimetria.' },
-          { title: 'Il tuo pass QR', text: 'Lo mostri alla reception quando arrivi.' },
-          { title: 'Giornate condivise', text: 'Se sei uno Stagionale con abbonamento.' },
-          { title: 'Gestore stabilimento', text: 'Sito, prenotazioni e reception.' },
-        ],
         stepsTitle: 'Tre passi, dal telefono',
         steps: [
           {
             title: 'Scegli la postazione',
-            text: 'Cerchi per località, giorno e numero di ospiti. Ogni postazione mostra la sua dotazione, per esempio un ombrellone e due lettini.',
+            text: 'Cerchi per località, giorno o periodo e numero di ospiti. Ogni postazione mostra la sua dotazione, per esempio un ombrellone e due lettini.',
           },
           {
             title: 'Controlla il riepilogo',
@@ -1176,7 +1168,7 @@ export function makeIt(brand: string) {
         title: `Ricerca ombrellone: disponibilità e prezzi | ${brand}`,
         description: `Cerca un ombrellone negli stabilimenti balneari attivi su ${brand}: sulla mappa o in elenco, con disponibilità e prezzo per la data scelta.`,
         h1: 'Ricerca ombrellone',
-        lead: 'Gli stabilimenti che accettano prenotazioni giornaliere, sulla mappa e in elenco, con disponibilità e prezzo per la data scelta.',
+        lead: 'Gli stabilimenti che accettano prenotazioni giornaliere, sulla mappa e in elenco, con disponibilità e prezzo per il giorno o il periodo scelto.',
         emptyTitle: 'Nessuno stabilimento attivo, per ora',
         emptyText: 'Il servizio è in preparazione e partirà da una zona pilota. Gli stabilimenti compariranno qui quando le prenotazioni saranno attive.',
         emptyLink: 'Nel frattempo, guarda come funziona',
@@ -1186,7 +1178,8 @@ export function makeIt(brand: string) {
         unavailableText: 'Non riusciamo a caricare gli stabilimenti. Riprova tra poco.',
         resultsTitle: (day: string) => `Disponibilità per ${day}`,
         resultsPeriodTitle: (period: string) => `Disponibilità ${period}`,
-        periodNote: (days: number) => `Periodo di ${days} giornate: contano solo le postazioni libere ogni giornata.`,
+        periodNote: (days: number) =>
+          `Periodo di ${days} giornate: uno stabilimento compare solo con postazioni libere in tutte le giornate, e il prezzo è il totale dell'intero periodo.`,
         resultsFor: (guests: number) => (guests === 1 ? 'Postazioni per 1 ospite.' : `Postazioni per ${guests} ospiti.`),
         sharedOnlyNote: 'Sono contate solo le giornate condivise.',
         placeNote: (place: string) => `Nome o località che contiene «${place}».`,
@@ -1194,7 +1187,7 @@ export function makeIt(brand: string) {
         priceFrom: (price: string) => `da ${price}`,
         priceNote: 'a postazione, per la giornata intera',
         priceNotePeriod: "a postazione, per l'intero periodo",
-        needDay: 'Indica un giorno per vedere le postazioni libere e il prezzo di partenza.',
+        needDay: 'Indica un giorno o un periodo per vedere le postazioni libere e il prezzo di partenza.',
         pastDay: 'Il giorno indicato è già passato. Scegli una data da oggi in poi.',
         noMatchTitle: 'Nessuno stabilimento corrisponde alla ricerca',
         noMatchText: (place: string) => `Non c'è uno stabilimento attivo con «${place}» nel nome o nella località. Controlla come è scritto oppure guarda l'elenco completo.`,
@@ -1212,7 +1205,7 @@ export function makeIt(brand: string) {
         steps: [
           {
             title: 'Cerca',
-            text: 'Indichi località, giorno e numero di ospiti. Per cercare non serve registrarsi.',
+            text: 'Indichi località, giorno o periodo e numero di ospiti. Per cercare non serve registrarsi.',
           },
           {
             title: 'Scegli la postazione',
@@ -1239,7 +1232,7 @@ export function makeIt(brand: string) {
           },
           {
             term: 'Giornata condivisa',
-            text: 'Una giornata su una postazione in abbonamento, proposta dallo stagionale e autorizzata dal gestore.',
+            text: 'Una giornata su una postazione in abbonamento, proposta dallo Stagionale e autorizzata dal Gestore stabilimento.',
           },
           {
             term: 'Riserva',
@@ -1257,7 +1250,7 @@ export function makeIt(brand: string) {
           'Se compare «Pagamento in verifica» non serve pagare di nuovo: l\'esito viene controllato e la prenotazione aggiornata.',
         ],
         nextTitle: 'Comincia dalla ricerca',
-        nextText: 'Indica località e giorno e guarda le postazioni libere, con il prezzo per la giornata.',
+        nextText: 'Indica località e un giorno o un periodo e guarda le postazioni libere, con il loro prezzo.',
         nextAction: 'Trova uno stabilimento',
       },
       managerGuide: {
@@ -1328,14 +1321,14 @@ export function makeIt(brand: string) {
         steps: [
           {
             title: "Chiedi l'accesso",
-            text: 'Entri su invito del tuo stabilimento oppure con una richiesta. Il gestore verifica contratto, periodo e postazione.',
+            text: 'Entri su invito del tuo stabilimento oppure con una richiesta. Il Gestore stabilimento verifica contratto, periodo e postazione.',
           },
           {
             title: 'Proponi le date',
             text: 'Giornate singole o ricorrenze, per esempio tutti i martedì. Prima di salvare vedi il riepilogo delle date.',
           },
           {
-            title: 'Il gestore autorizza',
+            title: 'Il Gestore stabilimento autorizza',
             text: 'Una volta per tutto l\'abbonamento oppure giornata per giornata, secondo le regole dello stabilimento.',
           },
           {
@@ -1383,7 +1376,7 @@ export function makeIt(brand: string) {
           },
         ],
         nextTitle: 'Cerca una giornata al mare',
-        nextText: 'Nella pagina Ricerca ombrellone trovi gli stabilimenti attivi e le postazioni libere per il giorno che scegli.',
+        nextText: 'Nella pagina Ricerca ombrellone trovi gli stabilimenti attivi e le postazioni libere per il giorno o il periodo che scegli.',
         nextAction: 'Trova uno stabilimento',
       },
     },

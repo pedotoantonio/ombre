@@ -61,10 +61,10 @@ export function makeEn(brand: string): Dictionary {
     },
     map: {
       homeTitle: 'Find the beach clubs on the map',
-      homeLead: 'Each pin is an active beach club. Open its card to reach the club page; the search and "Umbrella search" remain the list way in.',
+      homeLead: 'Each pin is an active beach club: open it to reach its page.',
       searchTitle: 'The results on the map',
-      searchLead: 'The same beach clubs as the list, one pin each. A club without a position stays in the list only.',
-      inviteSearch: 'Every beach club is in "Umbrella search", with a search by place, day and guests.',
+      searchLead: 'The same beach clubs as the list, one pin each. Clubs without a map position stay in the list only.',
+      inviteSearch: 'Prefer a list? In “Umbrella search” you find the same beach clubs, with a search by place, period and guests.',
       inviteList: 'The full list of results is just below.',
       goSearch: 'Open the umbrella search',
       goList: 'Go to the list',
@@ -77,11 +77,11 @@ export function makeEn(brand: string): Dictionary {
     booking: {
       demoBadge: 'Demo beach club: sample data',
       demoBadgeShort: 'Demo: sample data',
-      chooseCta: 'Choose the day and the spot',
+      chooseCta: 'Go to spot selection',
       beachTitle: (name: string, locality: string) => `${name} in ${locality}: umbrellas and booking`,
       beachDescription: (name: string, locality: string) =>
         `Free spots, equipment and day price at ${name}, ${locality}. Choose the date and hold your spot.`,
-      beachLead: (locality: string) => `Beach club in ${locality}. Choose the day and see the free spots.`,
+      beachLead: (locality: string) => `Beach club in ${locality}. Choose a day or a period and see the free spots.`,
       // ---- The dal–al period (D39) ----
       dayFromLabel: 'From day',
       dayToLabel: 'To day (optional)',
@@ -144,7 +144,7 @@ export function makeEn(brand: string): Dictionary {
       holdEndedTitle: 'Hold ended',
       holdEndedText: 'The hold has run out or has been released. The spot is available again.',
       planTitle: 'Beach map',
-      planLead: 'Each umbrella is a spot. Choose a free one to see its summary and continue.',
+      planLead: 'Each symbol on the beach map is a spot: umbrella, sunbed, gazebo or tent. Choose a free one to see its summary and continue.',
       planRegion: 'Beach map, row by row',
       planScrollHint: 'Scroll sideways to see the whole row.',
       planSea: 'Sea',
@@ -192,7 +192,7 @@ export function makeEn(brand: string): Dictionary {
       mapSpot: (type: string, code: string, status: string, price?: string) => `${type} ${code}. ${status}${price ? `. ${price}` : ''}`,
       toList: 'Go to the list of free spots',
       listTitle: 'List of free spots',
-      unavailableList: (codes: string) => `Not available on this day: ${codes}.`,
+      unavailableList: (codes: string) => `Not available for this search: ${codes}.`,
       selectedNotice: (code: string) => `You chose spot ${code}.`,
       toBar: 'Go to the summary bar',
       selectionGone: 'The spot you chose is no longer free on this day. Please choose another one.',
@@ -1116,19 +1116,11 @@ export function makeEn(brand: string): Dictionary {
           season: 'I rent out my umbrella',
           manager: 'I manage a beach club',
         },
-        featuresTitle: 'Everything in one place',
-        features: [
-          { title: 'Find a spot', text: 'By place, day and number of guests.' },
-          { title: 'Beach map', text: 'Pick your spot on the map.' },
-          { title: 'Your QR pass', text: 'Show it at the front desk on arrival.' },
-          { title: 'Shared days', text: 'If you are a Season holder with a pass.' },
-          { title: 'Beach manager', text: 'Website, bookings and front desk.' },
-        ],
         stepsTitle: 'Three steps, from your phone',
         steps: [
           {
             title: 'Pick your spot',
-            text: 'Search by place, day and number of guests. Each spot shows what it includes, for example one umbrella and two sunbeds.',
+            text: 'Search by place, day or period and number of guests. Each spot shows what it includes, for example one umbrella and two sunbeds.',
           },
           {
             title: 'Check the summary',
@@ -1164,7 +1156,7 @@ export function makeEn(brand: string): Dictionary {
         title: `Umbrella search: availability and prices | ${brand}`,
         description: `Search for an umbrella at the beach clubs active on ${brand}: on the map or in the list, with availability and price for the date you choose.`,
         h1: 'Umbrella search',
-        lead: 'The beach clubs that accept day bookings, on the map and in the list, with availability and price for the date you choose.',
+        lead: 'The beach clubs that take daily bookings, on the map and in a list, with availability and price for the day or the period you choose.',
         emptyTitle: 'No active beach clubs yet',
         emptyText: 'The service is in preparation and will start from a pilot area. Beach clubs will appear here once bookings are open.',
         emptyLink: 'In the meantime, see how it works',
@@ -1174,7 +1166,8 @@ export function makeEn(brand: string): Dictionary {
         unavailableText: 'We cannot load the beach clubs. Please try again shortly.',
         resultsTitle: (day: string) => `Availability on ${day}`,
         resultsPeriodTitle: (period: string) => `Availability ${period}`,
-        periodNote: (days: number) => `Period of ${days} days: only the spots free on every day count.`,
+        periodNote: (days: number) =>
+          `Period of ${days} days: a beach club is listed only with spots free on every day, and the price is the total for the whole period.`,
         resultsFor: (guests: number) => (guests === 1 ? 'Spots for 1 guest.' : `Spots for ${guests} guests.`),
         sharedOnlyNote: 'Only shared days are counted.',
         placeNote: (place: string) => `Name or place containing “${place}”.`,
@@ -1182,7 +1175,7 @@ export function makeEn(brand: string): Dictionary {
         priceFrom: (price: string) => `from ${price}`,
         priceNote: 'per spot, for the whole day',
       priceNotePeriod: 'per spot, for the whole period',
-        needDay: 'Choose a day to see the free spots and the starting price.',
+        needDay: 'Enter a day or a period to see the free spots and the starting price.',
         pastDay: 'That day has already passed. Choose a date from today onwards.',
         noMatchTitle: 'No beach club matches your search',
         noMatchText: (place: string) => `There is no active beach club with “${place}” in its name or place. Check the spelling or see the full list.`,
@@ -1200,7 +1193,7 @@ export function makeEn(brand: string): Dictionary {
         steps: [
           {
             title: 'Search',
-            text: 'Enter the place, the day and the number of guests. You do not need an account to search.',
+            text: 'Enter the place, a day or a period and the number of guests. You do not need an account to search.',
           },
           {
             title: 'Pick your spot',
@@ -1227,7 +1220,7 @@ export function makeEn(brand: string): Dictionary {
           },
           {
             term: 'Shared day',
-            text: 'A day on a season pass spot, offered by the season holder and approved by the manager.',
+            text: 'A day on a season pass spot, offered by the Season holder and approved by the Beach manager.',
           },
           {
             term: 'Hold',
@@ -1245,7 +1238,7 @@ export function makeEn(brand: string): Dictionary {
           'If you see “Payment under review” you do not need to pay again: the outcome is checked and your booking updated.',
         ],
         nextTitle: 'Start from the search',
-        nextText: 'Enter a place and a day and see the free spots, with the price for the day.',
+        nextText: 'Enter a place and a day or a period and see the free spots, with their price.',
         nextAction: 'Find a beach club',
       },
       managerGuide: {
@@ -1261,7 +1254,7 @@ export function makeEn(brand: string): Dictionary {
         tourTitle: 'The management area, in four screens',
         tourLead: 'Real screens of the management area, as the beach club staff sees it.',
         tour: [
-          { caption: 'The «Today on the beach» console: one tile per spot, with states, filters and the summary of the day.' },
+          { caption: 'The “Today on the beach” console: one tile per spot, with states, filters and the summary of the day.' },
           { caption: 'The planner: the grid of spots across the days, to read occupancy and periods at a glance.' },
           { caption: 'The spot card: booking, payment and the actions of the day in a single panel.' },
           { caption: 'The economic report: the sales of the period and the split of the shares.' },
@@ -1316,14 +1309,14 @@ export function makeEn(brand: string): Dictionary {
         steps: [
           {
             title: 'Ask for access',
-            text: 'You join by invitation from your beach club or by sending a request. The manager checks contract, period and spot.',
+            text: 'You join by invitation from your beach club or by sending a request. The Beach manager checks contract, period and spot.',
           },
           {
             title: 'Offer your dates',
             text: 'Single days or recurring ones, for example every Tuesday. Before saving you see a summary of the dates.',
           },
           {
-            title: 'The manager approves',
+            title: 'The Beach manager approves',
             text: 'Once for the whole season pass or day by day, according to the rules of the beach club.',
           },
           {
@@ -1371,7 +1364,7 @@ export function makeEn(brand: string): Dictionary {
           },
         ],
         nextTitle: 'Search for a day at the beach',
-        nextText: 'On the Umbrella search page you find the active beach clubs and the free spots for the day you choose.',
+        nextText: 'On the Umbrella search page you find the active beach clubs and the free spots for the day or the period you choose.',
         nextAction: 'Find a beach club',
       },
     },

@@ -2,7 +2,6 @@ import Link from 'next/link';
 import { connection } from 'next/server';
 import { accountPath, beachPath, config, formatMoney, getDictionary, pathFor, type InnerPageId, type Locale } from '@ombre/shared';
 import { api, formatDay, formatPeriod, isDay, periodDays, today, type ApiBeachOffer } from '@/lib/api';
-import { FeatureIcon, type FeatureIconName } from '@ombre/ui';
 import { breadcrumbData, JsonLd, pageUrl } from '@/lib/seo';
 import { Contact, NextStep, PageHead } from './PageShell';
 import { MapPanel, type MapLabels, type MapMarker } from './map-panel';
@@ -129,14 +128,6 @@ export function HomePage({ locale }: PageProps) {
   const t = getDictionary(locale, config.brandName);
   const copy = t.pages.home;
   const audienceLinks: readonly InnerPageId[] = ['guestGuide', 'seasonGuide', 'managerGuide'];
-  const featureLinks: readonly { icon: FeatureIconName; page: InnerPageId }[] = [
-    { icon: 'search', page: 'search' },
-    { icon: 'map', page: 'guestGuide' },
-    { icon: 'pass', page: 'guestGuide' },
-    { icon: 'share', page: 'seasonGuide' },
-    { icon: 'manager', page: 'managerGuide' },
-  ];
-
 
   return (
     <>
@@ -204,24 +195,6 @@ export function HomePage({ locale }: PageProps) {
           <p className="portal-map-lead">{t.map.homeLead}</p>
           {/* The page is prerendered: the pins arrive later, from an internal route of this site. */}
           <MapPanel sourceUrl={`/dati/mappa?lang=${locale}`} labels={mapLabels(locale, 'home')} />
-        </div>
-      </section>
-      <section className="section">
-        <div className="container">
-          <h2>{copy.featuresTitle}</h2>
-          <ul className="portal-features">
-            {copy.features.map((feature, index) => (
-              <li key={feature.title}>
-                <Link className="portal-feature" href={pathFor(featureLinks[index]?.page ?? 'search', locale)}>
-                  <span className="portal-feature__icon">
-                    <FeatureIcon name={featureLinks[index]?.icon ?? 'search'} />
-                  </span>
-                  <span className="portal-feature__title">{feature.title}</span>
-                  <span className="portal-feature__text">{feature.text}</span>
-                </Link>
-              </li>
-            ))}
-          </ul>
         </div>
       </section>
       <section className="section section--tinted">
