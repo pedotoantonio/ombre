@@ -1,5 +1,108 @@
 # Collaudo
 
+## Collaudo del 18/11/2026 — tre ruoli e ricerca per periodo
+
+Collaudo dell'iterazione della [specifica ruoli e periodo](specifica-ruoli-periodo.md)
+(commit `c5c3dec` prima pagina e barra fissa, `a8c1ad2` menu e pagine per ruolo,
+`b2894a2` i tre nomi con controllo automatico, `0b2da65`+`c8e8173` gruppo di prenotazione
+e periodo dal–al, `12c72f8` ricerca e prenotazione per periodo, `cf15b8f` banco, scheda,
+planner e incassi sul gruppo, `170d2b3` comunicazioni e OpenAPI al periodo, `5fb26ff`
+suite fumo), eseguito sullo stack **fisso** `ombre-collaudo` (web `127.0.0.1:3232`, API
+`127.0.0.1:3231`) **ricostruito dal codice corrente con volume nuovo** (migrazioni
+001–**018** dal servizio `migrate`, seed demo «Bagno delle Dune» e vetrina «Lido
+Aurora», immagine del sito con `OMBRE_SITE_URL=http://localhost:3210` come nei collaudi
+precedenti), con `pnpm lint`, `pnpm typecheck`, `pnpm test:db`, le sette suite fumo in
+ordine su un database appena seminato e un **giro dedicato ai criteri 1–7 del §8** nei
+panni di ospite (it e en), stagionale, gestore e reception: richieste `curl` con cookie
+jar e moduli GET/POST — l'HTML servito contiene già tutto, nessuno script del sito
+eseguito — più verifiche a database (gruppi, pass, storni, rimborsi, proposte, coda
+delle notifiche). I numeri sono quelli del ciclo finale, ripetuto per intero su un
+volume nuovo.
+
+### Test e collaudi fumo
+
+| Parte | Controlli | Esito |
+|---|---|---|
+| Lint e tipi (`pnpm lint`, `pnpm typecheck`) | tutto il codice | Superati |
+| Test con PostgreSQL vero (`pnpm test:db`) | **209** (38 shared, 5 comms, 25 db, 135 api, 6 worker), contratto OpenAPI a **96 rotte** | Superati |
+| Dizionari it/en senza formule vietate (`names.test.ts`, D42) | 3 | Superati |
+| Pagine pubbliche (`smoke`) | **413** | Superati |
+| Ricerca, planimetria e riserva (`smoke:flow`) | 72 | Superati |
+| Aree riservate (`smoke:areas`) | **85** | Superati |
+| Sito dello stabilimento (`smoke:site`) | 24 | Superati |
+| Prenotazione e ruoli sull'API (`smoke:booking`) | 15 | Superati |
+| Acquisti simultanei sull'API (`smoke:api`) | 13 | Superati |
+| Verifica in due passaggi (`smoke:2fa`) | 11 | Superati |
+| Giro dei criteri 2, 5 e 7 da HTTP e database | 86 | Superati (un'asserzione del giro corretta e riverificata a database, vedi difetti) |
+| Giro dei criteri 1, 3, 4, 5 e 6 sull'HTML e la CSS serviti | 35 | Superati |
+| Scansioni delle formule vietate (12 pagine rese × 10, email composte, pass, /paga, OpenAPI) | 175 | Superate |
+
+Il giro dei criteri crea i propri dati dai percorsi reali: le giornate 1–3 luglio 2027
+(30, 25 e 20 €), il 18–19 giugno 2027, il 17–19 novembre 2026 (18 €) e l'odierna
+18 novembre; una prenotazione online di 3 giornate con pagamento di prova, una inglese
+completa, una di un solo giorno uguale a oggi, due al banco di un giorno, un gruppo al
+banco dal–al «da incassare» con acconto e richiesta di pagamento, e le proposte
+condivise dello stagionale su B02 (20–21/06) approvate dal gestore e in parte ritirate.
+
+### Criteri di accettazione (§8 della specifica)
+
+| # | Criterio | Esito |
+|---|---|---|
+| 1 | Prima pagina: tre tasti `portal-role` con la stessa classe e lo stesso peso (griglia a 3 colonne uguali dalla CSS), **sopra** la ricerca (posizione verificata nell'HTML), in it e in en; destinazioni Ricerca ombrellone / Stagionale / Gestore stabilimento | Superato |
+| 2 | Ricerca con dal–al: periodo di 3 giornate su A01 → riepilogo con le 3 giornate elencate (30+25+20) e un totale 75,00; riserva, dati, pagamento di prova, **un** pass «valido dal 1º al 3 luglio 2027, ogni giornata» (a database: 3 prenotazioni confermate, un solo pass sul gruppo); verifica in reception: il pass del futuro è rifiutato oggi (`wrong_day`), l'ingresso riesce **nella giornata di mezzo** di un gruppo 17–19/11 creato al banco (orchestrato col fuso dello stabilimento, vedi note) e col pass del giorno singolo di oggi; caso minimo di un giorno: riepilogo e pass con «Giorno», identici a prima dell'iterazione; giornata occupata nel mezzo (A03 venduta il 2/7) → postazione assente dai risultati (8 → 6) e non libera in planimetria; condivise solo se coprono: il 20/6 da sola 1 libera, il periodo 20–21/6 coperto 1 libera, il 19–20/6 non coperto nessuna, dopo il ritiro del 21/6 di nuovo nessuna; riserva tutta-o-niente con giornata presa **fra riepilogo e riserva** (dal banco): rinvio `taken=1`, messaggio in parole, 1 e 3/7 ancora libere e zero riserve attive a database; banco dal–al «da incassare»: elenco del giorno con periodo e «residuo 54,00 €», acconto di 20 → «Residuo: 34,00 €», richiesta sul residuo → `/paga` con periodo e importo; annullamento del gestore sul gruppo 1–3/7: tutte e 3 le giornate annullate e tornate libere, storni per giornata a somma zero nel registro, rimborso di 75,00 richiesto; scheda della postazione (B04, giornata di mezzo): prezzo della giornata 18,00 e, del gruppo, codice, periodo, totale 54,00, incassato 20,00, residuo 34,00; planner: le celle del gruppo condividono codice e periodo nel `title` | Superato |
+| 3 | Barra pubblica fissa: `.site-header{position:sticky;top:0}` nella CSS servita, `scroll-padding-top` 7,5 rem (barra a due righe del telefono) e 5,5 rem da 72 rem — ancore e campi a fuoco non restano coperti; viewport responsive e griglia a due righe `"brand tools"/"nav nav"` sotto i 72 rem; barra presente su ogni pagina pubblica, it e en | Superato |
+| 4 | Menu a bottoni: cinque voci nell'ordine richiesto (⛱️ Ricerca ombrellone · Ospite · Stagionale · Gestore · Assistenza), nessuna voce mappa; voce attiva con `aria-current` evidenziata da fondo pieno, peso e sottolineatura (non solo colore); bottoni con bordo e raggio a pillola; `/esplora`→`/ricerca-ombrellone`, `/en/explore`→`/en/umbrella-search`, `/per-gli-stabilimenti` e `/per-gli-stagionali` (e i gemelli inglesi) → 301 alle pagine nuove, query conservata | Superato |
+| 5 | Dizionari verdi (3 test D42); nessuna formula vietata in 120 scansioni su 12 pagine rese (home, ricerca, le tre come-funziona, accesso, it+en), né su pass, `/paga` ed email composte (48 scansioni sulla coda `notification`: conferma it con «(3 giornate)» e «pass unico per tutto il soggiorno», conferma en con «(3 days)», richiesta di pagamento col periodo), né nell'OpenAPI (96 operazioni) | Superato |
+| 6 | Due tocchi: home → tasto «Gestisco uno stabilimento» → pagina del Gestore con «Accedi al gestionale» in evidenza → modulo di accesso (2 tocchi, contati sull'HTML reale); lo stesso dalla voce di menu; le 4 schermate vere del gestionale rispondono 200; identico in inglese | Superato |
+| 7 | Lint e tipi verdi; 209 test con database; le sette suite fumo verdi in ordine sull'ambiente fisso 3232/3231 (633 controlli); percorso inglese **completo** del periodo: ricerca `Period of 3 days` → planimetria → riepilogo → `/hold/` «Hold active» → dati → pagamento di prova → pass «valid from 1 to 3 July 2027, on every day» con un solo codice | Superato |
+
+### Difetti trovati e correzioni
+
+- **Nessun difetto del prodotto.** L'unico scarto del giro finale (85/86) era
+  un'asserzione del giro stesso: contava «2 proposte approvate» mentre il gestore ne
+  approvava giustamente 3, perché una proposta in attesa era stata lasciata dalla suite
+  `smoke:areas`; verificato a database (20–21/06 di B02 più l'8/07 della suite) e
+  corretta l'attesa dello script. Due stesure intermedie del giro hanno corretto solo
+  attese dello script (cast `::text` sugli enum di PostgreSQL, entità `&nbsp;`,
+  conteggi su una riga, attesa del giro del worker prima di leggere i corpi in coda).
+- **Ambiente, non codice**: una prima costruzione dell'immagine del sito senza
+  `OMBRE_SITE_URL` perdeva canonical, hreflang e sitemap (per progetto: il sito li
+  dichiara solo se conosce il proprio indirizzo) e 51 controlli di `smoke` lo
+  segnalavano; la variabile è stata aggiunta a `.env.collaudo` (file non versionato)
+  e l'immagine ricostruita. Altri 4 scarti di `smoke:flow` in un giro intermedio
+  venivano dai dati di prova stessi (con l'odierna pubblicata, la pagina del lido senza
+  parametri propone oggi): spariti sul ciclo finale, che esegue le suite prima del giro.
+
+### Limiti residui e note
+
+- **Orchestrazione della «giornata di mezzo»**: la verifica del pass risolve la
+  giornata corrente nel fuso dello stabilimento, e un periodo non può cominciare nel
+  passato; per collaudare l'ingresso a metà gruppo il fuso del Bagno delle Dune è stato
+  spostato temporaneamente a Pacific/Pago_Pago (dove «oggi» era il 17/11), il gruppo
+  17–19/11 creato al banco dal percorso reale, e il fuso **ripristinato** a Europe/Rome
+  prima della verifica: l'ingresso del 18/11 è passato sulla giornata di mezzo. Tutti i
+  dati del gruppo vengono dai moduli veri; a fine collaudo il fuso è Europe/Rome.
+- **Osservazione** (comportamento preesistente, non del periodo): una giornata di una
+  postazione in abbonamento pubblicata dal gestore risulta ordinaria e vendibile; la
+  proposta dello stagionale la converte in condivisa e il ritiro la restituisce
+  ordinaria allo stabilimento. Il ritiro di una giornata nata solo dalla condivisione
+  la lascia invece fuori vendita, come già verificato il 17/11.
+- La maturazione resta per giornata: nel gruppo del banco la giornata del 17/11 è
+  passata a `completed` al giro del worker, e l'annullamento del gestore (provato sul
+  gruppo 1–3/7, tutto futuro) tratta «le giornate non ancora mature» come da D40.
+- I collegamenti nelle email composte puntano a `http://localhost:3210`
+  (`OMBRE_SITE_URL` dell'ambiente dimostrativo), come nei collaudi precedenti.
+- L'ambiente `ombre-collaudo` resta **acceso** su `127.0.0.1:3232` (sito) e
+  `127.0.0.1:3231` (API) con i dati del collaudo: gruppo online 1–3/07/2027 annullato
+  con rimborso richiesto, prenotazione inglese 1–3/07 su A02, giorno singolo di oggi
+  con ingresso registrato, gruppo del banco `OM-261117-001` su B04 (17–19/11, acconto
+  20 €, richiesta di pagamento di 34 € aperta su `/paga`), condivise di B02 (20/06
+  coperta, 21/06 ritirata), giornate dei collaudi fumo sul 17/06/2027; la verifica in
+  due passaggi resta attiva sull'accesso di contabilità, lasciata da `smoke:2fa`.
+  Accesso gestore: `gestore@bagnodelledune.example` con la password di `.env.collaudo`.
+- Come prima: esclusi pagamenti reali, invio reale delle comunicazioni, carico, prove
+  con persone e lettore di schermo.
+
 ## Collaudo del 17/11/2026 — console, planner e repertorio
 
 Collaudo dell'iterazione della [specifica console/planner](specifica-console-planner.md)
