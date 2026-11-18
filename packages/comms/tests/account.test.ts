@@ -8,7 +8,7 @@ describe('account created mail', () => {
     const mail = accountCreatedMail({ ...base, locale: 'it', password: 'xkcd2345abcd6789' });
     expect(mail.to).toBe('ada@example.org');
     expect(mail.subject).toBe('Marchio: il tuo conto è pronto');
-    expect(mail.text).toContain("Parola d'ordine provvisoria: xkcd2345abcd6789");
+    expect(mail.text).toContain('Password provvisoria: xkcd2345abcd6789');
     expect(mail.text).toContain(base.signInUrl);
     expect(mail.text).toContain('Non condividere questa email');
   });
