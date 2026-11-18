@@ -1,11 +1,13 @@
 import { randomBytes } from 'node:crypto';
-import { asc, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { withUser, type Database } from './client';
 import { hashToken } from './auth';
 import { extraLinesByGroup } from './extras';
-import { DomainError } from './inventory';
+import { DomainError, type ExtraRequest } from './inventory';
 import { enqueue } from './jobs';
-import { groupTotalsByGroup, paidCentsByGroup, passCredential, paymentStateOf, type PaymentState } from './bookings';
+import { addExtrasToBooking, groupTotalsByGroup, paidCentsByGroup, passCredential, paymentStateOf, type PaymentState } from './bookings';
+import type { Actor } from './manage';
+import { createPaymentRequest, type CreatedPaymentRequest, type PayRequestMessageData } from './payment-requests';
 import { beach, booking, bookingGroup, inventoryDay, pass, spot } from './schema';
 
 // The guest's account (D44, D47, D48): registration with a generated password,
@@ -116,6 +118,8 @@ export async function relinkBookings(db: Database, userId: string, email: string
 }
 
 export interface MyBookingGroup {
+  /** Identifier of the group, for the owner's own actions («Aggiungi servizi», D46). */
+  groupId: string;
   code: string;
   beachSlug: string;
   beachName: string;
@@ -206,6 +210,7 @@ export async function listMyBookings(db: Database, userId: string, secret: strin
         const issued = passOf.get(group.groupId);
         const first = live[0] ?? members[0]!;
         const view: MyBookingGroup & { sortKey: string } = {
+          groupId: group.groupId,
           code: group.code,
           beachSlug: club.slug,
           beachName: club.name,
@@ -240,4 +245,52 @@ export async function listMyBookings(db: Database, userId: string, secret: strin
     };
     return { nextArrivals, totalSpentCents, upcoming: upcoming.map(strip), past: past.map(strip) };
   });
+}
+
+export interface OwnerExtrasResult {
+  addedCents: number;
+  totalCents: number;
+  paidCents: number;
+  remainingCents: number;
+  paymentState: PaymentState;
+  /** Payable at /paga/{token} with the sandbox provider, whoever pays. Null when nothing is owed. */
+  paymentRequest: CreatedPaymentRequest | null;
+}
+
+/**
+ * «Aggiungi servizi» from the guest's own history (spec §5): the signed-in
+ * owner adds extras to an own confirmed, not-yet-matured booking group. The
+ * snapshot grows through the desk's addExtrasToBooking inside the right beach
+ * context, authorised by group.user_id alone; the residual becomes a payment
+ * request so the balance is payable at /paga/{token}.
+ */
+export async function addExtrasAsOwner(
+  db: Database,
+  userId: string,
+  input: { groupId: string; extras: ExtraRequest[] },
+  secret: string,
+  compose: (data: PayRequestMessageData) => string,
+): Promise<OwnerExtrasResult> {
+  // Ownership through the owner RLS path (D47): someone else's group is simply absent.
+  const owned = await withUser(db, userId, async (tx) => {
+    const [row] = await tx
+      .select({ beachId: bookingGroup.beachId, code: bookingGroup.code })
+      .from(bookingGroup)
+      .where(and(eq(bookingGroup.id, input.groupId), eq(bookingGroup.userId, userId)));
+    return row ?? null;
+  });
+  if (!owned) throw new DomainError('not_found', 'Booking not found');
+  // The role is never read by these two functions: the owner is authorised by
+  // group.user_id alone, and the audit trail records the user, not the role.
+  const actor: Actor = { beachId: owned.beachId, userId, role: 'reception' };
+  const added = await addExtrasToBooking(db, actor, { code: owned.code, extras: input.extras, collect: 'later' });
+  const paymentRequest = added.remainingCents > 0 ? await createPaymentRequest(db, actor, { code: owned.code, amountCents: added.remainingCents }, secret, compose) : null;
+  return {
+    addedCents: added.addedCents,
+    totalCents: added.totalCents,
+    paidCents: added.paidCents,
+    remainingCents: added.remainingCents,
+    paymentState: added.paymentState,
+    paymentRequest,
+  };
 }

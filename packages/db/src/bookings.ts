@@ -1,13 +1,13 @@
 import { createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
-import { and, asc, desc, eq, inArray, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNotNull, like, or, sql } from 'drizzle-orm';
 import { canTransition } from '@ombre/shared';
 import { withActor, withBeach, type Database, type Transaction } from './client';
 import { extraLinesByGroup, groupExtraLines } from './extras';
-import { acquireHold, conventionAppliesOn, DomainError, priceExtras, type ExtraLine, type ExtraRequest } from './inventory';
+import { acquireHold, acquireHoldWithin, conventionAppliesOn, DomainError, periodDays, priceExtras, type ExtraLine, type ExtraRequest } from './inventory';
 import { enqueue } from './jobs';
 import { recordRefundDue, recordSale } from './ledger';
 import type { Actor } from './manage';
-import { accessEvent, allocation, auditEvent, beach, booking, bookingExtra, bookingGroup, hold, holdExtra, hotelConvention, inventoryDay, ledgerEntry, pass, payment, paymentRequest, promotion, providerEvent, refund, spot } from './schema';
+import { accessEvent, allocation, auditEvent, beach, booking, bookingExtra, bookingGroup, cart, cartItem, cartItemExtra, hold, holdExtra, hotelConvention, inventoryDay, ledgerEntry, orderGroup, pass, payment, paymentRequest, promotion, providerEvent, refund, spot } from './schema';
 
 /** Signs identifiers so that links and passes cannot be guessed and need no stored secret per row. */
 function sign(secret: string, purpose: string, id: string): string {
@@ -21,6 +21,8 @@ function sameText(left: string, right: string): boolean {
 }
 
 export const bookingAccessToken = (secret: string, bookingId: string): string => sign(secret, 'booking', bookingId);
+/** Lets the orderer read the order summary without an account (D46), like the booking token. */
+export const orderAccessToken = (secret: string, orderId: string): string => sign(secret, 'order', orderId);
 export const passCredential = (secret: string, passId: string): string => `${passId}.${sign(secret, 'pass', passId).slice(0, 32)}`;
 
 // ---- The payment aggregate (D31 at group level, D38, spec ruoli-periodo §2) ----
@@ -35,13 +37,38 @@ export function paymentStateOf(totalCents: number, paidCents: number): PaymentSt
   return paidCents > 0 ? 'partial' : 'to_collect';
 }
 
-/** Sum of the succeeded payments of one booking group, inside the current transaction. */
+/**
+ * The slice of a succeeded ORDER payment that belongs to each group (D46): the
+ * totals frozen in the group's holds, which are exactly what the order charged.
+ * Extras added later never enter the quota, so they stay in the residual. Empty
+ * for groups born outside an order, which keeps every older number unchanged.
+ */
+async function orderQuotaByGroup(tx: Transaction, groupIds: string[]): Promise<Map<string, number>> {
+  if (groupIds.length === 0) return new Map();
+  const rows = await tx
+    .select({ groupId: booking.groupId, quota: sql<number>`coalesce(sum(${hold.totalCents}), 0)::int` })
+    .from(booking)
+    .innerJoin(hold, eq(hold.id, booking.holdId))
+    .innerJoin(bookingGroup, eq(bookingGroup.id, booking.groupId))
+    .where(
+      and(
+        inArray(booking.groupId, groupIds),
+        isNotNull(bookingGroup.orderId),
+        sql`exists (select 1 from payment po where po.order_id = ${bookingGroup.orderId} and po.status = 'succeeded')`,
+      ),
+    )
+    .groupBy(booking.groupId);
+  return new Map(rows.map((row) => [row.groupId, row.quota]));
+}
+
+/** Sum of the succeeded payments of one booking group, order quota included (D46), inside the current transaction. */
 export async function paidCentsOfGroup(tx: Transaction, groupId: string): Promise<number> {
   const [row] = await tx
     .select({ paid: sql<number>`coalesce(sum(${payment.amountCents}), 0)::int` })
     .from(payment)
     .where(and(eq(payment.groupId, groupId), eq(payment.status, 'succeeded')));
-  return row?.paid ?? 0;
+  const quota = (await orderQuotaByGroup(tx, [groupId])).get(groupId) ?? 0;
+  return (row?.paid ?? 0) + quota;
 }
 
 /** Succeeded cents per group, for day lists: one query, a map back. */
@@ -52,7 +79,11 @@ export async function paidCentsByGroup(tx: Transaction, groupIds: string[]): Pro
     .from(payment)
     .where(and(inArray(payment.groupId, groupIds), eq(payment.status, 'succeeded')))
     .groupBy(payment.groupId);
-  return new Map(rows.map((row) => [row.groupId, row.paid]));
+  const paid = new Map(rows.map((row) => [row.groupId!, row.paid]));
+  for (const [groupId, quota] of await orderQuotaByGroup(tx, groupIds)) {
+    paid.set(groupId, (paid.get(groupId) ?? 0) + quota);
+  }
+  return paid;
 }
 
 /** One booking is one spot for one day: these are the days of one group, first day first. */
@@ -148,7 +179,7 @@ async function lockedHoldFamily(tx: Transaction, leadHoldId: string): Promise<Fa
  * day rows already locked by the caller: one code on the group, one booking per
  * day with its day's frozen price, the extras copied once onto the first day.
  */
-async function createGroupFromHolds(tx: Transaction, beachId: string, members: FamilyMember[], request: CheckoutRequest) {
+async function createGroupFromHolds(tx: Transaction, beachId: string, members: FamilyMember[], request: CheckoutRequest & { userId?: string | null; orderId?: string | null }) {
   const lead = members[0];
   if (!lead) throw new DomainError('not_found', 'Hold not found');
   const [live] = await tx
@@ -171,7 +202,7 @@ async function createGroupFromHolds(tx: Transaction, beachId: string, members: F
     .where(eq(inventoryDay.day, lead.day.day));
   const code = `OM-${lead.day.day.slice(2).replaceAll('-', '')}-${String((count?.n ?? 0) + 1).padStart(3, '0')}`;
 
-  const [group] = await tx.insert(bookingGroup).values({ beachId, code }).returning();
+  const [group] = await tx.insert(bookingGroup).values({ beachId, code, userId: request.userId ?? null, orderId: request.orderId ?? null }).returning();
   if (!group) throw new Error('booking group was not created');
 
   const created: (typeof booking.$inferSelect)[] = [];
@@ -289,8 +320,10 @@ export async function applyPaymentOutcome(db: Database, notice: ProviderNotice):
     // NEVER walks the checkout confirm/cancel path below — on a group that is
     // already confirmed that path would treat the days as gone and cancel them.
     if (found.purpose === 'request') return settleRequestPayment(tx, beachId, notice.outcome, found);
+    // An order payment (D46) settles EVERY group of the order together, all or nothing.
+    if (found.orderId !== null) return settleOrderPayment(tx, beachId, notice.outcome, found);
 
-    const members = await bookingsOfGroup(tx, found.groupId);
+    const members = await bookingsOfGroup(tx, found.groupId!);
     if (members.length === 0) return 'ignored';
     const lockedDays = await tx
       .select()
@@ -327,7 +360,7 @@ export async function applyPaymentOutcome(db: Database, notice: ProviderNotice):
         await tx.update(booking).set({ status: 'confirmed', confirmedAt: sql`now()` }).where(eq(booking.id, pair.reserved.id));
         await recordSale(tx, beachId, { bookingId: pair.reserved.id, inventoryDayId: pair.day!.id, totalCents: pair.reserved.totalCents, extrasCents: pair.reserved.extrasCents });
       }
-      await tx.insert(pass).values({ beachId, bookingId: lead.reserved.id, groupId: found.groupId });
+      await tx.insert(pass).values({ beachId, bookingId: lead.reserved.id, groupId: found.groupId! });
       await enqueue(tx, beachId, 'booking.confirmed', { bookingId: lead.reserved.id });
       return 'confirmed';
     }
@@ -354,7 +387,10 @@ export async function applyPaymentOutcome(db: Database, notice: ProviderNotice):
  * Lock order everywhere: group → payment → payment_request.
  */
 async function settleRequestPayment(tx: Transaction, beachId: string, outcome: 'succeeded' | 'failed', found: typeof payment.$inferSelect): Promise<PaymentOutcome> {
-  await lockGroup(tx, found.groupId);
+  // A request payment always names its group and its first-day booking.
+  const groupId = found.groupId!;
+  const bookingId = found.bookingId!;
+  await lockGroup(tx, groupId);
   const [paid] = await tx.select().from(payment).where(eq(payment.id, found.id)).for('update');
   if (!paid || paid.status === 'succeeded' || paid.status === 'failed') return 'ignored';
   const settle = (status: 'succeeded' | 'failed') => tx.update(payment).set({ status, updatedAt: sql`now()` }).where(eq(payment.id, paid.id));
@@ -366,9 +402,9 @@ async function settleRequestPayment(tx: Transaction, beachId: string, outcome: '
   }
 
   const [request] = paid.requestId ? await tx.select().from(paymentRequest).where(eq(paymentRequest.id, paid.requestId)).for('update') : [];
-  const members = await bookingsOfGroup(tx, found.groupId);
+  const members = await bookingsOfGroup(tx, groupId);
   const alive = members.some((member) => member.booking.status === 'confirmed' || member.booking.status === 'completed');
-  const residual = liveTotalCents(members) - (await paidCentsOfGroup(tx, found.groupId));
+  const residual = liveTotalCents(members) - (await paidCentsOfGroup(tx, groupId));
   const collectable = alive && request !== undefined && request.status === 'pending' && paid.amountCents <= residual;
 
   if (collectable) {
@@ -391,8 +427,82 @@ async function settleRequestPayment(tx: Transaction, beachId: string, outcome: '
     amountCents: paid.amountCents,
     reason: alive ? 'over_collection' : 'booking_cancelled',
   });
-  await recordRefundDue(tx, beachId, found.bookingId, paid.amountCents);
-  await enqueue(tx, beachId, 'refund.due', { bookingId: found.bookingId });
+  await recordRefundDue(tx, beachId, bookingId, paid.amountCents);
+  await enqueue(tx, beachId, 'refund.due', { bookingId });
+  return 'refund_due';
+}
+
+/**
+ * Outcome of the single payment of an order (D46): all its groups settle
+ * together. A success confirms every group — holds converted, days occupied,
+ * the sale recorded per day, one pass and one `booking.confirmed` per group —
+ * only when EVERY day of EVERY group is still ours or free; otherwise, and on a
+ * failed outcome, the whole order is cancelled, with the full refund recorded
+ * on a late loss exactly like the single-group path.
+ */
+async function settleOrderPayment(tx: Transaction, beachId: string, outcome: 'succeeded' | 'failed', found: typeof payment.$inferSelect): Promise<PaymentOutcome> {
+  const groups = await tx.select().from(bookingGroup).where(eq(bookingGroup.orderId, found.orderId!)).orderBy(asc(bookingGroup.code));
+  if (groups.length === 0) return 'ignored';
+  const perGroup: { group: typeof bookingGroup.$inferSelect; members: { booking: typeof booking.$inferSelect; day: string }[] }[] = [];
+  for (const group of groups) perGroup.push({ group, members: await bookingsOfGroup(tx, group.id) });
+  const everyBooking = perGroup.flatMap((entry) => entry.members.map((member) => member.booking));
+  if (everyBooking.length === 0) return 'ignored';
+
+  const lockedDays = await tx
+    .select()
+    .from(inventoryDay)
+    .where(inArray(inventoryDay.id, everyBooking.map((member) => member.inventoryDayId)))
+    .orderBy(asc(inventoryDay.id))
+    .for('update');
+  const dayOf = new Map(lockedDays.map((row) => [row.id, row]));
+  const [paid] = await tx.select().from(payment).where(eq(payment.id, found.id)).for('update');
+  if (!paid || paid.status === 'succeeded' || paid.status === 'failed') return 'ignored';
+
+  const pairs = everyBooking.map((reserved) => ({ reserved, day: dayOf.get(reserved.inventoryDayId) }));
+  if (pairs.some((pair) => !pair.day)) return 'ignored';
+  const settle = (status: 'succeeded' | 'failed') => tx.update(payment).set({ status, updatedAt: sql`now()` }).where(eq(payment.id, paid.id));
+  const ours = (pair: { reserved: typeof booking.$inferSelect; day?: typeof inventoryDay.$inferSelect }) =>
+    pair.day!.state === 'held' && pair.day!.activeHoldId === pair.reserved.holdId;
+
+  const cancelEverything = async () => {
+    for (const pair of pairs) {
+      await tx.update(booking).set({ status: 'cancelled' }).where(eq(booking.id, pair.reserved.id));
+      if (ours(pair)) await freeDay(tx, pair.day!.id, pair.reserved.holdId, pair.reserved.promotionId);
+    }
+    for (const entry of perGroup) {
+      await enqueue(tx, beachId, 'booking.cancelled', { bookingId: entry.members[0]!.booking.id });
+    }
+  };
+
+  if (outcome === 'failed') {
+    await settle('failed');
+    await cancelEverything();
+    return 'cancelled';
+  }
+
+  await settle('succeeded');
+  if (pairs.every((pair) => ours(pair) || pair.day!.state === 'available')) {
+    for (const entry of perGroup) {
+      for (const member of entry.members) {
+        const day = dayOf.get(member.booking.inventoryDayId)!;
+        await tx.update(hold).set({ status: 'converted' }).where(eq(hold.id, member.booking.holdId));
+        await tx.update(inventoryDay).set({ state: 'occupied', activeHoldId: null, updatedAt: sql`now()` }).where(eq(inventoryDay.id, day.id));
+        await tx.update(booking).set({ status: 'confirmed', confirmedAt: sql`now()` }).where(eq(booking.id, member.booking.id));
+        await recordSale(tx, beachId, { bookingId: member.booking.id, inventoryDayId: day.id, totalCents: member.booking.totalCents, extrasCents: member.booking.extrasCents });
+      }
+      await tx.insert(pass).values({ beachId, bookingId: entry.members[0]!.booking.id, groupId: entry.group.id });
+      await enqueue(tx, beachId, 'booking.confirmed', { bookingId: entry.members[0]!.booking.id });
+    }
+    return 'confirmed';
+  }
+
+  // A day of ANY item went to someone else while the payment was in flight: the
+  // order was all or nothing, so everything is given back and the money returns.
+  await cancelEverything();
+  const leadBookingId = perGroup[0]!.members[0]!.booking.id;
+  await tx.insert(refund).values({ beachId, paymentId: paid.id, amountCents: paid.amountCents, reason: 'inventory_unavailable' });
+  await recordRefundDue(tx, beachId, leadBookingId, paid.amountCents);
+  await enqueue(tx, beachId, 'refund.due', { bookingId: leadBookingId });
   return 'refund_due';
 }
 
@@ -472,7 +582,9 @@ export function getBooking(db: Database, beachId: string, bookingId: string, acc
     // exactly as it was; request payments only enter the aggregate.
     const payments = await tx.select().from(payment).where(eq(payment.groupId, row.booking.groupId)).orderBy(asc(payment.createdAt));
     const opened = payments.find((entry) => entry.purpose !== 'request') ?? null;
-    const paidCents = payments.filter((entry) => entry.status === 'succeeded').reduce((sum, entry) => sum + entry.amountCents, 0);
+    // A group born from an order (D46) adds the quota its order payment covered.
+    const quota = (await orderQuotaByGroup(tx, [row.booking.groupId])).get(row.booking.groupId) ?? 0;
+    const paidCents = payments.filter((entry) => entry.status === 'succeeded').reduce((sum, entry) => sum + entry.amountCents, 0) + quota;
 
     const status = groupStatusOf(members.map((member) => member.booking.status));
     const live = members.filter((member) => member.booking.status !== 'cancelled');
@@ -959,11 +1071,13 @@ export function cancelByBeachClub(db: Database, actor: Actor, input: { code: str
 
     // The refund is what was really paid (D31), up to what was cancelled: the
     // succeeded payments of the group, newest first, each cut to what is left to
-    // give back. A group taken «da incassare» and never collected refunds nothing.
+    // give back. A group born from an order (D46) also draws from the order's
+    // payments, up to its own quota. A group taken «da incassare» and never
+    // collected refunds nothing.
     const paidRows = await tx
       .select()
       .from(payment)
-      .where(and(eq(payment.groupId, group.id), eq(payment.status, 'succeeded')))
+      .where(and(group.orderId ? or(eq(payment.groupId, group.id), eq(payment.orderId, group.orderId)) : eq(payment.groupId, group.id), eq(payment.status, 'succeeded')))
       .orderBy(desc(payment.createdAt));
     const paidSum = paidRows.reduce((sum, row) => sum + row.amountCents, 0);
     let leftToRefund = Math.min(paidSum, refundableCents);
@@ -1004,5 +1118,260 @@ export function cancelByBeachClub(db: Database, actor: Actor, input: { code: str
       target: group.code,
       detail: { reason: input.reason, days: targets.length },
     });
+  });
+}
+
+// ---- The order (D46): «Conferma e paga» the whole cart, all or nothing ----
+
+function errorCode(error: unknown): string | undefined {
+  const candidate = error as { code?: string; cause?: { code?: string } } | null;
+  return candidate?.code ?? candidate?.cause?.code;
+}
+
+export interface OrderItemResult {
+  /** Code of the booking group born from this cart item. */
+  code: string;
+  spotCode: string;
+  from: string;
+  to: string;
+}
+
+export interface OrderResult {
+  orderId: string;
+  code: string;
+  totalCents: number;
+  payment: { provider: string; reference: string; amountCents: number };
+  /** Lets the orderer read the order summary without an account. */
+  accessToken: string;
+  items: OrderItemResult[];
+}
+
+export interface ConfirmOrderInput {
+  cartId: string;
+  guestName: string;
+  guestEmail: string;
+  locale?: 'it' | 'en';
+  /** The signed-in orderer, when the cart itself carries no account. */
+  userId?: string | null;
+}
+
+/**
+ * Confirms the whole cart in ONE transaction (D46): every item's period is
+ * reserved through the ordinary hold families — one shared expiry, every day
+ * locked in identifier order first — and ONE busy day rolls the whole thing
+ * back, naming the offending item. Then the order is born (ORD-YYMMDD-NNN under
+ * its own advisory lock), one booking group per item with its own code — the
+ * item's holder as guest name, the orderer's email on every day — and one
+ * single `sandbox` payment on the order total. The cart is deleted on success.
+ */
+export async function confirmOrder(db: Database, beachId: string, input: ConfirmOrderInput, secret: string, ttlSeconds: number): Promise<OrderResult> {
+  try {
+    return await withBeach(db, beachId, async (tx) => {
+      const [basket] = await tx.select().from(cart).where(eq(cart.id, input.cartId));
+      if (!basket) throw new DomainError('not_found', 'Cart not found');
+      const items = await tx
+        .select({ item: cartItem, spotCode: spot.code })
+        .from(cartItem)
+        .innerJoin(spot, eq(spot.id, cartItem.spotId))
+        .where(eq(cartItem.cartId, input.cartId))
+        .orderBy(asc(cartItem.createdAt), asc(cartItem.id));
+      if (items.length === 0) throw new DomainError('invalid_state', 'The cart is empty');
+      const extrasRows = await tx
+        .select()
+        .from(cartItemExtra)
+        .where(inArray(cartItemExtra.cartItemId, items.map((entry) => entry.item.id)));
+      const extrasOf = new Map<string, ExtraRequest[]>();
+      for (const row of extrasRows) {
+        const list = extrasOf.get(row.cartItemId) ?? [];
+        list.push({ serviceId: row.serviceId, quantity: row.quantity });
+        extrasOf.set(row.cartItemId, list);
+      }
+
+      // Every day of every item is locked first, in identifier order like every
+      // multi-day path: two confirmations of overlapping carts queue up cleanly.
+      await tx
+        .select({ id: inventoryDay.id })
+        .from(inventoryDay)
+        .where(or(...items.map(({ item }) => and(eq(inventoryDay.spotId, item.spotId), inArray(inventoryDay.day, periodDays(item.dayFrom, item.dayTo))))))
+        .orderBy(asc(inventoryDay.id))
+        .for('update');
+
+      let totalCents = 0;
+      const holds: { holdId: string; from: string; to: string }[] = [];
+      for (const [index, { item, spotCode }] of items.entries()) {
+        try {
+          const held = await acquireHoldWithin(tx, beachId, {
+            spotId: item.spotId,
+            day: item.dayFrom,
+            to: item.dayTo,
+            promoCode: item.promoCode,
+            extras: extrasOf.get(item.id) ?? [],
+            idempotencyKey: `order-${input.cartId}-${index}`,
+            // One shared ttl: now() is transaction-stable, so every family expires together.
+            ttlSeconds,
+          });
+          totalCents += held.quote.total;
+          holds.push({ holdId: held.holdId, from: held.from, to: held.to });
+        } catch (error) {
+          if (error instanceof DomainError && (error.code === 'inventory_conflict' || error.code === 'not_found' || error.code === 'hold_expired')) {
+            const period = item.dayFrom === item.dayTo ? item.dayFrom : `${item.dayFrom}–${item.dayTo}`;
+            throw new DomainError('order_item_unavailable', `Spot ${spotCode} is no longer available for ${period}: remove or change that item`);
+          }
+          throw error;
+        }
+      }
+
+      // One numbering per beach club and day of creation: ORD-YYMMDD-NNN. The
+      // unique constraint on order_group is the backstop.
+      const [clock] = await tx.select({ today: sql<string>`(now() at time zone ${beach.timezone})::date::text` }).from(beach).where(eq(beach.id, beachId));
+      const today = clock!.today;
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`${beachId}/order/${today}`}, 0))`);
+      const stamp = today.slice(2).replaceAll('-', '');
+      const [numbered] = await tx
+        .select({ n: sql<number>`count(*)::int` })
+        .from(orderGroup)
+        .where(like(orderGroup.code, `ORD-${stamp}-%`));
+      const code = `ORD-${stamp}-${String((numbered?.n ?? 0) + 1).padStart(3, '0')}`;
+
+      const guestEmail = input.guestEmail.toLowerCase();
+      const userId = basket.userId ?? input.userId ?? null;
+      const [order] = await tx
+        .insert(orderGroup)
+        .values({ beachId, code, guestName: input.guestName, guestEmail, userId, locale: input.locale ?? 'it', totalCents })
+        .returning();
+      if (!order) throw new Error('order was not created');
+
+      const created: OrderItemResult[] = [];
+      for (const [index, { item, spotCode }] of items.entries()) {
+        const members = await lockedHoldFamily(tx, holds[index]!.holdId);
+        const { group } = await createGroupFromHolds(tx, beachId, members, {
+          holdId: holds[index]!.holdId,
+          // The item's holder, or the orderer when the field was left empty (D46).
+          guestName: item.guestName.trim() || input.guestName,
+          guestEmail,
+          locale: input.locale ?? 'it',
+          source: 'online',
+          userId,
+          orderId: order.id,
+        });
+        created.push({ code: group.code, spotCode, from: holds[index]!.from, to: holds[index]!.to });
+      }
+
+      const reference = `sbx_${randomBytes(12).toString('hex')}`;
+      await tx.insert(payment).values({
+        beachId,
+        bookingId: null,
+        groupId: null,
+        orderId: order.id,
+        provider: 'sandbox',
+        providerRef: reference,
+        status: 'in_progress',
+        amountCents: totalCents,
+        purpose: 'checkout',
+      });
+      await tx.delete(cart).where(eq(cart.id, basket.id));
+      return {
+        orderId: order.id,
+        code,
+        totalCents,
+        payment: { provider: 'sandbox', reference, amountCents: totalCents },
+        accessToken: orderAccessToken(secret, order.id),
+        items: created,
+      };
+    });
+  } catch (error) {
+    // Two confirmations of the same cart raced: the hold unique index stopped the second.
+    if (errorCode(error) === '23505') throw new DomainError('inventory_conflict', 'This cart is already being confirmed');
+    throw error;
+  }
+}
+
+export interface OrderItemView {
+  code: string;
+  spotCode: string;
+  from: string;
+  to: string;
+  guestName: string;
+  status: (typeof booking.$inferSelect)['status'];
+  totalCents: number;
+  /** Text to show as a QR code; present only while the group is confirmed. */
+  passCredential: string | null;
+}
+
+export interface OrderView {
+  orderId: string;
+  code: string;
+  guestName: string;
+  locale: string;
+  totalCents: number;
+  paidCents: number;
+  remainingCents: number;
+  paymentState: PaymentState;
+  payment: { provider: string; reference: string; status: (typeof payment.$inferSelect)['status'] } | null;
+  items: OrderItemView[];
+}
+
+/** The orderer's own view of an order, opened with the token received at confirmation. */
+export function getOrder(db: Database, beachId: string, orderId: string, accessToken: string, secret: string): Promise<OrderView> {
+  if (!sameText(accessToken, orderAccessToken(secret, orderId))) {
+    return Promise.reject(new DomainError('not_found', 'Order not found'));
+  }
+  return withBeach(db, beachId, async (tx) => {
+    const [order] = await tx.select().from(orderGroup).where(eq(orderGroup.id, orderId));
+    if (!order) throw new DomainError('not_found', 'Order not found');
+    const groups = await tx.select().from(bookingGroup).where(eq(bookingGroup.orderId, orderId)).orderBy(asc(bookingGroup.code));
+    const groupIds = groups.map((group) => group.id);
+    const totals = await groupTotalsByGroup(tx, groupIds);
+    const passes = groupIds.length > 0 ? await tx.select().from(pass).where(inArray(pass.groupId, groupIds)) : [];
+    const passOf = new Map(passes.map((row) => [row.groupId, row]));
+    const dayRows = groupIds.length > 0
+      ? await tx
+          .select({ groupId: booking.groupId, status: booking.status, guestName: booking.guestName, day: inventoryDay.day, spotCode: spot.code })
+          .from(booking)
+          .innerJoin(inventoryDay, eq(inventoryDay.id, booking.inventoryDayId))
+          .innerJoin(spot, eq(spot.id, inventoryDay.spotId))
+          .where(inArray(booking.groupId, groupIds))
+          .orderBy(asc(inventoryDay.day))
+      : [];
+    const daysOf = new Map<string, typeof dayRows>();
+    for (const row of dayRows) {
+      const list = daysOf.get(row.groupId) ?? [];
+      list.push(row);
+      daysOf.set(row.groupId, list);
+    }
+
+    const payments = await tx.select().from(payment).where(eq(payment.orderId, orderId)).orderBy(asc(payment.createdAt));
+    const opened = payments.find((entry) => entry.purpose !== 'request') ?? null;
+    const paidCents = payments.filter((entry) => entry.status === 'succeeded').reduce((sum, entry) => sum + entry.amountCents, 0);
+
+    const items = groups.map((group) => {
+      const members = daysOf.get(group.id) ?? [];
+      const status = groupStatusOf(members.map((member) => member.status));
+      const issued = passOf.get(group.id);
+      const total = totals.get(group.id);
+      return {
+        code: group.code,
+        spotCode: members[0]?.spotCode ?? '',
+        from: total?.from ?? members[0]?.day ?? '',
+        to: total?.to ?? members[members.length - 1]?.day ?? '',
+        guestName: members[0]?.guestName ?? order.guestName,
+        status,
+        totalCents: total?.totalCents ?? 0,
+        passCredential: status === 'confirmed' && issued && !issued.revoked ? passCredential(secret, issued.id) : null,
+      };
+    });
+
+    return {
+      orderId: order.id,
+      code: order.code,
+      guestName: order.guestName,
+      locale: order.locale,
+      totalCents: order.totalCents,
+      paidCents,
+      remainingCents: Math.max(0, order.totalCents - paidCents),
+      paymentState: paymentStateOf(order.totalCents, paidCents),
+      payment: opened ? { provider: opened.provider, reference: opened.providerRef, status: opened.status } : null,
+      items,
+    };
   });
 }
