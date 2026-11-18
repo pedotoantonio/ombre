@@ -280,6 +280,7 @@ export function makeIt(brand: string) {
         password_mismatch: 'Le due password nuove non coincidono. Riscrivile.',
         password_change_required: 'Prima scegli una password tua al posto di quella generata.',
         rate_limited: 'Troppe richieste. Riprova tra qualche minuto.',
+        oidc_failed: "Accesso con Google non riuscito. Riprova dall'inizio.",
         // ---- Il carrello e l'ordine (D46) ----
         cart_full: 'Il carrello ha già 10 voci: confermalo, oppure togli una voce prima di aggiungerne altre.',
         cart_item_duplicate: 'Questa postazione con questo periodo è già nel carrello.',
@@ -303,6 +304,16 @@ export function makeIt(brand: string) {
       passwordButton: 'Cambia la password',
       passwordChanged: 'Password cambiata.',
       passwordLink: 'Cambia la password',
+      // ---- L'accesso con Google (D48) ----
+      orDivider: 'oppure',
+      googleButton: 'Entra con Google',
+      googleTestButton: 'Entra con Google (fornitore di prova)',
+      googleNote: 'Chi entra con Google non ha una password locale da gestire: si entra sempre dal collegamento qui sopra.',
+      consentTitle: 'Consenso del fornitore di prova',
+      consentLead: "Questa pagina simula l'accesso con Google: nessun dato viaggia verso Google. Scrivi l'email e il nome con cui entrare.",
+      consentEmail: 'Email',
+      consentName: 'Nome e cognome',
+      consentButton: 'Continua ed entra',
       // ---- «Il mio conto»: la casa dell'Ospite con conto (D44/D47) ----
       myAccountTitle: 'Il mio conto',
       nextArrivals: 'Prossimi arrivi',

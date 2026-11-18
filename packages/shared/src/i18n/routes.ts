@@ -114,6 +114,8 @@ export const accountPages = {
   register: { it: 'registrazione', en: 'register' },
   /** Password change: forced at the first sign-in, voluntary from the account later (D44). */
   password: { it: 'password', en: 'password' },
+  /** Local consent page of the TEST identity provider (D48); Google never lands here. */
+  oidcConsent: { it: 'consenso', en: 'consent' },
 } as const satisfies Record<string, Record<Locale, string>>;
 export type AccountPage = keyof typeof accountPages;
 
@@ -211,7 +213,7 @@ export function payPath(locale: Locale, token: string): string {
 /** Internal address of the page shown for unknown addresses. It is never linked. */
 export const notFoundSegment = 'pagina-non-trovata';
 
-const accountDepth: Record<AccountPage, number> = { signIn: 2, overview: 2, twoFactor: 2, manage: 3, season: 3, site: 3, cabins: 2, register: 2, password: 2 };
+const accountDepth: Record<AccountPage, number> = { signIn: 2, overview: 2, twoFactor: 2, manage: 3, season: 3, site: 3, cabins: 2, register: 2, password: 2, oidcConsent: 2 };
 
 /**
  * Reads the language of an address and tells whether it has the shape of a page of the site.

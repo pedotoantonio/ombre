@@ -268,6 +268,7 @@ export function makeEn(brand: string): Dictionary {
         password_mismatch: 'The two new passwords do not match. Write them again.',
         password_change_required: 'First choose a password of your own in place of the generated one.',
         rate_limited: 'Too many requests. Try again in a few minutes.',
+        oidc_failed: 'Sign-in with Google did not go through. Start over.',
         // ---- The cart and the order (D46) ----
         cart_full: 'The cart already holds 10 items: confirm it, or remove one before adding more.',
         cart_item_duplicate: 'This spot and period is already in the cart.',
@@ -291,6 +292,16 @@ export function makeEn(brand: string): Dictionary {
       passwordButton: 'Change the password',
       passwordChanged: 'Password changed.',
       passwordLink: 'Change the password',
+      // ---- Sign-in with Google (D48) ----
+      orDivider: 'or',
+      googleButton: 'Sign in with Google',
+      googleTestButton: 'Sign in with Google (test provider)',
+      googleNote: 'Whoever signs in with Google has no local password to manage: the link above is always the way in.',
+      consentTitle: 'Test provider consent',
+      consentLead: 'This page simulates the Google sign-in: no data travels to Google. Write the email and the name to sign in with.',
+      consentEmail: 'Email',
+      consentName: 'Full name',
+      consentButton: 'Continue and sign in',
       // ---- «Il mio conto»: the home of the guest with an account (D44/D47) ----
       myAccountTitle: 'My account',
       nextArrivals: 'Upcoming arrivals',

@@ -273,6 +273,39 @@ export async function RegisterView({ locale, query }: { locale: Locale; query: Q
 }
 
 /**
+ * The local consent page of the TEST identity provider (D48): it says plainly that it
+ * simulates Google, asks the email and the name, and carries the signed state through.
+ * With the real Google the visitor never lands here.
+ */
+export async function OidcConsentView({ locale, query }: { locale: Locale; query: Query }) {
+  const t = getDictionary(locale, config.brandName).account;
+  const state = ((value) => (Array.isArray(value) ? value[0] : value))(query.state) ?? '';
+  const providers = await apiCall<{ provider: 'test' | 'google' | null }>('GET', '/v1/auth/oidc/providers');
+  if (!providers.ok || providers.data.provider !== 'test' || state === '' || state.length > 300) redirect(accountPath(locale, 'signIn'));
+  return (
+    <PageShell locale={locale} page="help" highlight={false} alternatePath={accountPath(other(locale), 'oidcConsent')} crumbs={[{ label: t.consentTitle }]}>
+      <PageHead title={t.consentTitle} lead={t.consentLead} />
+      <section className="section">
+        <div className="container stack">
+          <form method="post" action="/azioni/oidc-consenso" className="stack">
+            <Hidden values={{ lang: locale, state }} />
+            <div className="field">
+              <label htmlFor="consenso-email">{t.consentEmail}</label>
+              <input id="consenso-email" name="email" type="email" autoComplete="email" maxLength={200} required />
+            </div>
+            <div className="field">
+              <label htmlFor="consenso-nome">{t.consentName}</label>
+              <input id="consenso-nome" name="name" autoComplete="name" maxLength={120} required />
+            </div>
+            <button className="button button--block" type="submit">{t.consentButton}</button>
+          </form>
+        </div>
+      </section>
+    </PageShell>
+  );
+}
+
+/**
  * «Cambia la password» (D44): forced while the generated password is in place — every
  * other reserved page redirects here — and voluntary from the account afterwards.
  */

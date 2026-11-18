@@ -403,6 +403,16 @@ const actions: Record<string, (request: Request, form: Form, lang: Locale) => Pr
     return { to: back, err: code };
   },
 
+  // The local consent of the TEST identity provider (D48): mints the signed code and
+  // sends the navigator to the same return address the real Google would use.
+  async 'oidc-consenso'(_request, form, lang) {
+    const state = form('state');
+    if (state === '' || state.length > 300) return bad();
+    const result = await apiCall<{ code: string }>('POST', '/v1/auth/oidc/test-code', { body: { email: form('email'), name: form('name') } });
+    if (!result.ok) return { to: accountPath(lang, 'signIn'), err: result.status === 0 ? 'unavailable' : 'oidc_failed' };
+    return { to: `/azioni/oidc-ritorno?${new URLSearchParams({ code: result.data.code, state, lang }).toString()}` };
+  },
+
   // «Crea un conto» (D44): whatever happened — new account or existing email — the
   // answer is the same neutral notice: the page never tells whether an email has a conto.
   async registrazione(_request, form, lang) {
@@ -1183,6 +1193,46 @@ async function seasonCall(request: Request, lang: Locale, path: string, form: Fo
   if (!result.ok) return { err: result.status === 0 ? 'unavailable' : result.code };
   const summary = result.data;
   return { ok: getDictionary(lang, config.brandName).account.proposeResult(summary.added.length, summary.alreadyPresent.length, summary.outsidePeriod.length, summary.waiting.length) };
+}
+
+/**
+ * The two addresses of the sign-in with Google (D48), reached by plain navigation: the
+ * start is an ANCHOR on the sign-in page (the CSP form-action 'self' stays untouched),
+ * and the return is where the provider — real or test — sends the navigator back.
+ */
+export async function GET(request: Request, context: { params: Promise<{ action: string }> }): Promise<Response> {
+  const { action } = await context.params;
+  const url = new URL(request.url);
+  const langAsked = url.searchParams.get('lang') ?? '';
+  const lang: Locale = isLocale(langAsked) ? langAsked : 'it';
+
+  if (action === 'oidc-avvio') {
+    const providers = await apiCall<{ provider: 'test' | 'google' | null; state?: string; authorizeUrl?: string }>('GET', '/v1/auth/oidc/providers');
+    if (!providers.ok || !providers.data.provider) return redirect(accountPath(lang, 'signIn'));
+    // Google: straight to the provider. Test: the local consent page, state in the query.
+    if (providers.data.provider === 'google' && providers.data.authorizeUrl) return redirect(providers.data.authorizeUrl);
+    return redirect(withQuery(accountPath(lang, 'oidcConsent'), { state: providers.data.state }));
+  }
+
+  if (action === 'oidc-ritorno') {
+    const code = url.searchParams.get('code') ?? '';
+    const state = url.searchParams.get('state') ?? '';
+    if (code === '' || state === '') return redirect(withQuery(accountPath(lang, 'signIn'), { err: 'oidc_failed' }));
+    const result = await apiCall<{ token: string; expiresAt: string }>('POST', '/v1/auth/oidc/callback', { body: { code, state } });
+    if (!result.ok) return redirect(withQuery(accountPath(lang, 'signIn'), { err: result.status === 0 ? 'unavailable' : 'oidc_failed' }));
+    // The session cookie is laid exactly as after «accesso», and the anonymous cart
+    // joins the account the same way (D46).
+    const headers = new Headers({ Location: accountPath(lang, 'overview') });
+    headers.append('Set-Cookie', sessionCookieHeader(result.data.token, result.data.expiresAt));
+    const ticket = readCartTicket(request);
+    if (ticket) {
+      const claimed = await apiCall('POST', `/v1/carts/${ticket.cartId}/claim`, { body: { accessToken: ticket.accessToken }, token: result.data.token });
+      if (claimed.ok || claimed.status === 404) headers.append('Set-Cookie', clearCartCookieHeader());
+    }
+    return new Response(null, { status: 303, headers });
+  }
+
+  return new Response('Not found', { status: 404 });
 }
 
 export async function POST(request: Request, context: { params: Promise<{ action: string }> }): Promise<Response> {

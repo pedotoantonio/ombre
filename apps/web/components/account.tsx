@@ -51,7 +51,7 @@ import { privateMetadata } from '@/lib/seo';
 import { signedIn, type Me } from '@/lib/session';
 import { ManageShell } from './manage-shell';
 import { PageHead, PageShell } from './PageShell';
-import { GuestOverview, PasswordView, RegisterView } from './guest';
+import { GuestOverview, OidcConsentView, PasswordView, RegisterView } from './guest';
 import { SiteEditorView } from './site-editor';
 import { Cell, DataTable, Row, RowHead } from './table';
 
@@ -113,7 +113,9 @@ export async function accountMetadata(locale: Locale, segments: string[]): Promi
                 ? t.account.registerTitle
                 : page === 'password'
                   ? t.account.passwordTitle
-                  : null;
+                  : page === 'oidcConsent'
+                    ? t.account.consentTitle
+                    : null;
     return privateMetadata(locale, title ?? t.nav.reservedArea);
   }
   if (segments.length === 3 && page === 'manage') {
@@ -194,6 +196,9 @@ export function Hidden({ values }: { values: Record<string, string> }) {
 async function SignInView({ locale, query }: { locale: Locale; query: Query }) {
   const t = getDictionary(locale, config.brandName).account;
   if (await signedIn()) redirect(accountPath(locale, 'overview'));
+  // The configured identity provider (D48): without one, the Google block stays out.
+  const providers = await apiCall<{ provider: 'test' | 'google' | null }>('GET', '/v1/auth/oidc/providers');
+  const provider = providers.ok ? providers.data.provider : null;
   return (
     <PageShell locale={locale} page="help" highlight={false} alternatePath={accountPath(other(locale), 'signIn')} crumbs={[{ label: t.signInTitle }]}>
       <PageHead title={t.signInTitle} lead={t.signInLead} />
@@ -216,6 +221,18 @@ async function SignInView({ locale, query }: { locale: Locale; query: Query }) {
             </div>
             <button className="button button--block" type="submit">{t.signInButton}</button>
           </form>
+          {provider ? (
+            <>
+              {/* An anchor, not a form (D48): the CSP form-action 'self' stays as it is. */}
+              <p className="prose">{t.orDivider}</p>
+              <p>
+                <a className="button button--secondary button--block" href={`/azioni/oidc-avvio?lang=${locale}`}>
+                  {provider === 'test' ? t.googleTestButton : t.googleButton}
+                </a>
+              </p>
+              <p className="prose">{t.googleNote}</p>
+            </>
+          ) : null}
           <p>
             <Link href={accountPath(locale, 'register')}>{t.registerLink}</Link>
           </p>
@@ -1013,6 +1030,7 @@ export async function AccountRoute({ locale, segments, query }: { locale: Locale
   if (segments.length === 1 && page === 'cabins') return <CabinHolderView locale={locale} query={query} />;
   if (segments.length === 1 && page === 'register') return <RegisterView locale={locale} query={query} />;
   if (segments.length === 1 && page === 'password') return <PasswordView locale={locale} query={query} />;
+  if (segments.length === 1 && page === 'oidcConsent') return <OidcConsentView locale={locale} query={query} />;
   if (segments.length === 2 && page === 'manage') return <ManageView locale={locale} beachSlug={segments[1]!} query={query} />;
   if (segments.length === 3 && page === 'manage' && segments[2] === beachLayoutSegment[locale])
     return <BeachLayoutView locale={locale} beachSlug={segments[1]!} query={query} />;
