@@ -93,6 +93,15 @@ indicizzato.
   pagine per ruolo (quella del Gestore con le schermate vere e l'accesso in
   due tocchi), i tre nomi ovunque con controllo automatico nei test e nelle
   suite fumo.
+- Fotografie vere nel repertorio dimostrativo (18/11/2026, D43): le nove
+  illustrazioni di `/demo` sono ora fotografie scattate da persone, con licenza
+  libera accertata alla fonte e registrata in
+  [immagini-reali.md](immagini-reali.md) (tutte Pexels License, senza obbligo di
+  attribuzione), ritagliate a 1200×800 e verificate a vista (niente persone
+  riconoscibili in primo piano, niente insegne di attività vere). Il Bagno delle
+  Dune ha ora nel seme un sito pubblicato con copertina e galleria, come il Lido
+  Aurora. Restano com'erano la fotografia della costa del committente (diritti
+  da confermare), il marchio, le icone e le schermate del gestionale.
 - Prenotazione dell'ospite: scelta della postazione, riepilogo con codice promozionale,
   riserva, dati, pagamento di prova, pass con codice QR e codice breve.
 - Reception: verifica del pass con ingresso, uscita e rientro, prenotazione al banco,
@@ -169,6 +178,13 @@ corretto (la pagina cortese di `/paga` arrivava vuota senza JavaScript). In
 coda, i tag `canonical`/`hreflang`/`og:url` sono omessi quando l'indirizzo
 pubblico non è configurato (prima puntavano al segnaposto `localhost`).
 
+Il 18/11/2026, incremento «fotografie vere» (D43): lint, tipi e tutti i test
+con database verdi (contratto fermo a 96 rotte), 633 controlli fumo
+sull'ambiente ricostruito (il fumo del sito parte ora dal sito seminato del
+Bagno delle Dune), verifica a vista dei nove ritagli pubblicati; due ritagli
+automatici rifatti a mano (`tramonto`, `docce`); sette schermate aggiornate in
+[schermate](schermate/). Ambiente di collaudo riseminato e lasciato acceso.
+
 Il 18/11/2026, iterazione «tre ruoli e ricerca per periodo»: 209 test con
 database (contratto a 96 rotte), 633 controlli fumo (col percorso completo
 di un periodo di tre giornate, in italiano e in inglese), 86 verifiche
@@ -195,8 +211,9 @@ stabilimento inesistente) ha il codice 404 giusto, ma senza script appare vuota.
 ## Ambiente dimostrativo
 
 Progetto compose `ombre-demo`, porte 3220 (sito) e 3221 (API), segreti in `.env.demo`
-(non versionato). Contiene due stabilimenti di fantasia, tra cui «Lido Aurora» con
-immagini, abbonamenti e prenotazioni già fatte: guida in [demo.md](demo.md). Si avvia e si ferma così, dalla cartella `ombre/`:
+(non versionato). Contiene due stabilimenti di fantasia, entrambi con sito
+pubblicato, copertina e galleria di fotografie vere (D43); «Lido Aurora» ha anche
+abbonamenti e prenotazioni già fatte: guida in [demo.md](demo.md). Si avvia e si ferma così, dalla cartella `ombre/`:
 
 ```bash
 docker compose --env-file .env.demo -p ombre-demo --profile tunnel up -d
