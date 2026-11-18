@@ -51,6 +51,7 @@ import { privateMetadata } from '@/lib/seo';
 import { signedIn, type Me } from '@/lib/session';
 import { ManageShell } from './manage-shell';
 import { PageHead, PageShell } from './PageShell';
+import { PasswordView, RegisterView } from './guest';
 import { SiteEditorView } from './site-editor';
 import { Cell, DataTable, Row, RowHead } from './table';
 
@@ -78,10 +79,15 @@ function pageFromSegment(locale: Locale, segment: string): AccountPage | null {
   return found ?? null;
 }
 
-/** Signed-in person, or a redirect to the sign-in page. */
-export async function requireMe(locale: Locale): Promise<{ me: Me; token: string }> {
+/**
+ * Signed-in person, or a redirect to the sign-in page. While the generated password is
+ * still in place (D44) every reserved page redirects to the change page, which is the
+ * only one that asks to be let through.
+ */
+export async function requireMe(locale: Locale, options: { allowPendingPasswordChange?: boolean } = {}): Promise<{ me: Me; token: string }> {
   const session = await signedIn();
   if (!session) redirect(accountPath(locale, 'signIn'));
+  if (session.me.user.mustChangePassword && !options.allowPendingPasswordChange) redirect(accountPath(locale, 'password'));
   return session;
 }
 
@@ -103,7 +109,11 @@ export async function accountMetadata(locale: Locale, segments: string[]): Promi
             ? t.account.twoFactorTitle
             : page === 'cabins'
               ? t.cabins.holderTitle
-              : null;
+              : page === 'register'
+                ? t.account.registerTitle
+                : page === 'password'
+                  ? t.account.passwordTitle
+                  : null;
     return privateMetadata(locale, title ?? t.nav.reservedArea);
   }
   if (segments.length === 3 && page === 'manage') {
@@ -206,6 +216,9 @@ async function SignInView({ locale, query }: { locale: Locale; query: Query }) {
             </div>
             <button className="button button--block" type="submit">{t.signInButton}</button>
           </form>
+          <p>
+            <Link href={accountPath(locale, 'register')}>{t.registerLink}</Link>
+          </p>
         </div>
       </section>
     </PageShell>
@@ -995,6 +1008,8 @@ export async function AccountRoute({ locale, segments, query }: { locale: Locale
   if (segments.length === 1 && page === 'overview') return <OverviewView locale={locale} />;
   if (segments.length === 1 && page === 'twoFactor') return <TwoFactorView locale={locale} query={query} />;
   if (segments.length === 1 && page === 'cabins') return <CabinHolderView locale={locale} query={query} />;
+  if (segments.length === 1 && page === 'register') return <RegisterView locale={locale} query={query} />;
+  if (segments.length === 1 && page === 'password') return <PasswordView locale={locale} query={query} />;
   if (segments.length === 2 && page === 'manage') return <ManageView locale={locale} beachSlug={segments[1]!} query={query} />;
   if (segments.length === 3 && page === 'manage' && segments[2] === beachLayoutSegment[locale])
     return <BeachLayoutView locale={locale} beachSlug={segments[1]!} query={query} />;

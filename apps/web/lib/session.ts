@@ -10,7 +10,7 @@ export async function sessionToken(): Promise<string | null> {
 }
 
 export interface Me {
-  user: { email: string; name: string; twoFactor: boolean };
+  user: { email: string; name: string; twoFactor: boolean; mustChangePassword: boolean };
   memberships: { beachSlug: string; beachName: string; role: MembershipRole }[];
 }
 

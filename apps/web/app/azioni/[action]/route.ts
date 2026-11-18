@@ -242,6 +242,28 @@ const actions: Record<string, (request: Request, form: Form, lang: Locale) => Pr
     return { to: back };
   },
 
+  // «Crea un conto» (D44): whatever happened — new account or existing email — the
+  // answer is the same neutral notice: the page never tells whether an email has a conto.
+  async registrazione(_request, form, lang) {
+    const { getDictionary, config } = await import('@ombre/shared');
+    const result = await apiCall('POST', '/v1/account/register', { body: { name: form('name'), email: form('email'), locale: lang } });
+    if (result.ok) return { to: accountPath(lang, 'signIn'), ok: getDictionary(lang, config.brandName).account.registerNotice };
+    const code = result.status === 0 ? 'unavailable' : result.status === 429 ? 'rate_limited' : result.code;
+    return { to: accountPath(lang, 'register'), err: code };
+  },
+
+  // The password change (D44): forced after the first sign-in, voluntary later.
+  async 'cambia-password'(request, form, lang) {
+    const { getDictionary, config } = await import('@ombre/shared');
+    const back = accountPath(lang, 'password');
+    if (form('next') !== form('repeat')) return { to: back, err: 'password_mismatch' };
+    const result = await apiCall('POST', '/v1/account/password', { body: { current: form('current'), next: form('next') }, token: cookieToken(request) });
+    if (result.ok) return { to: back, ok: getDictionary(lang, config.brandName).account.passwordChanged };
+    if (result.status === 401 && result.code === 'unauthenticated') return { to: accountPath(lang, 'signIn') };
+    const code = result.status === 0 ? 'unavailable' : result.status === 401 ? 'invalid_credentials' : result.code;
+    return { to: back, err: code };
+  },
+
   async accesso(_request, form, lang) {
     const code = form('code').trim();
     const result = await apiCall<{ token: string; expiresAt: string }>('POST', '/v1/auth/login', { body: { email: form('email'), password: form('password'), ...(code ? { code } : {}) } });
