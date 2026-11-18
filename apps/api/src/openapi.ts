@@ -5,8 +5,8 @@ export interface Operation {
   path: string;
   summary: string;
   tag: 'Public' | 'Booking' | 'Sign-in' | 'Account' | 'Season holder' | 'Cabin holder' | 'Beach club' | 'System';
-  /** Who may call it: nobody in particular, a signed-in person, or the guest of one booking. */
-  auth: 'none' | 'session' | 'booking-token' | 'provider-signature';
+  /** Who may call it: nobody in particular, a signed-in person, or the holder of one booking, cart or order token. */
+  auth: 'none' | 'session' | 'booking-token' | 'cart-token' | 'order-token' | 'provider-signature';
   request?: z.ZodType;
   query?: Record<string, string>;
   /** Query parameters the caller may leave out. */
@@ -47,7 +47,9 @@ export function buildOpenApi(operations: readonly Operation[], info: { title: st
       summary: operation.summary,
       tags: [operation.tag],
       parameters: [...pathParameters, ...queryParameters, ...headerParameters],
-      ...(operation.auth === 'session' || operation.auth === 'booking-token' ? { security: [{ [operation.auth === 'session' ? 'session' : 'bookingToken']: [] }] } : {}),
+      ...(operation.auth === 'session' || operation.auth === 'booking-token' || operation.auth === 'cart-token' || operation.auth === 'order-token'
+        ? { security: [{ [{ session: 'session', 'booking-token': 'bookingToken', 'cart-token': 'cartToken', 'order-token': 'orderToken' }[operation.auth]]: [] }] }
+        : {}),
       ...(operation.request ? { requestBody: { required: true, content: { 'application/json': { schema: z.toJSONSchema(operation.request, { unrepresentable: 'any' }) } } } } : {}),
       responses,
     };
@@ -60,6 +62,8 @@ export function buildOpenApi(operations: readonly Operation[], info: { title: st
       securitySchemes: {
         session: { type: 'http', scheme: 'bearer', description: 'Token returned by POST /v1/auth/login' },
         bookingToken: { type: 'http', scheme: 'bearer', description: 'Token returned by POST /v1/checkouts, valid for that booking only' },
+        cartToken: { type: 'http', scheme: 'bearer', description: 'Ticket returned by POST /v1/carts, valid for that cart only; the cart owner may use a session token instead' },
+        orderToken: { type: 'http', scheme: 'bearer', description: 'Token returned by the cart confirmation, valid for that order only' },
       },
       schemas: {
         Error: {

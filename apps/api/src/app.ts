@@ -6,7 +6,9 @@ import { formatDeadline, formatLongPeriod, paymentRequestMessage } from '@ombre/
 import {
   acquireHold,
   addElement,
+  addExtrasAsOwner,
   addExtrasToBooking,
+  addItem,
   addRow,
   addRows,
   addSpot,
@@ -20,11 +22,17 @@ import {
   cabinHistory,
   cabinsToday,
   cancelByBeachClub,
+  cartAccessToken,
+  cartOwnerId,
+  cartTokenIsValid,
   changePassword,
   checkAccess,
+  claimCart,
+  confirmOrder,
   confirmTwoFactor,
   conventionStatement,
   createCabin,
+  createCart,
   createContract,
   createConvention,
   createExtraService,
@@ -41,7 +49,9 @@ import {
   endAssignment,
   findActiveBeach,
   getBooking,
+  getCart,
   getHold,
+  getOrder,
   getLayout,
   getPublicCanvas,
   getPublishedSite,
@@ -70,7 +80,9 @@ import {
   plannerMaxDays,
   listMemberships,
   listMyBookings,
+  listMyCarts,
   listSpotTypes,
+  locateCartBeach,
   login,
   logout,
   passwordMinLength,
@@ -84,6 +96,7 @@ import {
   publishDay,
   readPayRequest,
   removeElement,
+  removeItem,
   reportSummary,
   resolveSession,
   restoreRevision,
@@ -109,6 +122,7 @@ import {
   updateCabin,
   updateConvention,
   updateExtraService,
+  updateItem,
   updateSpot,
   updateSpotType,
   withdrawDay,
@@ -211,6 +225,12 @@ const domainStatus: Record<DomainErrorCode, 401 | 403 | 404 | 409 | 422 | 429> =
   // The one neutral refusal of /paga/{token}: it never says why (spec §4.3).
   request_unavailable: 404,
   request_not_payable: 409,
+  // ---- The cart and the order (D46) ----
+  cart_full: 409,
+  cart_item_duplicate: 409,
+  cart_mixed_beach: 422,
+  // «Conferma e paga» is all or nothing: the message names the offending item.
+  order_item_unavailable: 409,
 };
 
 const slugSchema = z.string().regex(/^[a-z0-9]+(-[a-z0-9]+)*$/).max(80);
@@ -326,6 +346,39 @@ const paymentRequestSchema = z.object({
 // The token is validated by the signature check, in constant time: a malformed
 // token must answer the SAME neutral refusal as an expired one, never a 400.
 const payTokenSchema = z.string().min(1).max(200);
+// ---- The cart and the order (D46) ----
+const cartCreateSchema = z.object({ beachSlug: slugSchema });
+const cartItemSchema = z.object({
+  spotId: z.uuid(),
+  day: daySchema,
+  to: daySchema.optional(),
+  /** «Per chi è»: free text; empty or missing means the orderer. */
+  guestName: z.string().trim().max(120).optional(),
+  promoCode: z.string().trim().min(1).max(40).optional(),
+  extras: extrasRequestSchema,
+});
+// Absent leaves a field as it is; promoCode null clears it, extras replace the whole set.
+const cartItemChangeSchema = z
+  .object({
+    guestName: z.string().trim().max(120).optional(),
+    promoCode: z.string().trim().min(1).max(40).nullable().optional(),
+    extras: extrasRequestSchema,
+  })
+  .refine((change) => Object.values(change).some((value) => value !== undefined));
+const cartClaimSchema = z.object({ accessToken: z.string().min(20).max(200) });
+const confirmOrderSchema = z.object({
+  guestName: z.string().trim().min(1).max(120),
+  guestEmail: z.email().max(200),
+  locale: z.enum(['it', 'en']).default('it'),
+});
+// The §5 add-services route: at least one line, each service at most once.
+const ownerExtrasSchema = z.object({
+  extras: z
+    .array(z.object({ serviceId: z.uuid(), quantity: z.number().int().min(1).max(maxExtraQuantity) }))
+    .min(1)
+    .max(20)
+    .refine((extras) => new Set(extras.map((entry) => entry.serviceId)).size === extras.length),
+});
 // ---- Extra services (spec §4.2): Italian name required, English optional with fallback ----
 const extraServiceSchema = z.object({
   nameIt: z.string().trim().min(1).max(80),
@@ -496,6 +549,9 @@ const limits: Record<string, number> = {
   'post /v1/holds': 30,
   'post /v1/checkouts': 20,
   'post /v1/quotes': 120,
+  // The cart confirmation takes the reserves and opens the payment, like a checkout.
+  'post /v1/carts': 30,
+  'post /v1/carts/:cartId/confirm': 20,
   // The public payment page, limited like the purchase routes (spec §4.3).
   'get /v1/pay-requests/:token': 60,
   'post /v1/pay-requests/:token/payments': 20,
@@ -649,6 +705,142 @@ export function createApp(options: AppOptions): Hono {
   route({ method: 'get', path: '/v1/account/bookings', summary: "«Le mie prenotazioni»: the person's stays across beach clubs, upcoming and past, with totals and passes", tag: 'Account', auth: 'session', success: 200, errors: [401, 403] }, async (c) => {
     const user = await currentUser(c.req.header('Authorization'));
     return c.json({ currency: 'EUR', ...(await listMyBookings(db, user.userId, signingSecret)) });
+  });
+
+  // ---- The cart and the order (D46, spec §3 and §5) ----
+  /** The session user when a valid token rides along; null otherwise: the cart works without an account. */
+  async function optionalUser(authorization: string | undefined): Promise<(SessionUser & { token: string }) | null> {
+    try {
+      return await currentUser(authorization);
+    } catch {
+      return null;
+    }
+  }
+
+  /** Opens a cart route with the signed ticket OR the owner's session; anyone else reads «not found». */
+  async function cartAccess(c: Context, cartId: string): Promise<{ beachId: string; userId: string | null }> {
+    const beachId = await locateCartBeach(db, cartId);
+    if (!beachId) throw new HttpError(404, 'not_found', 'Cart not found');
+    const token = /^Bearer ([A-Za-z0-9_-]{20,200})$/.exec(c.req.header('Authorization') ?? '')?.[1];
+    if (!token) throw new HttpError(401, 'unauthenticated', 'The cart ticket is required');
+    const owner = await cartOwnerId(db, beachId, cartId);
+    if (cartTokenIsValid(signingSecret, cartId, token)) return { beachId, userId: owner };
+    const user = await currentUser(c.req.header('Authorization'));
+    if (owner !== user.userId) throw new HttpError(404, 'not_found', 'Cart not found');
+    return { beachId, userId: user.userId };
+  }
+
+  route({ method: 'post', path: '/v1/carts', summary: 'Open a cart at one beach club; signed in, the existing cart of the account is handed back', tag: 'Booking', auth: 'none', request: cartCreateSchema, success: 201, errors: [400, 404, 429] }, async (c) => {
+    const { beachSlug } = parse(cartCreateSchema, await body(c.req.raw), 'request');
+    const beach = await beachBySlug(beachSlug);
+    const user = await optionalUser(c.req.header('Authorization'));
+    const opened = await createCart(db, beach.id, user?.userId ?? null);
+    return c.json({ cartId: opened.cartId, accessToken: cartAccessToken(signingSecret, opened.cartId) }, opened.created ? 201 : 200);
+  });
+
+  route({ method: 'get', path: '/v1/carts/:cartId', summary: 'The full cart, availability and prices recomputed now, with the grand total', tag: 'Booking', auth: 'cart-token', success: 200, errors: [400, 401, 404] }, async (c) => {
+    const cartId = parse(z.uuid(), c.req.param('cartId'), 'cart');
+    const { beachId } = await cartAccess(c, cartId);
+    const view = await getCart(db, beachId, cartId);
+    return c.json({
+      cartId: view.cartId,
+      currency: 'EUR',
+      // The item's own fields win: `extras` stays the requested quantities,
+      // while the quote contributes the money fields and the priced lines in `days`.
+      items: view.items.map(({ quote, ...item }) => ({ ...(quote ? purchaseMoney(quote) : {}), ...item })),
+      totalCents: view.totalCents,
+      allAvailable: view.allAvailable,
+    });
+  });
+
+  route({ method: 'post', path: '/v1/carts/:cartId/items', summary: 'Add a spot over a dal–al period to the cart, with holder, promotion and extras', tag: 'Booking', auth: 'cart-token', request: cartItemSchema, success: 201, errors: [400, 401, 404, 409, 422] }, async (c) => {
+    const cartId = parse(z.uuid(), c.req.param('cartId'), 'cart');
+    const { beachId } = await cartAccess(c, cartId);
+    const request = parse(cartItemSchema, await body(c.req.raw), 'cart item');
+    return c.json(await addItem(db, beachId, cartId, request), 201);
+  });
+
+  route({ method: 'put', path: '/v1/carts/:cartId/items/:itemId', summary: 'Change holder, promotion or extras of one cart item', tag: 'Booking', auth: 'cart-token', request: cartItemChangeSchema, success: 204, errors: [400, 401, 404, 422] }, async (c) => {
+    const cartId = parse(z.uuid(), c.req.param('cartId'), 'cart');
+    const { beachId } = await cartAccess(c, cartId);
+    const change = parse(cartItemChangeSchema, await body(c.req.raw), 'change');
+    await updateItem(db, beachId, cartId, parse(z.uuid(), c.req.param('itemId'), 'cart item'), change);
+    return c.body(null, 204);
+  });
+
+  route({ method: 'delete', path: '/v1/carts/:cartId/items/:itemId', summary: 'Take one item out of the cart', tag: 'Booking', auth: 'cart-token', success: 204, errors: [400, 401, 404] }, async (c) => {
+    const cartId = parse(z.uuid(), c.req.param('cartId'), 'cart');
+    const { beachId } = await cartAccess(c, cartId);
+    await removeItem(db, beachId, cartId, parse(z.uuid(), c.req.param('itemId'), 'cart item'));
+    return c.body(null, 204);
+  });
+
+  route({ method: 'post', path: '/v1/carts/:cartId/claim', summary: "Hand the ticket's cart to the signed-in account, merging the account's previous cart into it", tag: 'Booking', auth: 'session', request: cartClaimSchema, success: 200, errors: [400, 401, 403, 404] }, async (c) => {
+    const user = await currentUser(c.req.header('Authorization'));
+    const cartId = parse(z.uuid(), c.req.param('cartId'), 'cart');
+    const { accessToken } = parse(cartClaimSchema, await body(c.req.raw), 'request');
+    const beachId = await locateCartBeach(db, cartId);
+    if (!beachId || !cartTokenIsValid(signingSecret, cartId, accessToken)) throw new HttpError(404, 'not_found', 'Cart not found');
+    return c.json(await claimCart(db, beachId, cartId, user.userId));
+  });
+
+  route({ method: 'post', path: '/v1/carts/:cartId/confirm', summary: '«Conferma e paga»: reserve every item in one transaction, all or nothing, and open the single payment of the order', tag: 'Booking', auth: 'cart-token', request: confirmOrderSchema, success: 201, errors: [400, 401, 404, 409, 422, 429] }, async (c) => {
+    const cartId = parse(z.uuid(), c.req.param('cartId'), 'cart');
+    const access = await cartAccess(c, cartId);
+    const request = parse(confirmOrderSchema, await body(c.req.raw), 'request');
+    const order = await confirmOrder(db, access.beachId, { cartId, ...request, userId: access.userId }, signingSecret, holdSeconds);
+    return c.json(
+      {
+        orderId: order.orderId,
+        code: order.code,
+        currency: 'EUR',
+        totalCents: order.totalCents,
+        accessToken: order.accessToken,
+        payment: { ...order.payment, currency: 'EUR' },
+        items: order.items,
+      },
+      201,
+    );
+  });
+
+  route({ method: 'get', path: '/v1/beaches/:slug/orders/:orderId', summary: "The orderer's own order summary: every item with code, state and pass, the total and the payment", tag: 'Booking', auth: 'order-token', success: 200, errors: [400, 401, 404] }, async (c) => {
+    const beach = await beachBySlug(parse(slugSchema, c.req.param('slug'), 'beach club'));
+    const token = /^Bearer ([A-Za-z0-9_-]{20,200})$/.exec(c.req.header('Authorization') ?? '')?.[1];
+    if (!token) throw new HttpError(401, 'unauthenticated', 'The order token is required');
+    const view = await getOrder(db, beach.id, parse(z.uuid(), c.req.param('orderId'), 'order'), token, signingSecret);
+    return c.json({ ...view, currency: 'EUR', beach: publicBeach(beach) });
+  });
+
+  route({ method: 'get', path: '/v1/account/carts', summary: "The person's carts across beach clubs: the cart is found again from the account", tag: 'Account', auth: 'session', success: 200, errors: [401, 403] }, async (c) => {
+    const user = await currentUser(c.req.header('Authorization'));
+    const carts = await listMyCarts(db, user.userId);
+    return c.json({ carts: carts.map((row) => ({ ...row, updatedAt: row.updatedAt.toISOString() })) });
+  });
+
+  route({ method: 'post', path: '/v1/account/bookings/:groupId/extras', summary: 'Add extra services to an own confirmed booking; the balance becomes a payment request payable at /paga', tag: 'Account', auth: 'session', request: ownerExtrasSchema, success: 201, errors: [400, 401, 403, 404, 409, 422] }, async (c) => {
+    const user = await currentUser(c.req.header('Authorization'));
+    const groupId = parse(z.uuid(), c.req.param('groupId'), 'booking group');
+    const { extras } = parse(ownerExtrasSchema, await body(c.req.raw), 'extras');
+    const result = await addExtrasAsOwner(db, user.userId, { groupId, extras }, signingSecret, composeRequestMessage);
+    return c.json(
+      {
+        currency: 'EUR',
+        addedCents: result.addedCents,
+        totalCents: result.totalCents,
+        paidCents: result.paidCents,
+        remainingCents: result.remainingCents,
+        paymentState: result.paymentState,
+        paymentRequest: result.paymentRequest
+          ? {
+              requestId: result.paymentRequest.requestId,
+              amountCents: result.paymentRequest.amountCents,
+              expiresAt: result.paymentRequest.expiresAt.toISOString(),
+              payUrl: `${siteUrl}${payPath(result.paymentRequest.locale, result.paymentRequest.token)}`,
+            }
+          : null,
+      },
+      201,
+    );
   });
 
   // ---- Sign-in with an external identity (D48) ----
