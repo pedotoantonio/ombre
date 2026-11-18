@@ -1,5 +1,148 @@
 # Collaudo
 
+## Collaudo del 18/11/2026 — carrello, conto dell'Ospite, accesso Google e perizia d'usabilità
+
+Collaudo delle due commesse del 18/11: l'ampliamento della
+[specifica carrello e conto](specifica-carrello-conto.md) (D44–D48; commit `2191b09`
+specifica, `5bca555` migrazione 019 e conto nel dato, `f0d920a` email di piattaforma,
+`2766c87` rotte del conto, `15c8bed` identità esterna col fornitore di prova,
+`b2b8f54` migrazione 020 e modulo del carrello, `0ec349f` ordine e pagamento unico,
+`843da33` rotte del carrello e dell'ordine, `8263155` conto sul sito, `d1a6453`
+«Il mio conto», `6cd3f6e` carrello sul sito, `a66ef79` «Entra con Google») e la
+perizia d'usabilità applicata ([rapporto](perizia-usabilita.md); commit `82ee756`
+rapporto, `fc71ab1` pannello eliminato e quindici riscritture, `8a80cb8` «password»
+nelle email di conto). Eseguito sullo stack **fisso** `ombre-collaudo` (web
+`127.0.0.1:3232`, API `127.0.0.1:3231`) **ricostruito dal codice corrente con volume
+nuovo** (migrazioni 001–**020**, seed demo e vetrina, `OMBRE_SITE_URL=http://localhost:3210`
+come nei collaudi precedenti, e da questa iterazione **`OMBRE_OIDC_PROVIDER=test`**
+col suo segreto in `.env.collaudo`; il `compose.yaml` passa già le due variabili
+all'API — verificato, nessun difetto). Gate statici, le **otto** suite fumo in ordine
+su un database appena seminato — la nuova `smoke:conto` tra `smoke:site` e
+`smoke:booking` — e un giro dedicato ai criteri con `curl` (cookie jar, moduli
+GET/POST, HTML servito senza alcuno script) più verifiche a database. I numeri sono
+del ciclo finale, ripetuto per intero su volume nuovo.
+
+### La suite nuova: `smoke:conto`
+
+`scripts/smoke-conto.ts` (139 controlli, cablata in `package.json` e in
+`scripts/collaudo.sh`, che ora esporta anche il fornitore OIDC di prova) percorre da
+navigatore senza script: le pagine di registrazione in it e en e la **risposta neutra**
+(stessa Location, byte per byte, per email nuova ed email già registrata); l'àncora
+«Entra con Google (fornitore di prova)» sulle due pagine d'accesso; il **giro OIDC
+intero** (avvio → consenso locale → ritorno che posa la sessione); il percorso rapido
+senza conto **prima** del conto, con la stessa email, e poi «Il mio conto» che mostra
+quella prenotazione **ricollegata per email**, col pass e i tasti «Aggiungi un altro
+periodo» e «Aggiungi servizi»; il carrello anonimo con **due voci** (periodo 14–15/7 e
+giornata 16/7, intestatari diversi, extra sulla prima), totale complessivo 90,00 →
+100,00 con l'extra; «Conferma e paga» → **un ordine `ORD-…`, una prenotazione col suo
+pass per voce** (due codici `OM-…`, due QR), pagamento di prova, pagina dell'ordine
+anche in inglese, biglietto del carrello speso; e la scansione dei nomi vietati sulle
+pagine nuove. In `smoke.ts` le pagine `registrazione`/`register` e il carrello del
+Bagno delle Dune (it/en) sono entrati nel censimento dei nomi vietati (+40 controlli).
+
+### Test e collaudi fumo
+
+| Parte | Controlli | Esito |
+|---|---|---|
+| Lint e tipi (`pnpm lint`, `pnpm typecheck`) | tutto il codice | Superati |
+| Test con PostgreSQL vero (`pnpm test:db`) | **235** (38 shared, 9 comms, 31 db, 150 api, 7 worker), contratto OpenAPI a **112 rotte** | Superati |
+| Pagine pubbliche (`smoke`) | **453** | Superati |
+| Ricerca, planimetria e riserva (`smoke:flow`) | 72 | Superati |
+| Aree riservate (`smoke:areas`) | 85 | Superati |
+| Sito dello stabilimento (`smoke:site`) | 25 | Superati |
+| **Conto, Google e carrello (`smoke:conto`, nuova)** | **139** | Superati |
+| Prenotazione end-to-end (`smoke:booking`) | 15 | Superati |
+| Presa simultanea (`smoke:api`) | 13 | Superati |
+| Due passaggi (`smoke:2fa`) | 11 | Superati |
+
+In totale **813 controlli fumo**, tutti superati sul ciclo finale.
+
+### Criteri del carrello e del conto (specifica §9)
+
+1. **Carrello a più voci — superato.** Due voci con periodi diversi e intestatari
+   diversi («Prima Intestataria», «Secondo Intestatario»), extra per voce, totale
+   complessivo ricalcolato a ogni resa. *Nota:* nessuno stabilimento dimostrativo
+   semina servizi extra (lo notava già la perizia): il collaudo ne crea uno —
+   «Telo mare (collaudo)», 5,00 — **dalla pagina extra del Gestore**, cioè dal
+   percorso del proprietario, sul solo database di collaudo; i seed non sono toccati.
+2. **Una prenotazione per voce, un riepilogo unico — superato.** `ORD-261118-001`
+   con due gruppi (`OM-270714-…`, `OM-270716-…`), un pass ciascuno (contati anche a
+   database: un pass per gruppo), stati e totali sulla pagina dell'ordine, pagamento
+   unico «Saldata»; pagina negata col biglietto sbagliato (404).
+3. **Registrazione, email in coda, cambio obbligato — superato** (a mano, con
+   `curl` e `psql`). La riga di piattaforma (`notification` con `beach_id` NULL,
+   modello `account_created`) contiene la password nel corpo («Password provvisoria:
+   …», provider `log`, testo pronto e copiabile); l'accesso con quella password entra,
+   e **ogni** pagina dell'area risponde 307 verso `/area/password` (anche
+   `/en/account/overview` verso la sua) finché la password non cambia; «corta» è
+   rifiutata (`weak_password`), 12+ accettata, poi l'area torna normale. La
+   registrazione ripetuta produce la riga `account.exists` (coda `outbox` e
+   notifica); nel registro ci sono gli eventi di piattaforma `account.register`,
+   `account.change_password`, `account.identity_link` con `beach_id` NULL.
+4. **Storico e ricollegamento per email — superato.** Prenotazione rapida senza
+   conto con l'email poi usata su Google: al primo accesso OIDC «Le mie prenotazioni»
+   la mostra con pass, stato e totale, e il riepilogo in testa (arrivi e spesa); un
+   secondo accesso ritrova lo stesso storico, nessun conto doppio.
+5. **Aggiungere dal posto giusto — superato.** «Aggiungi un altro periodo» porta
+   alla scheda con la giornata precompilata; «Aggiungi servizi» (a mano) crea la
+   richiesta di pagamento e atterra su `/paga/{token}`: pagamento di prova,
+   «Pagamento ricevuto». Vale la nota del criterio 1 sugli extra dimostrativi.
+6. **«Entra con Google» sul fornitore di prova — superato.** Giro completo nella
+   suite; caso limite a mano: OIDC con l'email di un conto **che ha già la password**
+   entra nello stesso conto (un solo `app_user`, riga `user_identity` agganciata, il
+   nome resta quello del conto) e la password continua a valere. Le **chiavi reali**
+   di Google restano non esercitate: le fornirà il committente.
+7. **La prenotazione rapida non cambia — superato.** `smoke:flow` (72) e
+   `smoke:booking` (15) verdi come prima; nel riepilogo «Riserva la postazione» e
+   «Aggiungi al carrello» convivono, e la suite nuova completa un acquisto rapido
+   senza conto prima di toccare il conto.
+8. **Collaudato in due lingue senza JavaScript — superato.** Ogni percorso sopra è
+   HTML servito; registrazione, accesso, consenso, conto, carrello e ordine
+   verificati in italiano e inglese.
+
+### Criteri della perizia d'usabilità
+
+1. **Rapporto — superato.** [perizia-usabilita.md](perizia-usabilita.md): censimento
+   completo, cinque domande per blocco, esito e proposta già scritta per ciascuno.
+2. **Prima pagina coerente — superato.** Il pannello «Tutto in un posto solo» è
+   eliminato con motivo scritto (H5 nel rapporto) e non compare nell'HTML di `/` né
+   `/en`; il Gestore stabilimento resta visibile nel terzo tasto e nella carta di
+   «Per chi è», entrambi con collegamento (verificato sulle pagine rese, it e en).
+3. **Lessico vecchio assente — superato.** `names.test.ts` dentro `test:db` e il
+   censimento di `smoke.ts`, ora su sedici pagine (comprese registrazione e
+   carrello), tutti verdi.
+4. **Cinque domande sui blocchi rimasti — superato.** Esiti nel rapporto; eliminati:
+   uno (H5); spostati: nessuno, come il rapporto dichiara.
+5. **Pagine toccate collaudate — superato.** Le otto correzioni «giorno» → «giorno o
+   periodo» verificate sull'HTML servito in entrambe le lingue (passo 1 dei tre
+   passi, sottotitolo e stato vuoto della ricerca, sottotitolo + ancora e chiusura
+   della scheda del lido, passo «Cerca» e chiusura di come-funziona, chiusura
+   dell'assistenza), vecchie formule assenti, nota del periodo R5 allineata a L11
+   parola per parola.
+
+### Difetti trovati
+
+Nessun difetto del prodotto. Due falsi allarmi, annotati per onestà: un test
+(`account.test.ts`, ricollegamento per email) è scaduto una volta nel limite dei 5
+secondi mentre sulla stessa macchina giravano le build dei container — in
+isolamento e nel ciclo pulito passa; e la prima stesura della suite nuova contava i
+QR con un conteggio di `<svg>` che prendeva anche il marchio del sito — corretto
+nella suite (conteggio dei soli QR) prima del commit. Resta vera l'accortezza dei
+collaudi passati: le suite vanno nell'ordine del copione, `smoke:2fa` per ultima.
+
+### Lacune dichiarate
+
+- **Extra dimostrativi**: nessun seed li pubblica; il collaudo li esercita creandone
+  uno dal percorso del Gestore sul database di collaudo. Se si vuole che la demo li
+  mostri, va deciso (seed o dato dimostrativo nuovo).
+- **Google vero**: `OMBRE_OIDC_PROVIDER=google` non esercitato (servono le chiavi
+  del committente); il prompt chiede di registrare la dipendenza in `stato.md`, dove
+  **ancora non compare** tra le dipendenze esterne aperte.
+- **Comunicazioni di piattaforma**: leggibili solo in coda via database; nessuna
+  pagina le elenca (rimandato dichiarato in D45, confermato).
+- **Schermate nuove, stato.md e demo aggiornata**: voci di chiusura delle due
+  commesse, fuori dal perimetro di questo collaudo e non ancora presenti nel ramo.
+
 ## Collaudo del 18/11/2026 — fotografie vere nel repertorio dimostrativo
 
 Collaudo dell'incremento D43 (commit `2e92b66`: le nove fotografie Pexels al posto

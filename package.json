@@ -20,6 +20,7 @@
     "smoke:booking": "node scripts/smoke-booking.ts",
     "smoke:areas": "node scripts/smoke-areas.ts",
     "smoke:site": "node scripts/smoke-site.ts",
+    "smoke:conto": "node scripts/smoke-conto.ts",
     "smoke:2fa": "node scripts/smoke-2fa.ts",
     "collaudo": "sh scripts/collaudo.sh"
   },

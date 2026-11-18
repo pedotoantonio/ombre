@@ -9,6 +9,9 @@ export OMBRE_SEED_DEMO=true
 export OMBRE_DEMO_PASSWORD="collaudo-password-123"
 export OMBRE_SANDBOX_WEBHOOK_SECRET="collaudo-segreto-fornitore"
 export OMBRE_MAIL_PROVIDER=log
+# Identity provider di prova (D48): il collaudo del conto esercita l'intero giro OIDC.
+export OMBRE_OIDC_PROVIDER=test
+export OMBRE_OIDC_TEST_SECRET="collaudo-oidc-segreto-di-prova"
 # The acceptance stack declares its public address, so canonical/hreflang stay under test.
 export OMBRE_SITE_URL="http://localhost:3210"
 export OMBRE_WORKER_INTERVAL_SECONDS=2
@@ -40,7 +43,7 @@ done
 echo "Servizi pronti"
 
 step "Percorsi sul sito e sull'API in esecuzione"
-for check in smoke smoke:flow smoke:areas smoke:site smoke:booking smoke:api smoke:2fa; do
+for check in smoke smoke:flow smoke:areas smoke:site smoke:conto smoke:booking smoke:api smoke:2fa; do
   pnpm -s "$check" | tail -1
 done
 

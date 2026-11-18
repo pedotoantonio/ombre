@@ -231,7 +231,7 @@ const banishedNames = [
   'share your days',
   'manager area',
 ];
-const namePages = ['/', '/en', '/ricerca-ombrellone', '/en/umbrella-search', '/come-funziona', '/en/how-it-works', '/stagionale', '/en/season-holder', '/gestore-stabilimento', '/en/beach-manager', '/area/accesso', '/en/account/sign-in'];
+const namePages = ['/', '/en', '/ricerca-ombrellone', '/en/umbrella-search', '/come-funziona', '/en/how-it-works', '/stagionale', '/en/season-holder', '/gestore-stabilimento', '/en/beach-manager', '/area/accesso', '/en/account/sign-in', '/area/registrazione', '/en/account/register', '/bagni/bagno-delle-dune/carrello', '/en/beach-clubs/bagno-delle-dune/cart'];
 for (const path of namePages) {
   const html = (await (await fetch(base + path, { redirect: 'manual' })).text()).toLowerCase();
   for (const formula of banishedNames) {
