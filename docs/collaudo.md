@@ -1,5 +1,34 @@
 # Collaudo
 
+## Collaudo del 18/11/2026 — fotografie vere nel repertorio dimostrativo
+
+Collaudo dell'incremento D43 (commit `2e92b66`: le nove fotografie Pexels al posto
+delle illustrazioni SVG, registro [immagini-reali.md](immagini-reali.md), sito
+seminato del Bagno delle Dune con copertina e galleria), eseguito sullo stack fisso
+`ombre-collaudo` ricostruito dal codice corrente con volume nuovo.
+
+- **Statici e test**: lint e tipi puliti; tutti i test con database superati
+  (25 shared, 135 api, 6 worker, più db — nessun cambiamento di contratto: le
+  rotte restano 96).
+- **Fumo, nell'ordine del collaudo**: 412 + 72 (percorso ospite) + 85 (aree) +
+  25 (sito, ora a partire dal sito seminato del Bagno delle Dune: copertina
+  presente prima della prima bozza, numerazione delle bozze 2 e 4, due revisioni
+  archiviate) + 15 (prenotazione end-to-end) + 13 (presa simultanea) + 11 (due
+  passaggi) = **633 controlli, tutti superati**.
+- **Verifica a vista delle fonti**: le nove foto guardate una per una nei ritagli
+  pubblicati (1200×800): soggetti giusti, nessuna persona riconoscibile in primo
+  piano, nessuna insegna leggibile, nessuna filigrana. Due ritagli automatici
+  erano sbagliati (`tramonto` senza mare, `docce` senza soffione) e sono stati
+  rifatti a mano sulla fascia giusta.
+- **Pagine rese**: la scheda del Lido Aurora mostra copertina e sei foto di
+  galleria (`/demo/*.jpg`); la copertina compare nella lista della ricerca; il
+  Bagno delle Dune parte col sito seminato (nel collaudo il fumo del sito poi lo
+  ripubblica senza immagini, com'è scritto nel copione; nella demo resta).
+- **Un'accortezza emersa**: le suite fumo vanno nell'ordine del collaudo —
+  `smoke:2fa` attiva la verifica in due passaggi sulla contabilità, e un
+  `smoke:booking` ripetuto dopo fallisce l'accesso (`totp_required`). Non è un
+  difetto del prodotto.
+
 ## Collaudo del 18/11/2026 — tre ruoli e ricerca per periodo
 
 Collaudo dell'iterazione della [specifica ruoli e periodo](specifica-ruoli-periodo.md)
