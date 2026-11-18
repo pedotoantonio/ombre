@@ -54,10 +54,12 @@ describe.skipIf(!testAdminUrl)('sign-in, roles and inventory management', () => 
     expect((await send('GET', '/v1/me')).status).toBe(401);
     expect((await send('GET', '/v1/me', undefined, 'token-inventato-abbastanza-lungo')).status).toBe(401);
 
-    const me = (await (await send('GET', '/v1/me', undefined, manager())).json()) as { user: { email: string }; memberships: unknown[] };
+    const me = (await (await send('GET', '/v1/me', undefined, manager())).json()) as { user: { email: string; mustChangePassword: boolean }; memberships: unknown[] };
     expect(me.user.email).toBe('gestore@bagnodelledune.example');
     expect(me.memberships).toEqual([{ beachSlug: demoBeach.slug, beachName: demoBeach.name, role: 'manager' }]);
-    expect(JSON.stringify(me)).not.toMatch(/password|hash/i);
+    // The mustChangePassword flag (D44) is the one legitimate mention: no password or hash leaks.
+    expect(me.user.mustChangePassword).toBe(false);
+    expect(JSON.stringify({ ...me, user: { ...me.user, mustChangePassword: undefined } })).not.toMatch(/password|hash/i);
   });
 
   it('locks the account after five wrong passwords, even for the right one', async () => {

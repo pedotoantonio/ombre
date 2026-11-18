@@ -20,6 +20,7 @@ import {
   cabinHistory,
   cabinsToday,
   cancelByBeachClub,
+  changePassword,
   checkAccess,
   confirmTwoFactor,
   conventionStatement,
@@ -67,9 +68,13 @@ import {
   plannerGrid,
   plannerMaxDays,
   listMemberships,
+  listMyBookings,
   listSpotTypes,
   login,
   logout,
+  passwordMinLength,
+  registerAccount,
+  relinkBookings,
   moveBooking,
   nextAvailableDay,
   proposeDays,
@@ -168,10 +173,10 @@ export interface AppOptions {
 type Handler = (c: Context) => Response | Promise<Response>;
 
 class HttpError extends Error {
-  readonly status: 400 | 401 | 404 | 503;
+  readonly status: 400 | 401 | 403 | 404 | 422 | 503;
   readonly code: string;
 
-  constructor(status: 400 | 401 | 404 | 503, code: string, message: string) {
+  constructor(status: 400 | 401 | 403 | 404 | 422 | 503, code: string, message: string) {
     super(message);
     this.status = status;
     this.code = code;
@@ -223,6 +228,9 @@ const dayRequestSchema = z.object({
 });
 const codeSchema = z.string().regex(/^\d{6}$/);
 const loginSchema = z.object({ email: z.email().max(200), password: z.string().min(1).max(200), code: codeSchema.optional() });
+// The guest's account (D44): name and email, nothing else; the password is generated.
+const registerSchema = z.object({ name: z.string().trim().min(1).max(120), email: z.email().max(200), locale: z.enum(['it', 'en']).default('it') });
+const changePasswordSchema = z.object({ current: z.string().min(1).max(200), next: z.string().min(1).max(200) });
 const priceSchema = z.number().int().min(0).max(1_000_000);
 const publishSchema = z.object({ day: daySchema, priceCents: priceSchema, spotIds: z.array(z.uuid()).min(1).max(500).optional() });
 const blockSchema = z.object({ spotId: z.uuid(), day: daySchema, blocked: z.boolean(), reason: z.string().trim().max(200).optional() });
@@ -477,6 +485,8 @@ function publicBeach(beach: PublicBeach) {
 // Requests per minute and per client on the routes most exposed to abuse.
 const limits: Record<string, number> = {
   'post /v1/auth/login': 10,
+  // Registration is limited like the sign-in (D44).
+  'post /v1/account/register': 10,
   'post /v1/holds': 30,
   'post /v1/checkouts': 20,
   'post /v1/quotes': 120,
@@ -552,10 +562,15 @@ export function createApp(options: AppOptions): Hono {
     }
   }
 
-  async function currentUser(authorization: string | undefined): Promise<SessionUser & { token: string }> {
+  async function currentUser(authorization: string | undefined, options: { allowPendingPasswordChange?: boolean } = {}): Promise<SessionUser & { token: string }> {
     const token = /^Bearer ([A-Za-z0-9_-]{20,200})$/.exec(authorization ?? '')?.[1];
     const user = token ? await resolveSession(db, token) : null;
     if (!token || !user) throw new HttpError(401, 'unauthenticated', 'Sign in to continue');
+    // The forced first change (D44): until the generated password is replaced, the
+    // session only reads itself, signs out or changes the password.
+    if (user.mustChangePassword && !options.allowPendingPasswordChange) {
+      throw new HttpError(403, 'password_change_required', 'Change the generated password to continue');
+    }
     return { ...user, token };
   }
 
@@ -572,11 +587,13 @@ export function createApp(options: AppOptions): Hono {
   route({ method: 'post', path: '/v1/auth/login', summary: 'Sign in with email and password', tag: 'Sign-in', auth: 'none', request: loginSchema, success: 200, errors: [400, 401, 429] }, async (c) => {
     const credentials = parse(loginSchema, await body(c.req.raw), 'credentials');
     const session = await login(db, credentials.email, credentials.password, sessionSeconds, credentials.code);
+    // Orphan stays with this email join the account at every sign-in (D47).
+    await relinkBookings(db, session.userId, credentials.email);
     return c.json({ token: session.token, expiresAt: session.expiresAt.toISOString() });
   });
 
   route({ method: 'post', path: '/v1/auth/logout', summary: 'End the current session', tag: 'Sign-in', auth: 'session', success: 204, errors: [401] }, async (c) => {
-    const user = await currentUser(c.req.header('Authorization'));
+    const user = await currentUser(c.req.header('Authorization'), { allowPendingPasswordChange: true });
     await logout(db, user.token);
     return c.body(null, 204);
   });
@@ -599,12 +616,33 @@ export function createApp(options: AppOptions): Hono {
   });
 
   route({ method: 'get', path: '/v1/me', summary: 'The signed-in person and the beach clubs they belong to', tag: 'Sign-in', auth: 'session', success: 200, errors: [401] }, async (c) => {
-    const user = await currentUser(c.req.header('Authorization'));
+    const user = await currentUser(c.req.header('Authorization'), { allowPendingPasswordChange: true });
     const memberships = await listMemberships(db, user.userId);
     return c.json({
-      user: { email: user.email, name: user.name, platformRole: user.platformRole, twoFactor: user.twoFactor },
+      user: { email: user.email, name: user.name, platformRole: user.platformRole, twoFactor: user.twoFactor, mustChangePassword: user.mustChangePassword },
       memberships: memberships.map(({ beachSlug, beachName, role }) => ({ beachSlug, beachName, role })),
     });
+  });
+
+  // ---- The guest's account (D44, D47) ----
+  route({ method: 'post', path: '/v1/account/register', summary: 'Open an account with name and email; the password arrives by mail', tag: 'Account', auth: 'none', request: registerSchema, success: 201, errors: [400, 429] }, async (c) => {
+    const request = parse(registerSchema, await body(c.req.raw), 'registration');
+    // Created or already existing: both queue their mail and answer the same (D44).
+    await registerAccount(db, request);
+    return c.json({ result: 'ok' }, 201);
+  });
+
+  route({ method: 'post', path: '/v1/account/password', summary: 'Change the password of the signed-in person; clears the forced first change', tag: 'Account', auth: 'session', request: changePasswordSchema, success: 204, errors: [400, 401, 422] }, async (c) => {
+    const user = await currentUser(c.req.header('Authorization'), { allowPendingPasswordChange: true });
+    const { current, next } = parse(changePasswordSchema, await body(c.req.raw), 'password change');
+    if (next.length < passwordMinLength) throw new HttpError(422, 'weak_password', `The new password must be at least ${passwordMinLength} characters long`);
+    await changePassword(db, user.userId, current, next);
+    return c.body(null, 204);
+  });
+
+  route({ method: 'get', path: '/v1/account/bookings', summary: "«Le mie prenotazioni»: the person's stays across beach clubs, upcoming and past, with totals and passes", tag: 'Account', auth: 'session', success: 200, errors: [401, 403] }, async (c) => {
+    const user = await currentUser(c.req.header('Authorization'));
+    return c.json({ currency: 'EUR', ...(await listMyBookings(db, user.userId, signingSecret)) });
   });
 
   route({ method: 'get', path: '/v1/manage/beaches/:slug/inventory', summary: 'Every spot of a day with its state and price', tag: 'Beach club', auth: 'session', query: { day: 'YYYY-MM-DD' }, success: 200, errors: [400, 401, 403] }, async (c) => {
