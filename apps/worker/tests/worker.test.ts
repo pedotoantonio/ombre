@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Mail, MailProvider } from '@ombre/comms';
-import { acquireHold, applyPaymentOutcome, processOutbox, runMaintenance, setSplitRule, startCheckout } from '@ombre/db';
+import { acquireHold, applyPaymentOutcome, processOutbox, registerAccount, runMaintenance, setSplitRule, startCheckout } from '@ombre/db';
 import { createTestDatabase, insertBeach, testAdminUrl, type TestBeach, type TestDatabase } from '@ombre/db/testing';
 import { createHandler } from '../src/handlers';
 
@@ -113,5 +113,35 @@ describe.skipIf(!testAdminUrl)('worker: queue, expired holds, end of day', () =>
     const past = beach.spotIds[nextSpot + 1]!;
     await database.admin.query("UPDATE inventory_day SET day = current_date - 2 WHERE spot_id = $1", [past]);
     await expect(acquireHold(db(), beach.beachId, { spotId: past, day: new Date(Date.now() - 2 * 86_400_000).toISOString().slice(0, 10), idempotencyKey: `test-${randomUUID()}`, ttlSeconds: 600 })).rejects.toMatchObject({ code: 'inventory_conflict' });
+  });
+
+  // The account mails (D45): platform rows with no beach club, one per outcome.
+  it('sends the account mails and records them as platform notifications without a beach club', async () => {
+    // Drain what earlier tests left in the queue, so only the account mails remain.
+    await processOutbox(db(), handler(capture));
+    expect(await registerAccount(db(), { email: 'nino@example.org', name: 'Nino', locale: 'en' })).toBe('created');
+    expect(await registerAccount(db(), { email: 'nino@example.org', name: 'Nino', locale: 'it' })).toBe('exists');
+    const before = sent.length;
+    expect(await processOutbox(db(), handler(capture))).toEqual({ done: 2, failed: 0 });
+
+    const queued = await database.admin.query<{ payload: { password: string } }>("SELECT payload FROM outbox WHERE kind = 'account.created'");
+    // The queue does not promise an order between the two: find each mail by subject.
+    const batch = sent.slice(before);
+    const created = batch.find((mail) => mail.subject === 'Marchio: your account is ready')!;
+    expect(created.to).toBe('nino@example.org');
+    expect(created.text).toContain(`Temporary password: ${queued.rows[0]!.payload.password}`);
+    expect(created.text).toContain('https://esempio.test/en/account/sign-in');
+    const exists = batch.find((mail) => mail.subject === 'Marchio: hai già un conto')!;
+    expect(exists.text).toContain('https://esempio.test/area/accesso');
+    expect(exists.text).not.toContain('provvisoria');
+
+    const recorded = await database.admin.query<{ beach_id: string | null; template: string; status: string; recipient: string; body: string }>(
+      "SELECT beach_id, template, status, recipient, body FROM notification WHERE template LIKE 'account_%' ORDER BY template",
+    );
+    expect(recorded.rows.map((row) => ({ ...row, body: undefined }))).toEqual([
+      { beach_id: null, template: 'account_created', status: 'sent', recipient: 'nino@example.org', body: undefined },
+      { beach_id: null, template: 'account_exists', status: 'sent', recipient: 'nino@example.org', body: undefined },
+    ]);
+    expect(recorded.rows[0]!.body).toBe(created.text);
   });
 });

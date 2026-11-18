@@ -1084,7 +1084,12 @@ export function makeIt(brand: string) {
       colBooking: 'Prenotazione',
       colBody: 'Testo',
       templateName: (template: string) => {
-        const names: Record<string, string> = { payment_request: 'Richiesta di pagamento', booking_confirmed: 'Conferma di prenotazione' };
+        const names: Record<string, string> = {
+          payment_request: 'Richiesta di pagamento',
+          booking_confirmed: 'Conferma di prenotazione',
+          account_created: 'Conto creato',
+          account_exists: 'Conto già esistente',
+        };
         return names[template] ?? template;
       },
       statusNames: { queued: 'In coda', sent: 'Inviata', skipped: 'Saltata' },

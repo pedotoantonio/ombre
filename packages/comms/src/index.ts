@@ -122,6 +122,96 @@ export function formatDeadline(instant: Date, locale: Locale, timezone: string):
   return new Intl.DateTimeFormat(dateLocale[locale], { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: timezone }).format(instant);
 }
 
+export interface AccountCreatedMail {
+  brand: string;
+  locale: Locale;
+  name: string;
+  email: string;
+  /** The generated password (D44): it travels only in this mail, never in a page. */
+  password: string;
+  signInUrl: string;
+}
+
+/** Platform mail (D45): the new account with its generated password and the sign-in link. */
+export function accountCreatedMail(data: AccountCreatedMail): Mail {
+  if (data.locale === 'en') {
+    return {
+      to: data.email,
+      subject: `${data.brand}: your account is ready`,
+      text: [
+        `Hello ${data.name},`,
+        '',
+        `your ${data.brand} account has been created for the email ${data.email}.`,
+        '',
+        `Temporary password: ${data.password}`,
+        '',
+        'Sign in on this page; you will be asked to choose your own password right away:',
+        data.signInUrl,
+        '',
+        'Do not share this email: anyone who reads it can sign in to your account.',
+      ].join('\n'),
+    };
+  }
+  return {
+    to: data.email,
+    subject: `${data.brand}: il tuo conto è pronto`,
+    text: [
+      `Ciao ${data.name},`,
+      '',
+      `il tuo conto ${data.brand} è stato creato per l'email ${data.email}.`,
+      '',
+      `Parola d'ordine provvisoria: ${data.password}`,
+      '',
+      'Entra da questa pagina; ti verrà chiesto subito di scegliere una parola d\'ordine tua:',
+      data.signInUrl,
+      '',
+      'Non condividere questa email: chi la legge può entrare nel tuo conto.',
+    ].join('\n'),
+  };
+}
+
+export interface AccountExistsMail {
+  brand: string;
+  locale: Locale;
+  name: string;
+  email: string;
+  signInUrl: string;
+}
+
+/** Platform mail (D45): the address already has an account; the answer on the page said nothing. */
+export function accountExistsMail(data: AccountExistsMail): Mail {
+  if (data.locale === 'en') {
+    return {
+      to: data.email,
+      subject: `${data.brand}: you already have an account`,
+      text: [
+        `Hello ${data.name},`,
+        '',
+        `someone — probably you — asked to create a ${data.brand} account for the email ${data.email}, but an account with this email already exists.`,
+        '',
+        'You can sign in on this page with your password:',
+        data.signInUrl,
+        '',
+        'If the request was not yours you can ignore this email: your account has not changed.',
+      ].join('\n'),
+    };
+  }
+  return {
+    to: data.email,
+    subject: `${data.brand}: hai già un conto`,
+    text: [
+      `Ciao ${data.name},`,
+      '',
+      `qualcuno — probabilmente tu — ha chiesto di creare un conto ${data.brand} per l'email ${data.email}, ma un conto con questa email esiste già.`,
+      '',
+      'Puoi entrare da questa pagina con la tua parola d\'ordine:',
+      data.signInUrl,
+      '',
+      'Se la richiesta non è tua puoi ignorare questa email: il tuo conto non è cambiato.',
+    ].join('\n'),
+  };
+}
+
 export function bookingConfirmedMail(to: string, data: BookingMail): Mail {
   const total = formatMoney(data.totalCents, data.locale);
   // Beyond one day the mail names the whole dal–al period (D38), with the count of days,

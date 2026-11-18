@@ -1072,7 +1072,12 @@ export function makeEn(brand: string): Dictionary {
       colBooking: 'Booking',
       colBody: 'Text',
       templateName: (template: string) => {
-        const names: Record<string, string> = { payment_request: 'Payment request', booking_confirmed: 'Booking confirmation' };
+        const names: Record<string, string> = {
+          payment_request: 'Payment request',
+          booking_confirmed: 'Booking confirmation',
+          account_created: 'Account created',
+          account_exists: 'Account already exists',
+        };
         return names[template] ?? template;
       },
       statusNames: { queued: 'Queued', sent: 'Sent', skipped: 'Skipped' },
