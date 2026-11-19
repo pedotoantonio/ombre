@@ -2715,9 +2715,16 @@ dd .beach-badge,
 .pass__spot {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: var(--spazio-2);
   margin: var(--spazio-2) 0 0;
   color: var(--testo-secondario);
   font-size: 0.9375rem;
   font-weight: 700;
+}
+
+/* Il QR del pass riempie la tessera; il simbolo della postazione resta piccolo. */
+.pass .pass__spot .beach-spot {
+  width: 1.875rem;
+  height: 1.875rem;
 }
