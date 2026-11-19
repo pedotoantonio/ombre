@@ -8,7 +8,7 @@ import { enqueue } from './jobs';
 import { addExtrasToBooking, groupTotalsByGroup, paidCentsByGroup, passCredential, paymentStateOf, type PaymentState } from './bookings';
 import type { Actor } from './manage';
 import { createPaymentRequest, type CreatedPaymentRequest, type PayRequestMessageData } from './payment-requests';
-import { beach, booking, bookingGroup, inventoryDay, pass, spot } from './schema';
+import { beach, beachZone, booking, bookingGroup, inventoryDay, pass, spot } from './schema';
 
 // The guest's account (D44, D47, D48): registration with a generated password,
 // the forced first change, external identities and the history across beach clubs.
@@ -124,6 +124,8 @@ export interface MyBookingGroup {
   beachSlug: string;
   beachName: string;
   spotCode: string;
+  /** Name of the manager's named zone (D50); null when the spot belongs to none. */
+  zoneName: string | null;
   from: string;
   to: string;
   days: number;
@@ -184,10 +186,11 @@ export async function listMyBookings(db: Database, userId: string, secret: strin
       const passes = await tx.select({ groupId: pass.groupId, passId: pass.id, revoked: pass.revoked }).from(pass).where(inArray(pass.groupId, groupIds));
       const passOf = new Map(passes.map((row) => [row.groupId, row]));
       const dayRows = await tx
-        .select({ groupId: booking.groupId, status: booking.status, guestName: booking.guestName, day: inventoryDay.day, spotCode: spot.code })
+        .select({ groupId: booking.groupId, status: booking.status, guestName: booking.guestName, day: inventoryDay.day, spotCode: spot.code, zoneName: beachZone.name })
         .from(booking)
         .innerJoin(inventoryDay, eq(inventoryDay.id, booking.inventoryDayId))
         .innerJoin(spot, eq(spot.id, inventoryDay.spotId))
+        .leftJoin(beachZone, eq(beachZone.id, spot.namedZoneId))
         .where(inArray(booking.groupId, groupIds))
         .orderBy(asc(inventoryDay.day));
       const daysOf = new Map<string, typeof dayRows>();
@@ -215,6 +218,7 @@ export async function listMyBookings(db: Database, userId: string, secret: strin
           beachSlug: club.slug,
           beachName: club.name,
           spotCode: first.spotCode,
+          zoneName: first.zoneName,
           from: total?.from ?? first.day,
           to: total?.to ?? first.day,
           days: total?.days ?? members.length,

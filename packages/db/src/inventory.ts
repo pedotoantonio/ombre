@@ -142,6 +142,8 @@ export interface AvailableSpot {
   spotId: string;
   code: string;
   zone: SpotZone;
+  /** Name of the manager's named zone (D50); null when the spot belongs to none. */
+  zoneName: string | null;
   rowNumber: number;
   col: number;
   typeName: string;
@@ -171,6 +173,7 @@ export function listAvailability(db: Database, beachId: string, day: string, to:
         spotId: spot.id,
         code: spot.code,
         zone: spot.zone,
+        zoneName: beachZone.name,
         rowNumber: spot.rowNumber,
         col: spot.col,
         typeName: spotType.name,
@@ -184,9 +187,10 @@ export function listAvailability(db: Database, beachId: string, day: string, to:
       .from(inventoryDay)
       .innerJoin(spot, eq(spot.id, inventoryDay.spotId))
       .innerJoin(spotType, eq(spotType.id, spot.typeId))
+      .leftJoin(beachZone, eq(beachZone.id, spot.namedZoneId))
       .leftJoin(hold, eq(hold.id, inventoryDay.activeHoldId))
       .where(and(inArray(inventoryDay.day, days), eq(spot.retired, false), isFree))
-      .groupBy(spot.id, spot.code, spot.zone, spot.rowNumber, spot.col, spotType.name, spotType.mark, spot.umbrellas, spot.sunbeds, spot.maxGuests)
+      .groupBy(spot.id, spot.code, spot.zone, beachZone.name, spot.rowNumber, spot.col, spotType.name, spotType.mark, spot.umbrellas, spot.sunbeds, spot.maxGuests)
       .having(sql`count(*) = ${days.length}`)
       .orderBy(zoneOrder, asc(spot.rowNumber), asc(spot.col)),
   );
@@ -196,6 +200,8 @@ export interface DaySpot {
   spotId: string;
   code: string;
   zone: SpotZone;
+  /** Name of the manager's named zone (D50); null when the spot belongs to none. */
+  zoneName: string | null;
   rowNumber: number;
   /** Column inside the row: the drawing may leave holes, drawn as plain sand. */
   col: number;
@@ -226,6 +232,7 @@ export function listDayMap(db: Database, beachId: string, day: string, to: strin
         spotId: spot.id,
         code: spot.code,
         zone: spot.zone,
+        zoneName: beachZone.name,
         rowNumber: spot.rowNumber,
         col: spot.col,
         typeName: spotType.name,
@@ -239,10 +246,11 @@ export function listDayMap(db: Database, beachId: string, day: string, to: strin
       })
       .from(spot)
       .innerJoin(spotType, eq(spotType.id, spot.typeId))
+      .leftJoin(beachZone, eq(beachZone.id, spot.namedZoneId))
       .leftJoin(inventoryDay, and(eq(inventoryDay.spotId, spot.id), inArray(inventoryDay.day, days)))
       .leftJoin(hold, eq(hold.id, inventoryDay.activeHoldId))
       .where(eq(spot.retired, false))
-      .groupBy(spot.id, spot.code, spot.zone, spot.rowNumber, spot.col, spotType.name, spotType.mark, spot.umbrellas, spot.sunbeds, spot.maxGuests)
+      .groupBy(spot.id, spot.code, spot.zone, beachZone.name, spot.rowNumber, spot.col, spotType.name, spotType.mark, spot.umbrellas, spot.sunbeds, spot.maxGuests)
       .orderBy(zoneOrder, asc(spot.rowNumber), asc(spot.col));
     return rows.map(({ freeDays, priceCents, shared, ...place }) =>
       freeDays === days.length && priceCents !== null
@@ -340,6 +348,8 @@ export interface HoldView {
   from: string;
   to: string;
   spotCode: string;
+  /** Name of the manager's named zone (D50); null when the spot belongs to none. */
+  zoneName: string | null;
   rowNumber: number;
   umbrellas: number;
   sunbeds: number;
@@ -388,6 +398,7 @@ export async function getHold(db: Database, beachId: string, holdId: string): Pr
         live: sql<boolean>`${hold.status} = 'active' and ${hold.expiresAt} > now()`,
         day: inventoryDay.day,
         spotCode: spot.code,
+        zoneName: beachZone.name,
         rowNumber: spot.rowNumber,
         umbrellas: spot.umbrellas,
         sunbeds: spot.sunbeds,
@@ -395,6 +406,7 @@ export async function getHold(db: Database, beachId: string, holdId: string): Pr
       .from(hold)
       .innerJoin(inventoryDay, eq(inventoryDay.id, hold.inventoryDayId))
       .innerJoin(spot, eq(spot.id, inventoryDay.spotId))
+      .leftJoin(beachZone, eq(beachZone.id, spot.namedZoneId))
       .where(eq(hold.id, holdId));
     if (!row || row.hold.parentHoldId !== null) throw new DomainError('not_found', 'Hold not found');
     const members = await holdFamilyRows(tx, row.hold);
@@ -407,6 +419,7 @@ export async function getHold(db: Database, beachId: string, holdId: string): Pr
       from: members[0]?.day ?? row.day,
       to: members[members.length - 1]?.day ?? row.day,
       spotCode: row.spotCode,
+      zoneName: row.zoneName,
       rowNumber: row.rowNumber,
       umbrellas: row.umbrellas,
       sunbeds: row.sunbeds,

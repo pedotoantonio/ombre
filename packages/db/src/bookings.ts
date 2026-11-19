@@ -7,7 +7,7 @@ import { acquireHold, acquireHoldWithin, conventionAppliesOn, DomainError, perio
 import { enqueue } from './jobs';
 import { recordRefundDue, recordSale } from './ledger';
 import type { Actor } from './manage';
-import { accessEvent, allocation, auditEvent, beach, booking, bookingExtra, bookingGroup, cart, cartItem, cartItemExtra, hold, holdExtra, hotelConvention, inventoryDay, ledgerEntry, orderGroup, pass, payment, paymentRequest, promotion, providerEvent, refund, spot } from './schema';
+import { accessEvent, allocation, auditEvent, beach, beachZone, booking, bookingExtra, bookingGroup, cart, cartItem, cartItemExtra, hold, holdExtra, hotelConvention, inventoryDay, ledgerEntry, orderGroup, pass, payment, paymentRequest, promotion, providerEvent, refund, spot } from './schema';
 
 /** Signs identifiers so that links and passes cannot be guessed and need no stored secret per row. */
 function sign(secret: string, purpose: string, id: string): string {
@@ -555,7 +555,7 @@ export interface BookingView {
   from: string;
   to: string;
   days: BookingDayView[];
-  spot: { code: string; rowNumber: number; umbrellas: number; sunbeds: number };
+  spot: { code: string; zoneName: string | null; rowNumber: number; umbrellas: number; sunbeds: number };
   /** `total` is comprehensive: sum of the days' discounted prices + extras, chosen once per period. */
   quote: { listPrice: number; discount: number; total: number; promoCode: string | null; extrasCents: number; extras: ExtraLine[] };
   /** Text to show as a QR code, the same for every day of the group. Present only while the group is confirmed. */
@@ -569,10 +569,11 @@ export function getBooking(db: Database, beachId: string, bookingId: string, acc
   }
   return withBeach(db, beachId, async (tx) => {
     const [row] = await tx
-      .select({ booking, spot })
+      .select({ booking, spot, zoneName: beachZone.name })
       .from(booking)
       .innerJoin(inventoryDay, eq(inventoryDay.id, booking.inventoryDayId))
       .innerJoin(spot, eq(spot.id, inventoryDay.spotId))
+      .leftJoin(beachZone, eq(beachZone.id, spot.namedZoneId))
       .where(eq(booking.id, bookingId));
     if (!row) throw new DomainError('not_found', 'Booking not found');
     const members = await bookingsOfGroup(tx, row.booking.groupId);
@@ -616,7 +617,7 @@ export function getBooking(db: Database, beachId: string, bookingId: string, acc
         totalCents: member.booking.totalCents - member.booking.extrasCents,
         status: member.booking.status,
       })),
-      spot: { code: row.spot.code, rowNumber: row.spot.rowNumber, umbrellas: row.spot.umbrellas, sunbeds: row.spot.sunbeds },
+      spot: { code: row.spot.code, zoneName: row.zoneName, rowNumber: row.spot.rowNumber, umbrellas: row.spot.umbrellas, sunbeds: row.spot.sunbeds },
       quote: {
         listPrice,
         discount,
@@ -633,6 +634,8 @@ export function getBooking(db: Database, beachId: string, bookingId: string, acc
 export interface AccessResult {
   code: string;
   spotCode: string;
+  /** Name of the manager's named zone (D50); null when the spot belongs to none. */
+  zoneName: string | null;
   guestName: string;
   presence: (typeof booking.$inferSelect)['presence'];
   /** What the front desk hands over with the pass (spec §4.2): the extras of the period. */
@@ -669,11 +672,13 @@ export function checkAccess(db: Database, actor: Actor, input: { credential: str
         bookingId: booking.id,
         status: booking.status,
         spotCode: spot.code,
+        zoneName: beachZone.name,
         today: sql<boolean>`${inventoryDay.day} = (now() at time zone ${beach.timezone})::date`,
       })
       .from(booking)
       .innerJoin(inventoryDay, eq(inventoryDay.id, booking.inventoryDayId))
       .innerJoin(spot, eq(spot.id, inventoryDay.spotId))
+      .leftJoin(beachZone, eq(beachZone.id, spot.namedZoneId))
       .innerJoin(beach, eq(beach.id, booking.beachId))
       .where(eq(booking.groupId, groupId))
       .orderBy(asc(inventoryDay.day));
@@ -692,7 +697,7 @@ export function checkAccess(db: Database, actor: Actor, input: { credential: str
     await tx.insert(accessEvent).values({ beachId: actor.beachId, bookingId: reserved.id, kind: input.kind, operatorUserId: actor.userId });
     await tx.insert(auditEvent).values({ beachId: actor.beachId, actorUserId: actor.userId, action: `access.${input.kind}`, target: reserved.code, detail: {} });
     const extras = (await groupExtraLines(tx, groupId)).map((line) => ({ name: line.name, quantity: line.quantity }));
-    return { code: reserved.code, spotCode: current.spotCode, guestName: reserved.guestName, presence: target, extras };
+    return { code: reserved.code, spotCode: current.spotCode, zoneName: current.zoneName, guestName: reserved.guestName, presence: target, extras };
   });
 }
 
@@ -705,6 +710,8 @@ export interface BookingRow {
   presence: (typeof booking.$inferSelect)['presence'];
   guestName: string;
   spotCode: string;
+  /** Name of the manager's named zone (D50); null when the spot belongs to none. */
+  zoneName: string | null;
   /** Period of the group this day belongs to; from = to for a single day. */
   from: string;
   to: string;
@@ -728,10 +735,12 @@ export function listBookings(db: Database, actor: Actor, day: string): Promise<B
         presence: booking.presence,
         guestName: booking.guestName,
         spotCode: spot.code,
+        zoneName: beachZone.name,
       })
       .from(booking)
       .innerJoin(inventoryDay, eq(inventoryDay.id, booking.inventoryDayId))
       .innerJoin(spot, eq(spot.id, inventoryDay.spotId))
+      .leftJoin(beachZone, eq(beachZone.id, spot.namedZoneId))
       .where(eq(inventoryDay.day, day))
       .orderBy(asc(booking.code));
     const groupIds = [...new Set(rows.map((row) => row.groupId))];
@@ -1132,6 +1141,8 @@ export interface OrderItemResult {
   /** Code of the booking group born from this cart item. */
   code: string;
   spotCode: string;
+  /** Name of the manager's named zone (D50); null when the spot belongs to none. */
+  zoneName: string | null;
   from: string;
   to: string;
 }
@@ -1170,9 +1181,10 @@ export async function confirmOrder(db: Database, beachId: string, input: Confirm
       const [basket] = await tx.select().from(cart).where(eq(cart.id, input.cartId));
       if (!basket) throw new DomainError('not_found', 'Cart not found');
       const items = await tx
-        .select({ item: cartItem, spotCode: spot.code })
+        .select({ item: cartItem, spotCode: spot.code, zoneName: beachZone.name })
         .from(cartItem)
         .innerJoin(spot, eq(spot.id, cartItem.spotId))
+        .leftJoin(beachZone, eq(beachZone.id, spot.namedZoneId))
         .where(eq(cartItem.cartId, input.cartId))
         .orderBy(asc(cartItem.createdAt), asc(cartItem.id));
       if (items.length === 0) throw new DomainError('invalid_state', 'The cart is empty');
@@ -1242,7 +1254,7 @@ export async function confirmOrder(db: Database, beachId: string, input: Confirm
       if (!order) throw new Error('order was not created');
 
       const created: OrderItemResult[] = [];
-      for (const [index, { item, spotCode }] of items.entries()) {
+      for (const [index, { item, spotCode, zoneName }] of items.entries()) {
         const members = await lockedHoldFamily(tx, holds[index]!.holdId);
         const { group } = await createGroupFromHolds(tx, beachId, members, {
           holdId: holds[index]!.holdId,
@@ -1254,7 +1266,7 @@ export async function confirmOrder(db: Database, beachId: string, input: Confirm
           userId,
           orderId: order.id,
         });
-        created.push({ code: group.code, spotCode, from: holds[index]!.from, to: holds[index]!.to });
+        created.push({ code: group.code, spotCode, zoneName, from: holds[index]!.from, to: holds[index]!.to });
       }
 
       const reference = `sbx_${randomBytes(12).toString('hex')}`;
@@ -1289,6 +1301,8 @@ export async function confirmOrder(db: Database, beachId: string, input: Confirm
 export interface OrderItemView {
   code: string;
   spotCode: string;
+  /** Name of the manager's named zone (D50); null when the spot belongs to none. */
+  zoneName: string | null;
   from: string;
   to: string;
   guestName: string;
@@ -1326,10 +1340,11 @@ export function getOrder(db: Database, beachId: string, orderId: string, accessT
     const passOf = new Map(passes.map((row) => [row.groupId, row]));
     const dayRows = groupIds.length > 0
       ? await tx
-          .select({ groupId: booking.groupId, status: booking.status, guestName: booking.guestName, day: inventoryDay.day, spotCode: spot.code })
+          .select({ groupId: booking.groupId, status: booking.status, guestName: booking.guestName, day: inventoryDay.day, spotCode: spot.code, zoneName: beachZone.name })
           .from(booking)
           .innerJoin(inventoryDay, eq(inventoryDay.id, booking.inventoryDayId))
           .innerJoin(spot, eq(spot.id, inventoryDay.spotId))
+          .leftJoin(beachZone, eq(beachZone.id, spot.namedZoneId))
           .where(inArray(booking.groupId, groupIds))
           .orderBy(asc(inventoryDay.day))
       : [];
@@ -1352,6 +1367,7 @@ export function getOrder(db: Database, beachId: string, orderId: string, accessT
       return {
         code: group.code,
         spotCode: members[0]?.spotCode ?? '',
+        zoneName: members[0]?.zoneName ?? null,
         from: total?.from ?? members[0]?.day ?? '',
         to: total?.to ?? members[members.length - 1]?.day ?? '',
         guestName: members[0]?.guestName ?? order.guestName,

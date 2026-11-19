@@ -4,7 +4,7 @@ import { groupTotalsByGroup, lockGroup, paidCentsOfGroup, paymentStateOf, type P
 import { withActor, withBeach, type Database, type Transaction } from './client';
 import { DomainError } from './inventory';
 import type { Actor } from './manage';
-import { auditEvent, beach, booking, bookingGroup, inventoryDay, notification, payment, paymentRequest, spot } from './schema';
+import { auditEvent, beach, beachZone, booking, bookingGroup, inventoryDay, notification, payment, paymentRequest, spot } from './schema';
 
 // Payment requests (deposit or balance, spec §4.3, D31 — at GROUP level since
 // D38: one request asks for part of the residual of the whole period). The
@@ -41,10 +41,11 @@ async function groupDetail(tx: Transaction, code: string) {
   const [group] = await tx.select().from(bookingGroup).where(eq(bookingGroup.code, code.toUpperCase()));
   if (!group) throw new DomainError('not_found', 'Booking not found');
   const members = await tx
-    .select({ booking, day: inventoryDay.day, spotCode: spot.code, beachName: beach.name, timezone: beach.timezone })
+    .select({ booking, day: inventoryDay.day, spotCode: spot.code, zoneName: beachZone.name, beachName: beach.name, timezone: beach.timezone })
     .from(booking)
     .innerJoin(inventoryDay, eq(inventoryDay.id, booking.inventoryDayId))
     .innerJoin(spot, eq(spot.id, inventoryDay.spotId))
+    .leftJoin(beachZone, eq(beachZone.id, spot.namedZoneId))
     .innerJoin(beach, eq(beach.id, booking.beachId))
     .where(eq(booking.groupId, group.id))
     .orderBy(asc(inventoryDay.day));
@@ -239,6 +240,8 @@ export interface BookingPaymentRequests {
   from: string;
   to: string;
   spotCode: string;
+  /** Name of the manager's named zone (D50); null when the spot belongs to none. */
+  zoneName: string | null;
   totalCents: number;
   paidCents: number;
   remainingCents: number;
@@ -270,6 +273,7 @@ export function listPaymentRequests(db: Database, actor: Actor, code: string, se
       from: detail.from,
       to: detail.to,
       spotCode: detail.lead.spotCode,
+      zoneName: detail.lead.zoneName,
       totalCents: detail.totalCents,
       paidCents,
       remainingCents: Math.max(0, detail.totalCents - paidCents),
@@ -309,6 +313,8 @@ export interface PublicPayRequest {
   from: string;
   to: string;
   spotCode: string;
+  /** Name of the manager's named zone (D50); null when the spot belongs to none. */
+  zoneName: string | null;
   amountCents: number;
   expiresAt: Date;
 }
@@ -327,11 +333,12 @@ export async function readPayRequest(db: Database, token: string, secret: string
   await withBeach(db, beachId, (tx) => expireLazily(tx, requestId));
   return withBeach(db, beachId, async (tx) => {
     const [row] = await tx
-      .select({ request: paymentRequest, alive: groupAlive, day: inventoryDay.day, spotCode: spot.code, beachName: beach.name, beachSlug: beach.slug })
+      .select({ request: paymentRequest, alive: groupAlive, day: inventoryDay.day, spotCode: spot.code, zoneName: beachZone.name, beachName: beach.name, beachSlug: beach.slug })
       .from(paymentRequest)
       .innerJoin(booking, eq(booking.id, paymentRequest.bookingId))
       .innerJoin(inventoryDay, eq(inventoryDay.id, booking.inventoryDayId))
       .innerJoin(spot, eq(spot.id, inventoryDay.spotId))
+      .leftJoin(beachZone, eq(beachZone.id, spot.namedZoneId))
       .innerJoin(beach, eq(beach.id, paymentRequest.beachId))
       .where(eq(paymentRequest.id, requestId));
     if (!row || row.request.status !== 'pending' || !row.alive) throw unavailable();
@@ -344,6 +351,7 @@ export async function readPayRequest(db: Database, token: string, secret: string
       from: totals?.from ?? row.day,
       to: totals?.to ?? row.day,
       spotCode: row.spotCode,
+      zoneName: row.zoneName,
       amountCents: row.request.amountCents,
       expiresAt: row.request.expiresAt,
     };

@@ -2,7 +2,7 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 import { and, asc, desc, eq, sql } from 'drizzle-orm';
 import { withBeach, withUser, type Database, type Transaction } from './client';
 import { DomainError, normalizePromo, periodDays, priceExtras, quoteSpotWithin, type ExtraRequest, type PurchaseQuote } from './inventory';
-import { beach, cart, cartItem, cartItemExtra, spot, spotType } from './schema';
+import { beach, beachZone, cart, cartItem, cartItemExtra, spot, spotType } from './schema';
 
 // The cart (D46): it lives on the server, belongs to ONE beach club and
 // reserves nothing. Without an account the browser carries only a signed
@@ -193,7 +193,7 @@ export function claimCart(db: Database, beachId: string, cartId: string, userId:
 export interface CartItemView {
   itemId: string;
   spotId: string;
-  spot: { code: string; rowNumber: number; zone: string; typeName: string; typeMark: string; umbrellas: number; sunbeds: number };
+  spot: { code: string; zoneName: string | null; rowNumber: number; zone: string; typeName: string; typeMark: string; umbrellas: number; sunbeds: number };
   from: string;
   to: string;
   guestName: string;
@@ -228,10 +228,11 @@ export function getCart(db: Database, beachId: string, cartId: string): Promise<
   return withBeach(db, beachId, async (tx) => {
     const found = await cartOrRefuse(tx, cartId);
     const rows = await tx
-      .select({ item: cartItem, spot, typeName: spotType.name, typeMark: spotType.mark })
+      .select({ item: cartItem, spot, typeName: spotType.name, typeMark: spotType.mark, zoneName: beachZone.name })
       .from(cartItem)
       .innerJoin(spot, eq(spot.id, cartItem.spotId))
       .innerJoin(spotType, eq(spotType.id, spot.typeId))
+      .leftJoin(beachZone, eq(beachZone.id, spot.namedZoneId))
       .where(eq(cartItem.cartId, cartId))
       .orderBy(asc(cartItem.createdAt), asc(cartItem.id));
     const extrasRows = rows.length > 0
@@ -258,7 +259,7 @@ export function getCart(db: Database, beachId: string, cartId: string): Promise<
       items.push({
         itemId: row.item.id,
         spotId: row.item.spotId,
-        spot: { code: row.spot.code, rowNumber: row.spot.rowNumber, zone: row.spot.zone, typeName: row.typeName, typeMark: row.typeMark, umbrellas: row.spot.umbrellas, sunbeds: row.spot.sunbeds },
+        spot: { code: row.spot.code, zoneName: row.zoneName, rowNumber: row.spot.rowNumber, zone: row.spot.zone, typeName: row.typeName, typeMark: row.typeMark, umbrellas: row.spot.umbrellas, sunbeds: row.spot.sunbeds },
         from: row.item.dayFrom,
         to: row.item.dayTo,
         guestName: row.item.guestName,

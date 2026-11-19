@@ -5,7 +5,7 @@ import { groupTotalsByGroup, paidCentsOfGroup, paymentStateOf, type PaymentState
 import { withActor, type Database } from './client';
 import { DomainError, zoneOrder, type SpotZone } from './inventory';
 import type { Actor } from './manage';
-import { auditEvent, booking, hold, inventoryDay, promotion, spot, spotType } from './schema';
+import { auditEvent, beachZone, booking, hold, inventoryDay, promotion, spot, spotType } from './schema';
 
 /**
  * Operational state of a spot on a day, for the "Today on the beach" console.
@@ -193,6 +193,8 @@ export interface SpotCard {
   spotId: string;
   code: string;
   zone: SpotZone;
+  /** Name of the manager's named zone (D50); null when the spot belongs to none. */
+  zoneName: string | null;
   rowNumber: number;
   col: number;
   typeName: string;
@@ -228,6 +230,7 @@ export function spotCard(db: Database, actor: Actor, input: { day: string; code:
         spotId: spot.id,
         code: spot.code,
         zone: spot.zone,
+        zoneName: beachZone.name,
         rowNumber: spot.rowNumber,
         col: spot.col,
         typeName: spotType.name,
@@ -251,6 +254,7 @@ export function spotCard(db: Database, actor: Actor, input: { day: string; code:
       })
       .from(spot)
       .innerJoin(spotType, eq(spotType.id, spot.typeId))
+      .leftJoin(beachZone, eq(beachZone.id, spot.namedZoneId))
       .leftJoin(inventoryDay, and(eq(inventoryDay.spotId, spot.id), eq(inventoryDay.day, input.day)))
       .leftJoin(hold, eq(hold.id, inventoryDay.activeHoldId))
       .leftJoin(booking, and(eq(booking.inventoryDayId, inventoryDay.id), inArray(booking.status, ['confirmed', 'completed'])))
@@ -303,6 +307,7 @@ export function spotCard(db: Database, actor: Actor, input: { day: string; code:
       spotId: row.spotId,
       code: row.code,
       zone: row.zone,
+      zoneName: row.zoneName,
       rowNumber: row.rowNumber,
       col: row.col,
       typeName: row.typeName,
