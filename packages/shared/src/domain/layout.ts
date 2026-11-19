@@ -15,6 +15,15 @@ export const rentalNotesMaxLength = 500;
 /** Empty corridor rows between zones: 0 means adjacent, 10 is the widest gap. */
 export const maxGapRows = 10;
 
+/**
+ * Named zones of the layout (D50): a proper noun written by the manager, identical
+ * in both languages, distinct from the physical band (riva|ombrelloni|monte).
+ */
+export const zoneNameMinLength = 2;
+export const zoneNameMaxLength = 40;
+/** At most this many named zones per beach club, applied in the code. */
+export const maxNamedZones = 20;
+
 /** Side of the drawing where the sea band sits. Only the block order flips; the DOM order never does. */
 export const seaSides = ['top', 'bottom'] as const;
 export type SeaSide = (typeof seaSides)[number];

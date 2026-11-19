@@ -3,7 +3,7 @@ import { decorationSigns, maxColumns, maxGapRows, rentalNotesMaxLength, rentalTy
 import { withActor, type Database, type Transaction } from './client';
 import { DomainError, zoneOrder, type SpotZone } from './inventory';
 import type { Actor } from './manage';
-import { auditEvent, beach, cabin, inventoryDay, layoutElement, seasonContract, spot, spotType } from './schema';
+import { auditEvent, beach, beachZone, cabin, inventoryDay, layoutElement, seasonContract, spot, spotType } from './schema';
 
 function pgCode(error: unknown): string | undefined {
   const candidate = error as { code?: string; cause?: { code?: string } } | null;
@@ -63,6 +63,9 @@ export interface LayoutSpot {
   rentalType: string | null;
   rentalNotes: string | null;
   retired: boolean;
+  /** The named zone of the spot (D50); both null when it belongs to none. */
+  namedZoneId: string | null;
+  zoneName: string | null;
   /** The season contract that covers today, if any: the operational truth next to the label. */
   activeContract: ActiveContract | null;
 }
@@ -99,6 +102,8 @@ export function getLayout(db: Database, actor: Actor): Promise<BeachLayout> {
         rentalType: spot.rentalType,
         rentalNotes: spot.rentalNotes,
         retired: spot.retired,
+        namedZoneId: spot.namedZoneId,
+        zoneName: beachZone.name,
         contractId: seasonContract.id,
         validFrom: seasonContract.validFrom,
         validTo: seasonContract.validTo,
@@ -106,6 +111,7 @@ export function getLayout(db: Database, actor: Actor): Promise<BeachLayout> {
       })
       .from(spot)
       .innerJoin(spotType, eq(spotType.id, spot.typeId))
+      .leftJoin(beachZone, eq(beachZone.id, spot.namedZoneId))
       // At most one contract covers today: overlapping periods are excluded by the schema.
       .leftJoin(
         seasonContract,

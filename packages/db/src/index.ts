@@ -22,4 +22,5 @@ export * from './seed';
 export * from './sharing';
 export * from './showcase';
 export * from './site';
+export * from './zones';
 export * as schema from './schema';

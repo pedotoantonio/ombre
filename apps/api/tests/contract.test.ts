@@ -25,7 +25,7 @@ describe('API contract', () => {
       .flatMap(([path, methods]) => Object.keys(methods).map((method) => `${method} ${path}`))
       .sort();
     expect(described).toEqual(served);
-    expect(described).toHaveLength(113);
+    expect(described).toHaveLength(118);
 
     for (const methods of Object.values(document.paths)) {
       for (const operation of Object.values(methods)) {

@@ -13,6 +13,8 @@ import {
   addRows,
   addSpot,
   applyPaymentOutcome,
+  assignZoneToRow,
+  assignZoneToSpot,
   cancelPaymentRequest,
   collectAtDesk,
   createPaymentRequest,
@@ -37,6 +39,7 @@ import {
   createConvention,
   createExtraService,
   createSpotType,
+  createZone,
   decideProposal,
   decideSublet,
   deleteCabin,
@@ -44,6 +47,7 @@ import {
   deleteExtraService,
   deleteSpot,
   deleteSpotType,
+  deleteZone,
   deskBooking,
   DomainError,
   endAssignment,
@@ -82,6 +86,7 @@ import {
   listMyBookings,
   listMyCarts,
   listSpotTypes,
+  listZones,
   locateCartBeach,
   login,
   logout,
@@ -97,6 +102,7 @@ import {
   readPayRequest,
   removeElement,
   removeItem,
+  renameZone,
   reportSummary,
   resolveSession,
   restoreRevision,
@@ -162,6 +168,8 @@ import {
   spotTypeNameMaxLength,
   spotZones,
   suggestSpot,
+  zoneNameMaxLength,
+  zoneNameMinLength,
   type Action,
   type DayQuote,
 } from '@ombre/shared';
@@ -496,9 +504,14 @@ const subletProposalSchema = z.object({
   occupantContact: z.string().trim().min(1).max(holderContactMaxLength).optional(),
 });
 const subletDecisionSchema = z.object({ approve: z.boolean() });
-// Absent leaves a field as it is; an explicit null clears an annotation.
+// ---- Named zones of the layout (D50) ----
+const zoneNameSchema = z.string().trim().min(zoneNameMinLength).max(zoneNameMaxLength);
+const zoneBodySchema = z.object({ name: zoneNameSchema });
+// Like the rental per row: the physical band and the row pick the spots, zoneId null detaches them.
+const rowZoneSchema = z.object({ zone: zoneSchema, rowNumber: z.number().int().min(1).max(200), zoneId: z.uuid().nullable() });
+// Absent leaves a field as it is; an explicit null clears an annotation or detaches the zone.
 const updateSpotSchema = z
-  .object({ ...equipmentFields, rentalType: rentalTypeSchema.nullable().optional(), rentalNotes: rentalNotesSchema.nullable().optional() })
+  .object({ ...equipmentFields, rentalType: rentalTypeSchema.nullable().optional(), rentalNotes: rentalNotesSchema.nullable().optional(), namedZoneId: z.uuid().nullable().optional() })
   .refine((change) => Object.values(change).some((value) => value !== undefined));
 const rowRentalSchema = z.object({ zone: zoneSchema, rowNumber: z.number().int().min(1).max(200), rentalType: rentalTypeSchema.nullable(), rentalNotes: rentalNotesSchema.nullable() });
 const retiredSchema = z.object({ retired: z.boolean() });
@@ -1488,14 +1501,45 @@ export function createApp(options: AppOptions): Hono {
     return c.json(await setRowRental(db, actor, parse(rowRentalSchema, await body(c.req.raw), 'rental')));
   });
 
+  // ---- Named zones of the layout (D50): they live with the planimetria ----
+  route({ method: 'get', path: '/v1/manage/beaches/:slug/zones', summary: 'Named zones of the beach club, each with its spot count', tag: 'Beach club', auth: 'session', success: 200, errors: [401, 403] }, async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'layout.edit');
+    return c.json({ zones: await listZones(db, actor) });
+  });
+
+  route({ method: 'post', path: '/v1/manage/beaches/:slug/zones', summary: 'Create a named zone (at most 20 per beach club, name unique)', tag: 'Beach club', auth: 'session', request: zoneBodySchema, success: 201, errors: [400, 401, 403, 409] }, async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'layout.edit');
+    return c.json(await createZone(db, actor, parse(zoneBodySchema, await body(c.req.raw), 'zone')), 201);
+  });
+
+  route({ method: 'put', path: '/v1/manage/beaches/:slug/zones/:zoneId', summary: 'Rename a named zone; every label that shows the name follows', tag: 'Beach club', auth: 'session', request: zoneBodySchema, success: 204, errors: [400, 401, 403, 404, 409] }, async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'layout.edit');
+    await renameZone(db, actor, { zoneId: parse(z.uuid(), c.req.param('zoneId'), 'zone'), ...parse(zoneBodySchema, await body(c.req.raw), 'zone') });
+    return c.body(null, 204);
+  });
+
+  route({ method: 'delete', path: '/v1/manage/beaches/:slug/zones/:zoneId', summary: 'Delete a named zone; its spots stay, detached', tag: 'Beach club', auth: 'session', success: 200, errors: [400, 401, 403, 404] }, async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'layout.edit');
+    return c.json(await deleteZone(db, actor, { zoneId: parse(z.uuid(), c.req.param('zoneId'), 'zone') }));
+  });
+
+  route({ method: 'put', path: '/v1/manage/beaches/:slug/layout/rows/zone', summary: 'Assign one named zone to every spot of a row, or detach the whole row with null', tag: 'Beach club', auth: 'session', request: rowZoneSchema, success: 200, errors: [400, 401, 403, 404] }, async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'layout.edit');
+    return c.json(await assignZoneToRow(db, actor, parse(rowZoneSchema, await body(c.req.raw), 'row zone')));
+  });
+
   route({ method: 'post', path: '/v1/manage/beaches/:slug/layout/spots', summary: 'Add a single spot, such as a shore sunbed', tag: 'Beach club', auth: 'session', request: addSpotSchema, success: 201, errors: [400, 401, 403, 409] }, async (c) => {
     const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'layout.edit');
     return c.json(await addSpot(db, actor, parse(addSpotSchema, await body(c.req.raw), 'spot')), 201);
   });
 
-  route({ method: 'put', path: '/v1/manage/beaches/:slug/layout/spots/:spotId', summary: 'Change equipment, capacity or rental annotations of a spot', tag: 'Beach club', auth: 'session', request: updateSpotSchema, success: 204, errors: [400, 401, 403, 404] }, async (c) => {
+  route({ method: 'put', path: '/v1/manage/beaches/:slug/layout/spots/:spotId', summary: 'Change equipment, capacity, rental annotations or named zone of a spot', tag: 'Beach club', auth: 'session', request: updateSpotSchema, success: 204, errors: [400, 401, 403, 404] }, async (c) => {
     const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'layout.edit');
-    await updateSpot(db, actor, { spotId: parse(z.uuid(), c.req.param('spotId'), 'spot'), ...parse(updateSpotSchema, await body(c.req.raw), 'change') });
+    const spotId = parse(z.uuid(), c.req.param('spotId'), 'spot');
+    // The named zone travels with the spot edit form (D50): null detaches the spot.
+    const { namedZoneId, ...change } = parse(updateSpotSchema, await body(c.req.raw), 'change');
+    if (namedZoneId !== undefined) await assignZoneToSpot(db, actor, { spotId, zoneId: namedZoneId });
+    if (Object.values(change).some((value) => value !== undefined)) await updateSpot(db, actor, { spotId, ...change });
     return c.body(null, 204);
   });
 
