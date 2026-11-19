@@ -152,7 +152,8 @@ describe.skipIf(!testAdminUrl)('operational console and bulk blocks', () => {
     expect(byCode.A02!.bookingCode).toBe(codes.a02);
     expect(byCode.A02!).toMatchObject({ typeName: 'Ombrellone', typeMark: 'umbrella', umbrellas: 1, sunbeds: 2, maxGuests: 2, col: 2 });
 
-    expect(view.summary.counts).toEqual({ free: 2, reserved: 1, expected: 1, present: 1, departed: 1, blocked: 1, not_for_sale: 2 });
+    // Maintenance (D56) joined the operational states: zero here, nobody is under the wrench.
+    expect(view.summary.counts).toEqual({ free: 2, reserved: 1, expected: 1, present: 1, departed: 1, blocked: 1, not_for_sale: 2, maintenance: 0 });
     expect(view.summary.expectedGuests).toBe(1);
     expect(view.summary.presentGuests).toBe(1);
     // Three sold days at 30.00 each.
