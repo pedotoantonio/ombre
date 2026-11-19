@@ -196,6 +196,8 @@ describe.skipIf(!testAdminUrl)('position on the map and layout of the beach', ()
     const actions = trail.rows.map((row) => row.action).sort();
     expect(actions).toEqual([
       'beach.position',
+      // The demo seed draws its scene through addElement, audited like every drawing.
+      'layout.element-add',
       'layout.gaps',
       'layout.restore',
       'layout.retire',

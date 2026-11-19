@@ -94,8 +94,9 @@ describe.skipIf(!testAdminUrl)('the drawing of the beach and the spot types', ()
     expect((await send('POST', `${manage}/layout/elements`, { kind: 'structure', label: 'Bar', zone: 'monte', rowNumber: 1, colStart: 1, colEnd: 2 }, manager())).status).toBe(201);
     expect((await send('POST', `${manage}/layout/elements`, { kind: 'cabin_block', label: 'Cabine', zone: 'monte', rowNumber: 2, colStart: 1, colEnd: 3 }, manager())).status).toBe(201);
 
+    // The four just drawn plus the three the demo seed already draws (tower, dune, vegetation).
     const drawn = (await layout()).elements;
-    expect(drawn).toHaveLength(4);
+    expect(drawn).toHaveLength(7);
     const open = await availability(demoBeach.day);
     expect(open.elements).toEqual(drawn);
 
@@ -135,10 +136,12 @@ describe.skipIf(!testAdminUrl)('the drawing of the beach and the spot types', ()
     expect((await send('POST', `${manage}/layout/elements`, { kind: 'decoration', sign: 'palma', zone: 'monte', rowNumber: 4, colStart: 1 }, manager())).status).toBe(201);
     expect((await send('POST', `${manage}/layout/elements`, { kind: 'decoration', sign: 'doccia', label: 'Docce fredde', zone: 'monte', rowNumber: 4, colStart: 2 }, manager())).status).toBe(201);
 
+    // The demo seed already draws its scene (tower, dune, vegetation): the two new ones join it.
     const drawn = (await layout()).elements.filter((element) => element.kind === 'decoration');
-    expect(drawn).toHaveLength(2);
-    expect(drawn[0]).toMatchObject({ sign: 'palma', label: null, orientation: null, rowNumber: 4, colStart: 1, colEnd: null });
-    expect(drawn[1]).toMatchObject({ sign: 'doccia', label: 'Docce fredde' });
+    expect(drawn).toHaveLength(5);
+    const palma = drawn.find((element) => element.sign === 'palma')!;
+    expect(palma).toMatchObject({ sign: 'palma', label: null, orientation: null, rowNumber: 4, colStart: 1, colEnd: null });
+    expect(drawn.find((element) => element.sign === 'doccia')).toMatchObject({ sign: 'doccia', label: 'Docce fredde' });
 
     // The public map shows the same decorations; no spot appears or disappears with them.
     const open = await availability(demoBeach.day);
@@ -156,9 +159,9 @@ describe.skipIf(!testAdminUrl)('the drawing of the beach and the spot types', ()
 
     // Only layout.edit draws and erases; the eraser detaches nothing from a decoration.
     expect((await send('POST', `${manage}/layout/elements`, { kind: 'decoration', sign: 'amaca', zone: 'monte', rowNumber: 4, colStart: 3 }, reception())).status).toBe(403);
-    expect((await send('DELETE', `${manage}/layout/elements/${drawn[0]!.elementId}`, undefined, reception())).status).toBe(403);
-    expect(await (await send('DELETE', `${manage}/layout/elements/${drawn[0]!.elementId}`, undefined, manager())).json()).toEqual({ detachedCabins: 0 });
-    expect((await layout()).elements.filter((element) => element.kind === 'decoration')).toHaveLength(1);
+    expect((await send('DELETE', `${manage}/layout/elements/${palma.elementId}`, undefined, reception())).status).toBe(403);
+    expect(await (await send('DELETE', `${manage}/layout/elements/${palma.elementId}`, undefined, manager())).json()).toEqual({ detachedCabins: 0 });
+    expect((await layout()).elements.filter((element) => element.kind === 'decoration')).toHaveLength(drawn.length - 1);
   });
 
   it('keeps decorations inside their beach club', async () => {

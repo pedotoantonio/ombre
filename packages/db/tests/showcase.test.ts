@@ -38,9 +38,14 @@ describe.skipIf(!testAdminUrl)('showcase beach club', () => {
     expect(await count('spot WHERE beach_id = $1 AND (col IS NULL OR type_id IS NULL)', [beachId])).toBe(0);
     expect(await count('inventory_day WHERE beach_id = $1', [beachId])).toBeGreaterThanOrEqual(53 * 21);
     expect(await count("inventory_day WHERE beach_id = $1 AND state = 'blocked'", [beachId])).toBe(2);
+    // M02 is under maintenance (D56): drawn on the map, never among the free spots.
+    const maintained = await database.admin.query<{ code: string }>('SELECT code FROM spot WHERE beach_id = $1 AND maintenance', [beachId]);
+    expect(maintained.rows).toEqual([{ code: 'M02' }]);
     const today = (await database.admin.query<{ day: string }>("SELECT (now() AT TIME ZONE 'Europe/Rome')::date::text AS day")).rows[0]!.day;
     const free = await listAvailability(database.app.db, beachId, today);
-    expect(free.length).toBe(53 - 5 - 1);
+    // Five booked today, A08 blocked, M02 under maintenance.
+    expect(free.length).toBe(53 - 5 - 1 - 1);
+    expect(free.some((spot) => spot.code === 'M02')).toBe(false);
     // The shore sunbeds come first, then the umbrellas, then the land side.
     expect(free[0]).toMatchObject({ code: 'R01', zone: 'riva', umbrellas: 0, sunbeds: 1, maxGuests: 1, priceCents: 1500 });
     expect(free.at(-1)).toMatchObject({ code: 'M04', zone: 'monte', priceCents: 1200 });
@@ -56,10 +61,21 @@ describe.skipIf(!testAdminUrl)('showcase beach club', () => {
     expect(elements.rows).toEqual([
       { kind: 'cabin_block', label: 'Cabine', sign: null },
       { kind: 'decoration', label: 'Area giochi', sign: 'giochi' },
+      { kind: 'decoration', label: 'Beach volley', sign: 'beachvolley' },
+      { kind: 'decoration', label: 'Bocce', sign: 'bocce' },
       { kind: 'decoration', label: 'Docce', sign: 'doccia' },
       { kind: 'decoration', label: null, sign: 'bandiera' },
+      { kind: 'decoration', label: null, sign: 'canoa' },
+      { kind: 'decoration', label: null, sign: 'cestino' },
+      { kind: 'decoration', label: null, sign: 'cestino' },
+      { kind: 'decoration', label: null, sign: 'duna' },
+      { kind: 'decoration', label: null, sign: 'duna' },
       { kind: 'decoration', label: null, sign: 'palma' },
+      { kind: 'decoration', label: null, sign: 'pedalo' },
       { kind: 'decoration', label: null, sign: 'salvagente' },
+      { kind: 'decoration', label: null, sign: 'sup' },
+      { kind: 'decoration', label: null, sign: 'torretta' },
+      { kind: 'decoration', label: null, sign: 'vegetazione' },
       { kind: 'structure', label: 'Bar', sign: null },
       { kind: 'walkway', label: null, sign: null },
       { kind: 'walkway', label: null, sign: null },
@@ -152,6 +168,9 @@ describe.skipIf(!testAdminUrl)('showcase beach club', () => {
     expect(await count('beach_amenity WHERE beach_id = $1', [club.id])).toBe(4);
     const zone = await database.admin.query<{ name: string }>('SELECT name FROM beach_zone WHERE beach_id = $1', [club.id]);
     expect(zone.rows).toEqual([{ name: 'Prima fila' }]);
+    // Three touches of scene (D55): flag, palm and shower on the public drawing.
+    const touches = await database.admin.query<{ sign: string }>("SELECT sign FROM layout_element WHERE beach_id = $1 AND kind = 'decoration' ORDER BY sign", [club.id]);
+    expect(touches.rows).toEqual([{ sign: 'bandiera' }, { sign: 'doccia' }, { sign: 'palma' }]);
     expect(await count("spot WHERE beach_id = $1 AND named_zone_id IS NOT NULL AND row_number = 1", [club.id])).toBe(5);
     expect(await count("site_revision WHERE beach_id = $1 AND status = 'published'", [club.id])).toBe(1);
   });

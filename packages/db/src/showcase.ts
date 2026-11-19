@@ -6,7 +6,7 @@ import { applyPaymentOutcome, cancelByBeachClub, checkAccess, deskBooking, start
 import { assignCabin, createCabin, decideSublet, proposeSublet } from './cabins';
 import { connect, type Database } from './client';
 import { acquireHold } from './inventory';
-import { addElement, addSpot } from './layout';
+import { addElement, addSpot, updateSpot } from './layout';
 import { closeDay } from './ledger';
 import { publishDay, type Actor } from './manage';
 import { createReview, replyToReview } from './reviews';
@@ -213,6 +213,11 @@ async function seedCalaDelMoro(client: pg.Client, db: Database): Promise<void> {
   await setAmenities(db, actor, { amenities: ['bar', 'parking', 'hot_showers', 'wifi'] });
   const primaFila = await createZone(db, actor, { name: 'Prima fila' });
   await assignZoneToRow(db, actor, { zone: 'ombrelloni', rowNumber: 1, zoneId: primaFila.zoneId });
+  // Three touches of scene, so the public drawing of the cove is not bare (D55):
+  // the flag by the water, a palm and the shower behind the umbrellas.
+  await addElement(db, actor, { kind: 'decoration', sign: 'bandiera', zone: 'riva', rowNumber: 1, colStart: 2 });
+  await addElement(db, actor, { kind: 'decoration', sign: 'palma', zone: 'monte', rowNumber: 1, colStart: 1 });
+  await addElement(db, actor, { kind: 'decoration', sign: 'doccia', zone: 'monte', rowNumber: 1, colStart: 4 });
 }
 
 async function ensureUser(client: pg.Client, email: string, name: string): Promise<string> {
@@ -360,6 +365,23 @@ export async function seedShowcase(adminUrl: string, signingSecret: string): Pro
     await addElement(db, manager, { kind: 'decoration', sign: 'giochi', label: 'Area giochi', zone: 'monte', rowNumber: 2, colStart: 7 });
     await addElement(db, manager, { kind: 'decoration', sign: 'salvagente', zone: 'riva', rowNumber: 1, colStart: 7 });
     await addElement(db, manager, { kind: 'decoration', sign: 'bandiera', zone: 'riva', rowNumber: 1, colStart: 8 });
+    // The new scenery of the beach-art language (D55/D58): the small craft pulled
+    // up by the shore with the lifeguard tower, a pair of dunes with low vegetation
+    // on the land side with the two courts, a litter bin beside each walkway.
+    await addElement(db, manager, { kind: 'decoration', sign: 'pedalo', zone: 'riva', rowNumber: 2, colStart: 1 });
+    await addElement(db, manager, { kind: 'decoration', sign: 'canoa', zone: 'riva', rowNumber: 2, colStart: 2 });
+    await addElement(db, manager, { kind: 'decoration', sign: 'sup', zone: 'riva', rowNumber: 2, colStart: 3 });
+    await addElement(db, manager, { kind: 'decoration', sign: 'torretta', zone: 'riva', rowNumber: 2, colStart: 6 });
+    await addElement(db, manager, { kind: 'decoration', sign: 'cestino', zone: 'ombrelloni', rowNumber: 6, colStart: 4 });
+    await addElement(db, manager, { kind: 'decoration', sign: 'cestino', zone: 'monte', rowNumber: 1, colStart: 5 });
+    await addElement(db, manager, { kind: 'decoration', sign: 'duna', zone: 'monte', rowNumber: 3, colStart: 1 });
+    await addElement(db, manager, { kind: 'decoration', sign: 'vegetazione', zone: 'monte', rowNumber: 3, colStart: 2 });
+    await addElement(db, manager, { kind: 'decoration', sign: 'duna', zone: 'monte', rowNumber: 3, colStart: 3 });
+    await addElement(db, manager, { kind: 'decoration', sign: 'beachvolley', label: 'Beach volley', zone: 'monte', rowNumber: 3, colStart: 5 });
+    await addElement(db, manager, { kind: 'decoration', sign: 'bocce', label: 'Bocce', zone: 'monte', rowNumber: 3, colStart: 7 });
+    // One land-side sunbed under maintenance (D56), through the real domain change
+    // the planner's draft applies: drawn on every map, never bookable.
+    await updateSpot(db, manager, { spotId: spots.M02!, maintenance: true });
 
     // Spot types: the builtin Gazebo gains a higher default price, and a custom
     // type with its mark from the fixed repertoire gets one spot.

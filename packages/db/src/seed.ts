@@ -2,6 +2,7 @@ import pg from 'pg';
 import { demoImage, type DemoMediaId, type Locale, type SiteContent, type SiteTexts } from '@ombre/shared';
 import { setAmenities } from './amenities';
 import { connect } from './client';
+import { addElement } from './layout';
 import type { Actor } from './manage';
 import { assignZoneToRow, createZone } from './zones';
 
@@ -155,6 +156,16 @@ export async function seedDemo(adminUrl: string): Promise<{ beachId: string }> {
       if (zones.rowCount === 0) {
         const primaFila = await createZone(app.db, actor, { name: 'Prima fila' });
         await assignZoneToRow(app.db, actor, { zone: 'ombrelloni', rowNumber: 1, zoneId: primaFila.zoneId });
+      }
+      // A sober scene (D55), drawn once: the dune of the name with its vegetation
+      // behind the umbrellas, the lifeguard tower by the water. The cells sit off
+      // the ones the test suites draw on and inside the four columns of the rows,
+      // so the demo drawing never collides and never widens.
+      const drawn = await client.query('SELECT 1 FROM layout_element WHERE beach_id = $1', [beachId]);
+      if (drawn.rowCount === 0) {
+        await addElement(app.db, actor, { kind: 'decoration', sign: 'torretta', zone: 'riva', rowNumber: 1, colStart: 4 });
+        await addElement(app.db, actor, { kind: 'decoration', sign: 'duna', zone: 'monte', rowNumber: 3, colStart: 2 });
+        await addElement(app.db, actor, { kind: 'decoration', sign: 'vegetazione', zone: 'monte', rowNumber: 3, colStart: 3 });
       }
     } finally {
       await app.close();
