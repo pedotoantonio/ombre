@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import {
+  beachAmenities,
   beachPath,
   beachSection,
   bookingSegment,
@@ -10,6 +11,7 @@ import {
   bookSegment,
   cartSegment,
   config,
+  depositCents,
   formatMoney,
   getDictionary,
   holdSegment,
@@ -18,6 +20,7 @@ import {
   orderSegment,
   pathFor,
   spotZones,
+  type BeachAmenity,
   type Locale,
   type SeaSide,
   type SiteContent,
@@ -28,7 +31,9 @@ import {
 import {
   api,
   dayPattern,
+  formatDate,
   formatDay,
+  formatInstant,
   formatPeriod,
   formatTime,
   isDay,
@@ -37,16 +42,20 @@ import {
   slugPattern,
   uuidPattern,
   type ApiBeach,
+  type ApiCancellation,
   type ApiExtraLine,
   type ApiExtraRequest,
   type ApiExtraService,
   type ApiLayoutElement,
   type ApiMapSpot,
+  type ApiPayment,
+  type ApiReview,
   type ApiSpot,
   type ApiZoneGaps,
 } from '@/lib/api';
 import { JsonLd, privateMetadata } from '@/lib/seo';
 import { DecorationMark } from './decorations';
+import { RatingLine } from './pages';
 import { PageHead, PageShell, type Crumb } from './PageShell';
 import { BeachSite, localBusinessData } from './site-view';
 
@@ -66,14 +75,29 @@ export const loadBeach = cache(
     lang: string,
     section: string,
     slug: string,
-  ): Promise<{ locale: Locale; beach: ApiBeach; nextDay: string | null; site: { template: SiteTemplate; content: SiteContent } | null }> => {
+  ): Promise<{
+    locale: Locale;
+    beach: ApiBeach;
+    nextDay: string | null;
+    site: { template: SiteTemplate; content: SiteContent } | null;
+    /** «Caparra adesso, saldo allo stabilimento» (D52) and the cancellation terms (D53). */
+    payment: ApiPayment;
+    cancellation: ApiCancellation;
+  }> => {
     if (!isLocale(lang) || section !== beachSection[lang] || !slugPattern.test(slug)) notFound();
     const result = await api.beach(slug);
     if (!result.ok) {
       if (result.status === 404) notFound();
       throw new Error(`API not available (${result.code})`);
     }
-    return { locale: lang, beach: result.data.beach, nextDay: result.data.nextAvailableDay, site: result.data.site };
+    return {
+      locale: lang,
+      beach: result.data.beach,
+      nextDay: result.data.nextAvailableDay,
+      site: result.data.site,
+      payment: result.data.payment,
+      cancellation: result.data.cancellation,
+    };
   },
 );
 
@@ -90,6 +114,236 @@ export function DemoBadge({ locale, beach }: { locale: Locale; beach: ApiBeach }
   return (
     <p className="container">
       <span className="badge badge--demo">{getDictionary(locale, config.brandName).booking.demoBadge}</span>
+    </p>
+  );
+}
+
+/* ---- Icone sobrie dei servizi del catalogo (D49): SVG in linea originali, tratto
+   semplice in currentColor, nessuna libreria e nessuna emoji. ---- */
+const amenityIconPaths: Record<BeachAmenity, ReactNode> = {
+  // Un calice da banco: la coppa, lo stelo e la base.
+  bar: (
+    <>
+      <path d="M5.5 5h13l-6.5 7.5V18" />
+      <path d="M8.5 18h7" />
+      <path d="M8 8.5h8" />
+    </>
+  ),
+  // Forchetta e coltello affiancati.
+  restaurant: (
+    <>
+      <path d="M7 4v16" />
+      <path d="M4.5 4v4a2.5 2.5 0 0 0 5 0V4" />
+      <path d="M16.5 4c-1.7 1.3-2.5 3.1-2.5 5.5V12h5V9.5c0-2.4-.8-4.2-2.5-5.5Z" />
+      <path d="M16.5 12v8" />
+    </>
+  ),
+  // La «P» del cartello, nel suo riquadro.
+  parking: (
+    <>
+      <rect x="4" y="4" width="16" height="16" rx="3" />
+      <path d="M10 16.5v-9h3.25a2.75 2.75 0 0 1 0 5.5H10" />
+    </>
+  ),
+  // Il soffione con le gocce.
+  hot_showers: (
+    <>
+      <path d="M12 3a4 4 0 0 0-4 4v2h8V7a4 4 0 0 0-4-4Z" />
+      <path d="M9 12.5V14" />
+      <path d="M12 13.5V15" />
+      <path d="M15 12.5V14" />
+      <path d="M12 17.5V19" />
+    </>
+  ),
+  // Un'altalena: la trave, le corde e il seggiolino.
+  playground: (
+    <>
+      <path d="M4 5h16" />
+      <path d="M9 5v8.5" />
+      <path d="M15 5v8.5" />
+      <path d="M7.5 13.5h9" />
+      <path d="M8 20l1-6.5" />
+      <path d="M16 20l-1-6.5" />
+    </>
+  ),
+  // Il simbolo della sedia a rotelle, essenziale.
+  accessible: (
+    <>
+      <circle cx="11" cy="5" r="1.8" />
+      <path d="M11 7.5V13h5.5l2 5" />
+      <path d="M11 10h4" />
+      <path d="M14 19.4a4.75 4.75 0 1 1-6.4-6.3" />
+    </>
+  ),
+  // Un'impronta di zampa: il cuscinetto e le dita.
+  pets: (
+    <>
+      <circle cx="8.5" cy="8" r="1.4" />
+      <circle cx="15.5" cy="8" r="1.4" />
+      <circle cx="5.8" cy="11.8" r="1.4" />
+      <circle cx="18.2" cy="11.8" r="1.4" />
+      <path d="M12 11c-2.6 0-4.4 1.9-4.4 4.1A2.4 2.4 0 0 0 10 17.5c.8 0 1.3-.3 2-.3s1.2.3 2 .3a2.4 2.4 0 0 0 2.4-2.4c0-2.2-1.8-4.1-4.4-4.1Z" />
+    </>
+  ),
+  // Gli archi del segnale con il punto.
+  wifi: (
+    <>
+      <path d="M4 9.5a12.5 12.5 0 0 1 16 0" />
+      <path d="M7 13a8 8 0 0 1 10 0" />
+      <path d="M10 16.5a4 4 0 0 1 4 0" />
+      <circle cx="12" cy="19" r="0.9" />
+    </>
+  ),
+  // Il salvagente: due cerchi e i quattro raggi.
+  lifeguard: (
+    <>
+      <circle cx="12" cy="12" r="8" />
+      <circle cx="12" cy="12" r="3.5" />
+      <path d="M12 4v4.5M12 15.5V20M4 12h4.5M15.5 12H20" />
+    </>
+  ),
+  // Una cabina col tetto a falde e la porta.
+  cabins: (
+    <>
+      <path d="M4.5 10.5 12 4l7.5 6.5V20h-15Z" />
+      <path d="M10 20v-6.5h4V20" />
+    </>
+  ),
+  // Il sole che tocca l'orizzonte, coi raggi bassi.
+  sunset_bar: (
+    <>
+      <path d="M4 17h16" />
+      <path d="M8.5 17a3.5 3.5 0 0 1 7 0" />
+      <path d="M12 8v2" />
+      <path d="M6.5 10.5 8 12" />
+      <path d="M17.5 10.5 16 12" />
+    </>
+  ),
+  // Una carta col suo circuito e la banda.
+  card_payments: (
+    <>
+      <rect x="3.5" y="6" width="17" height="12" rx="2" />
+      <path d="M3.5 10h17" />
+      <path d="M7 14.5h4" />
+    </>
+  ),
+};
+
+function AmenityIcon({ id }: { id: BeachAmenity }) {
+  return (
+    <svg
+      className="amenity-icon"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      {amenityIconPaths[id]}
+    </svg>
+  );
+}
+
+/**
+ * L'elenco per esteso dei servizi sulla scheda del lido (D49). Senza servizi la nota
+ * «none» compare solo quando la scheda ha altri contenuti (il sito pubblicato);
+ * su una pagina fatta solo di planimetria la sezione si omette.
+ */
+function AmenitiesSection({ locale, beach, hasSite }: { locale: Locale; beach: ApiBeach; hasSite: boolean }) {
+  const a = getDictionary(locale, config.brandName).amenities;
+  const listed = beachAmenities.filter((id) => beach.amenities.includes(id));
+  if (listed.length === 0 && !hasSite) return null;
+  return (
+    <section className="section" aria-labelledby="servizi-catalogo-titolo">
+      <div className="container">
+        <h2 id="servizi-catalogo-titolo">{a.listTitle}</h2>
+        {listed.length === 0 ? (
+          <p className="prose">{a.none}</p>
+        ) : (
+          <ul className="amenity-list">
+            {listed.map((id) => (
+              <li key={id}>
+                <AmenityIcon id={id} />
+                {a[id]}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </section>
+  );
+}
+
+/** «Le recensioni degli Ospiti» (D51): dal più recente, con replica e nota di segnalazione. */
+function ReviewsSection({ locale, reviews }: { locale: Locale; reviews: ApiReview[] }) {
+  const r = getDictionary(locale, config.brandName).reviews;
+  return (
+    <section className="section section--tinted" aria-labelledby="recensioni-titolo">
+      <div className="container">
+        <h2 id="recensioni-titolo">{r.title}</h2>
+        {reviews.length === 0 ? (
+          <p className="prose">{r.none}</p>
+        ) : (
+          reviews.map((review, index) => {
+            // Il periodo del soggiorno: una giornata sola in parole, il dal–al per esteso.
+            const stay = review.from === review.to ? r.stayOf(formatDate(review.from, locale)) : r.stayOfPeriod(formatPeriod(review.from, review.to, locale));
+            return (
+              <article className="review-card" key={index}>
+                <p className="review-card__head">
+                  <span className="review-card__rating">{r.rating(review.rating)}</span>
+                  <span className="review-card__meta">
+                    {r.by(review.authorName)} · {stay}
+                  </span>
+                </p>
+                {review.body ? <p className="prose">{review.body}</p> : null}
+                <p className="review-card__verified">{r.verified}</p>
+                {review.reply ? (
+                  <p className="review-card__reply">
+                    <strong>{r.replyLabel}:</strong> {review.reply}
+                  </p>
+                ) : null}
+                {review.status === 'flagged' ? <p className="review-card__verified">{r.flaggedNote}</p> : null}
+              </article>
+            );
+          })
+        )}
+      </div>
+    </section>
+  );
+}
+
+/**
+ * Il blocco «Condizioni di annullamento» (D53): il testo dello stabilimento nella lingua
+ * della pagina, o il predefinito di piattaforma con le ore, più il termine calcolato dal
+ * backend per il giorno d'arrivo, scritto nel fuso dello stabilimento.
+ */
+export function CancellationBlock({ locale, cancellation, timezone }: { locale: Locale; cancellation: ApiCancellation; timezone: string }) {
+  const t = getDictionary(locale, config.brandName).cancel;
+  const text = (locale === 'en' ? cancellation.policyEn : cancellation.policyIt) ?? t.defaultPolicy(cancellation.deadlineHours);
+  const deadline = cancellation.deadline;
+  const passed = deadline !== null && Date.parse(deadline) <= Date.now();
+  return (
+    <>
+      <p className="prose">{text}</p>
+      {deadline ? (
+        <p className="prose">
+          <strong>{passed ? t.deadlinePassed(formatInstant(deadline, locale, timezone)) : t.deadline(formatInstant(deadline, locale, timezone))}</strong>
+        </p>
+      ) : null}
+    </>
+  );
+}
+
+/** La frase della caparra (D52): quanto si paga ADESSO e quanto resta allo stabilimento. */
+export function DepositExplain({ locale, dueNowCents, balanceCents }: { locale: Locale; dueNowCents: number; balanceCents: number }) {
+  if (balanceCents <= 0) return null;
+  const d = getDictionary(locale, config.brandName).deposit;
+  return (
+    <p className="prose">
+      <strong>{d.explain(formatMoney(dueNowCents, locale), formatMoney(balanceCents, locale))}</strong>
     </p>
   );
 }
@@ -133,11 +387,14 @@ const pickerAnchor = 'disponibilita';
 
 function SpotCard({ locale, beach, spot, day, to, selected, suggested }: { locale: Locale; beach: ApiBeach; spot: ApiSpot; day: string; to?: string; selected: boolean; suggested: boolean }) {
   const t = getDictionary(locale, config.brandName).booking;
+  const z = getDictionary(locale, config.brandName).zone;
   const href = `${bookPath(locale, beach.slug)}?spot=${spot.spotId}&day=${day}${to ? `&to=${to}` : ''}`;
   return (
     <li className={selected ? 'spot plan-chosen' : 'spot'} aria-current={selected ? 'true' : undefined}>
       <span className="spot__code">{spot.code}</span>
       <p>{spot.typeName}</p>
+      {/* La zona con nome del Gestore (D50), identica nelle due lingue. */}
+      {spot.zoneName ? <p>{z.badge(spot.zoneName)}</p> : null}
       <p>{t.equipment(spot.umbrellas, spot.sunbeds)}</p>
       <p>{t.guests(spot.maxGuests)}</p>
       {spot.shared || selected || suggested ? (
@@ -459,6 +716,7 @@ function MapSpot({
   guests?: number;
 }) {
   const t = getDictionary(locale, config.brandName).booking;
+  const z = getDictionary(locale, config.brandName).zone;
   const content = (
     <>
       <SpotMark mark={spot.typeMark} status={spot.status} selected={selected} suggested={suggested} />
@@ -467,6 +725,8 @@ function MapSpot({
       </span>
       <span className="visually-hidden">
         {t.mapSpot(spot.typeName, spot.code, t.status[spot.status], spot.priceCents === null ? undefined : formatMoney(spot.priceCents, locale))}
+        {/* La zona con nome (D50), nell'etichetta letta come il resto dei dati della postazione. */}
+        {spot.zoneName ? `. ${z.badge(spot.zoneName)}` : ''}
         {`. ${t.equipment(spot.umbrellas, spot.sunbeds)}`}
         {suggested ? `. ${t.suggestedBadge}` : ''}
         {selected ? `. ${t.status.selected}` : ''}
@@ -906,11 +1166,14 @@ function BeachMap({
 function SelectionBar({ locale, beach, spot, day, to }: { locale: Locale; beach: ApiBeach; spot: ApiMapSpot & { priceCents: number }; day: string; to?: string }) {
   const t = getDictionary(locale, config.brandName).booking;
   const c = getDictionary(locale, config.brandName).cart;
+  const z = getDictionary(locale, config.brandName).zone;
   return (
     <aside className="plan-bar" id="scelta" aria-label={t.barLabel}>
       <div className="container plan-bar__inner">
         <p className="plan-bar__title">
-          {t.spot(spot.code)}, {t.zones[spot.zone].toLowerCase()}, {t.row(spot.rowNumber).toLowerCase()}
+          {/* La zona con nome (D50) accanto al codice, con le stesse parole di ovunque. */}
+          {t.spot(spot.code)}
+          {spot.zoneName ? `, ${z.label.toLowerCase()} ${spot.zoneName}` : ''}, {t.zones[spot.zone].toLowerCase()}, {t.row(spot.rowNumber).toLowerCase()}
         </p>
         <p className="plan-bar__price">{formatMoney(spot.priceCents, locale)}</p>
         <p className="plan-bar__detail">
@@ -940,7 +1203,11 @@ function SelectionBar({ locale, beach, spot, day, to }: { locale: Locale; beach:
 export async function BeachView({ lang, section, slug, query }: { lang: string; section: string; slug: string; query: Query }) {
   const { locale, beach, nextDay, site } = await loadBeach(lang, section, slug);
   const t = getDictionary(locale, config.brandName).booking;
+  const z = getDictionary(locale, config.brandName).zone;
   const texts = site ? site.content[locale] : null;
+  // Le recensioni pubbliche (D51): se l'elenco non si legge, la sezione non inventa nulla.
+  const reviewsResult = await api.reviews(beach.slug);
+  const reviews = reviewsResult.ok ? reviewsResult.data.reviews : null;
   const asked = first(query.day);
   const day = isDay(asked) ? asked : nextDay;
   // «Al» facoltativo (D39): vuoto o uguale a «dal», la pagina resta di una giornata.
@@ -976,6 +1243,8 @@ export async function BeachView({ lang, section, slug, query }: { lang: string; 
   return (
     <PageShell locale={locale} page="search" alternatePath={beachPath(otherLocale(locale), beach.slug) + alternateQuery} crumbs={crumbsFor(locale, beach)}>
       <PageHead title={beach.name} lead={t.beachLead(beach.locality)}>
+        {/* In testa il voto medio e il numero delle recensioni, quando esistono (D51). */}
+        <RatingLine locale={locale} rating={beach.rating} />
         {site && texts ? (
           <p className="actions">
             <a className="button" href={`#${pickerAnchor}`}>
@@ -993,6 +1262,8 @@ export async function BeachView({ lang, section, slug, query }: { lang: string; 
           </div>
         </section>
       ) : null}
+      {/* I servizi del catalogo per esteso, con le icone sobrie (D49). */}
+      <AmenitiesSection locale={locale} beach={beach} hasSite={Boolean(site && texts)} />
       <section className="section" id={pickerAnchor}>
         <div className="container">
           {first(query.taken) ? <p className="alert" role="alert">{to ? t.takenPeriodNotice : t.takenNotice}</p> : null}
@@ -1039,6 +1310,8 @@ export async function BeachView({ lang, section, slug, query }: { lang: string; 
               {guests && suggested ? (
                 <p className="plan__notice">
                   <strong>{t.suggestedNotice(suggested.code, guests)}</strong>
+                  {/* La proposta con la sua zona con nome (§6, D50). */}
+                  {suggested.zoneName ? ` ${z.proposedSpot(suggested.zoneName)}.` : ''}
                 </p>
               ) : null}
               {periodError ? (
@@ -1107,6 +1380,8 @@ export async function BeachView({ lang, section, slug, query }: { lang: string; 
           )}
         </div>
       </section>
+      {/* «Le recensioni degli Ospiti» (D51): dal più recente, con replica e nota di segnalazione. */}
+      {reviews !== null ? <ReviewsSection locale={locale} reviews={reviews} /> : null}
       {selected && day ? <SelectionBar locale={locale} beach={beach} spot={selected} day={day} to={to} /> : null}
     </PageShell>
   );
@@ -1117,14 +1392,18 @@ export function PriceSummary({
   rows,
   quote,
   days,
+  deposit,
 }: {
   locale: Locale;
   rows: [string, string][];
   quote: { listPriceCents: number; discountCents: number; extrasCents: number; totalCents: number; promoCode: string | null; extras: ApiExtraLine[] };
   /** The days of a dal–al period (D39), one priced line each. Listed only beyond one day. */
   days?: { day: string; totalCents: number }[];
+  /** Con la caparra (D52): «Caparra adesso» e «Saldo allo stabilimento», prima del totale. */
+  deposit?: { dueNowCents: number; balanceCents: number };
 }) {
   const t = getDictionary(locale, config.brandName).booking;
+  const d = getDictionary(locale, config.brandName).deposit;
   return (
     <dl className="summary">
       {rows.map(([label, value]) => (
@@ -1164,6 +1443,19 @@ export function PriceSummary({
           <dt>{t.extrasRow}</dt>
           <dd>{formatMoney(quote.extrasCents, locale)}</dd>
         </div>
+      ) : null}
+      {/* Le righe della caparra (D52): quanto si paga adesso e quanto resta, poi il totale. */}
+      {deposit && deposit.balanceCents > 0 ? (
+        <>
+          <div>
+            <dt>{d.now}</dt>
+            <dd>{formatMoney(deposit.dueNowCents, locale)}</dd>
+          </div>
+          <div>
+            <dt>{d.balance}</dt>
+            <dd>{formatMoney(deposit.balanceCents, locale)}</dd>
+          </div>
+        </>
       ) : null}
       <div className="summary__total">
         <dt>{t.total}</dt>
@@ -1239,9 +1531,10 @@ export function ExtraQuantityFields({
 }
 
 export async function BookView({ lang, section, slug, step, query }: { lang: string; section: string; slug: string; step: string; query: Query }) {
-  const { locale, beach } = await loadBeach(lang, section, slug);
+  const { locale, beach, payment } = await loadBeach(lang, section, slug);
   if (step !== bookSegment[locale]) notFound();
   const t = getDictionary(locale, config.brandName).booking;
+  const z = getDictionary(locale, config.brandName).zone;
   const spotId = first(query.spot) ?? '';
   const day = first(query.day) ?? '';
   if (!uuidPattern.test(spotId) || !dayPattern.test(day)) notFound();
@@ -1279,6 +1572,11 @@ export async function BookView({ lang, section, slug, step, query }: { lang: str
   }
   const availability = await api.availability(beach.slug, day, undefined, to);
   const spot = availability.ok ? availability.data.spots.find((candidate) => candidate.spotId === spotId) : undefined;
+  // Le condizioni di annullamento col termine di QUESTO giorno d'arrivo (D53) e la
+  // caparra (D52): la quota di adesso si calcola come la calcola il backend.
+  const cancellation = availability.ok ? availability.data.cancellation : null;
+  const dueNowCents = quote.ok && payment.mode === 'deposit' ? depositCents(quote.data.totalCents, payment.depositPercent) : quote.ok ? quote.data.totalCents : 0;
+  const balanceCents = quote.ok ? quote.data.totalCents - dueNowCents : 0;
   // Un periodo rifiutato dall'API (oltre 31 giornate, al rovescio) è spiegato in parole.
   const periodError = quote.ok ? null : quote.code === 'cap_reached' ? t.periodTooLong : quote.code === 'invalid_state' ? t.periodBackwards : null;
   const toQuery = to ? `&to=${to}` : '';
@@ -1309,15 +1607,20 @@ export async function BookView({ lang, section, slug, step, query }: { lang: str
                 locale={locale}
                 quote={quote.data}
                 days={quote.data.days}
+                deposit={{ dueNowCents, balanceCents }}
                 rows={[
                   // Il periodo in testa (D39): dal–al e numero di giornate; una giornata resta «Giorno».
                   to
                     ? [t.periodRow, t.periodValue(formatPeriod(day, to, locale), periodDays(day, to))]
                     : [t.dayRow, formatDay(day, locale)],
                   [t.spotRow, `${spot.code}, ${t.row(spot.rowNumber)}`],
+                  // La zona con nome (D50), quando la postazione ne ha una.
+                  ...(spot.zoneName ? ([[z.label, spot.zoneName]] as [string, string][]) : []),
                   [t.equipmentRow, t.equipment(spot.umbrellas, spot.sunbeds)],
                 ]}
               />
+              {/* La frase della caparra (D52): il pagamento che apri adesso vale l'acconto. */}
+              <DepositExplain locale={locale} dueNowCents={dueNowCents} balanceCents={balanceCents} />
               {/* The extras picker: the quote is recomputed at submit, like the promo code (spec §4.2). */}
               {catalogue.length > 0 ? (
                 <div className="panel">
@@ -1351,7 +1654,12 @@ export async function BookView({ lang, section, slug, step, query }: { lang: str
               </form>
               <div>
                 <h3>{t.conditionsTitle}</h3>
-                <p className="prose">{t.conditionsMissing}</p>
+                {/* Le condizioni VERE dello stabilimento (D53), col termine del giorno d'arrivo. */}
+                {cancellation ? (
+                  <CancellationBlock locale={locale} cancellation={cancellation} timezone={beach.timezone} />
+                ) : (
+                  <p className="prose">{t.conditionsMissing}</p>
+                )}
               </div>
               <form method="post" action="/azioni/riserva">
                 <input type="hidden" name="lang" value={locale} />
@@ -1416,15 +1724,24 @@ export async function HoldView({ lang, section, slug, step, holdId }: { lang: st
                 locale={locale}
                 quote={held}
                 days={held.days}
+                deposit={{ dueNowCents: held.dueNowCents, balanceCents: held.balanceCents }}
                 rows={[
                   // Il periodo della riserva (D39): una giornata resta «Giorno», come oggi.
                   held.to !== held.from
                     ? [t.periodRow, t.periodValue(formatPeriod(held.from, held.to, locale), periodDays(held.from, held.to))]
                     : [t.dayRow, formatDay(held.day, locale)],
                   [t.spotRow, `${held.spot.code}, ${t.row(held.spot.rowNumber)}`],
+                  // La zona con nome (D50), quando la postazione ne ha una.
+                  ...(held.spot.zoneName ? ([[getDictionary(locale, config.brandName).zone.label, held.spot.zoneName]] as [string, string][]) : []),
                   [t.equipmentRow, t.equipment(held.spot.umbrellas, held.spot.sunbeds)],
                 ]}
               />
+              {/* La caparra (D52): «Vai al pagamento» apre il pagamento dell'acconto, detto qui. */}
+              <DepositExplain locale={locale} dueNowCents={held.dueNowCents} balanceCents={held.balanceCents} />
+              <div>
+                <h3>{t.conditionsTitle}</h3>
+                <CancellationBlock locale={locale} cancellation={held.cancellation} timezone={beach.timezone} />
+              </div>
               <p className="prose">{t.holdNotConfirmation}</p>
               <form method="post" action="/azioni/prenotazione" className="stack">
                 <input type="hidden" name="lang" value={locale} />
