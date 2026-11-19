@@ -62,6 +62,19 @@ export const decorationSigns = [
 ] as const;
 export type DecorationSign = (typeof decorationSigns)[number];
 
+/**
+ * New scenery subjects of the «beach-art» language (D55/D58), added beside the
+ * D35 repertoire without touching it: lifeguard tower, dune, low vegetation,
+ * the two courts, and the small craft parked on the sand. Saved drawings keep
+ * their keys; these are only new options.
+ */
+export const scenerySigns = ['torretta', 'duna', 'vegetazione', 'beachvolley', 'bocce', 'pedalo', 'canoa', 'sup'] as const;
+export type ScenerySign = (typeof scenerySigns)[number];
+
+/** The whole decoration repertoire after D58: the D35 keys first, unchanged, then the new scenery. */
+export const allDecorationSigns = [...decorationSigns, ...scenerySigns] as const;
+export type AnyDecorationSign = (typeof allDecorationSigns)[number];
+
 /** A horizontal walkway adds its own drawing row after a zone row; a vertical one runs between two columns. */
 export const walkwayOrientations = ['horizontal', 'vertical'] as const;
 export type WalkwayOrientation = (typeof walkwayOrientations)[number];
