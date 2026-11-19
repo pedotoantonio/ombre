@@ -2587,3 +2587,125 @@ body:has(.manage-app) .site-header {
     display: none !important;
   }
 }
+
+/* ---- Al passo col mercato (D49–D53): filtri dei servizi, distintivi, voto, recensioni ---- */
+
+/* Le caselle dei servizi nel modulo di ricerca: un gruppo con legenda, caselle GET. */
+.portal-search__services {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: var(--spazio-3) var(--spazio-4) var(--spazio-4);
+  border: 1px solid var(--bordo);
+  border-radius: var(--raggio);
+}
+
+.portal-search__services legend {
+  padding-inline: var(--spazio-2);
+  color: var(--abisso);
+  font-weight: 700;
+}
+
+.portal-search__services-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+  gap: var(--spazio-1) var(--spazio-3);
+  margin-top: var(--spazio-2);
+}
+
+/* Dodici voci: il peso normale tiene leggibile l'insieme. */
+.portal-search__services .portal-check {
+  font-weight: 400;
+}
+
+/* I distintivi dei servizi sulle carte dei risultati: al più quattro, poi «+n». */
+.portal-club__amenities {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spazio-1);
+  margin-top: var(--spazio-2);
+  padding: 0;
+  list-style: none;
+}
+
+/* La riga del voto: «4,6 su 5 · 12 recensioni», sulle carte e in testa alla scheda. */
+.rating-line {
+  margin-top: var(--spazio-1);
+  color: var(--abisso);
+  font-size: 0.9375rem;
+  font-weight: 700;
+}
+
+/* L'elenco per esteso dei servizi sulla scheda del lido, con le icone sobrie. */
+.amenity-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
+  gap: var(--spazio-2) var(--spazio-4);
+  margin-top: var(--spazio-4);
+  padding: 0;
+  list-style: none;
+}
+
+.amenity-list li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spazio-2);
+  color: var(--abisso);
+}
+
+.amenity-list svg {
+  flex: none;
+  width: 1.25rem;
+  height: 1.25rem;
+  color: var(--oceano);
+}
+
+/* Le recensioni sulla scheda: una carta sobria per voce, la replica rientrata. */
+.review-card {
+  padding: var(--spazio-4);
+  border: 1px solid var(--bordo);
+  border-radius: var(--raggio);
+  background: var(--carta);
+}
+
+.review-card + .review-card {
+  margin-top: var(--spazio-3);
+}
+
+.review-card__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--spazio-1) var(--spazio-3);
+}
+
+.review-card__rating {
+  font-weight: 800;
+  color: var(--abisso);
+}
+
+.review-card__meta {
+  color: var(--testo-secondario);
+  font-size: var(--testo-piccolo);
+}
+
+.review-card__verified {
+  margin-top: var(--spazio-1);
+  color: var(--testo-secondario);
+  font-size: var(--testo-piccolo);
+}
+
+.review-card__reply {
+  margin-top: var(--spazio-3);
+  padding: var(--spazio-2) var(--spazio-3);
+  border-inline-start: 3px solid var(--bordo);
+  color: var(--testo-secondario);
+}
+
+.review-card__reply strong {
+  color: var(--abisso);
+}
+
+/* La riga «Niente profilazione» nel piè di pagina (D54). */
+.site-footer__privacy {
+  margin-top: var(--spazio-2);
+}

@@ -54,6 +54,8 @@ export function makeIt(brand: string) {
       tagline: 'Il tuo posto al sole, senza pensieri.',
       status: `${brand} è un progetto in sviluppo. Nomi e contenuti possono cambiare prima dell'avvio.`,
       pagesTitle: 'Pagine',
+      // Niente profilazione (D54): la riga è l'impegno, l'assenza del banner è il messaggio.
+      privacy: 'Niente cookie di profilazione né pubblicità: solo cookie tecnici, per sessione, carrello e lingua.',
     },
     contact: {
       title: 'Contatti',
@@ -289,6 +291,11 @@ export function makeIt(brand: string) {
         zone_name_taken: 'Esiste già una zona con questo nome.',
         zone_limit: 'Al massimo 20 zone per stabilimento.',
         review_already_flagged: 'Questa recensione è già stata segnalata alla piattaforma.',
+        review_not_allowed: 'Puoi recensire solo un soggiorno concluso.',
+        review_exists: 'Hai già recensito questo soggiorno.',
+        // L'annullamento dal conto (D53): oltre il termine o a soggiorno iniziato decide lo stabilimento.
+        cancel_not_allowed: 'Questa prenotazione non si può annullare dal conto. Rivolgiti allo stabilimento: è lui che può annullare.',
+        cancel_deadline_passed: 'Il termine per annullare gratis è passato. Rivolgiti allo stabilimento: è lui che può annullare.',
       },
       // ---- Registrazione e cambio della password (D44) ----
       registerTitle: 'Crea un conto',
@@ -539,6 +546,8 @@ export function makeIt(brand: string) {
       confirmLead: 'Un pagamento solo per tutte le voci. La conferma prende tutte le riserve insieme: se una sola giornata non è libera, nessuna voce viene riservata.',
       confirmBlocked: 'Togli o correggi le voci segnate prima di confermare.',
       confirmButton: 'Conferma e paga',
+      // Con la caparra (D52) il bottone dice quanto si paga ADESSO.
+      confirmButtonAmount: (amount: string) => `Conferma e paga ${amount}`,
     },
     // ---- Il riepilogo d'ordine (D46): una prenotazione per voce, ciascuna col suo pass ----
     order: {
@@ -1251,9 +1260,27 @@ export function makeIt(brand: string) {
       nameTaken: 'Esiste già una zona con questo nome.',
       spots: (count: number) => (count === 1 ? '1 postazione' : `${count} postazioni`),
     },
-    // ---- Recensioni verificate (D51): il pannello di moderazione del Gestore ----
+    // ---- Recensioni verificate (D51): la scheda pubblica, il modulo dell'Ospite e il pannello del Gestore ----
     reviews: {
       short: 'Recensioni',
+      title: 'Le recensioni degli Ospiti',
+      // La media «{avg} su 5 · {n} recensioni»: il singolare è una forma a parte.
+      average: (avg: string, n: number) => `${avg} su 5 · ${n} recensioni`,
+      averageOne: (avg: string) => `${avg} su 5 · 1 recensione`,
+      verified: 'Recensione verificata: soggiorno reale.',
+      flaggedNote: 'Segnalata alla piattaforma.',
+      // Il modulo dal conto dell'Ospite: le sorprese (testo immutabile, nome visibile) dette PRIMA.
+      formTitle: 'Come è andato il soggiorno?',
+      ratingLabel: 'Voto, da 1 a 5',
+      ratingScale: '1 = pessimo · 5 = ottimo',
+      bodyLabel: 'Racconta, se vuoi (facoltativo)',
+      bodyHint: "Al massimo 600 caratteri. Il testo non si può modificare dopo l'invio.",
+      submit: 'Pubblica la recensione',
+      thanks: 'Grazie, la tua recensione è stata pubblicata.',
+      onlyCompleted: 'Puoi recensire solo un soggiorno concluso.',
+      alreadyDone: 'Hai già recensito questo soggiorno.',
+      publicName: 'Comparirà il nome del tuo conto, mai la tua email.',
+      yours: 'La tua recensione',
       manageTitle: 'Recensioni degli Ospiti',
       manageLead: 'Puoi rispondere a ogni recensione e segnalare alla piattaforma quelle che non rispettano le regole.',
       none: 'Ancora nessuna recensione.',
@@ -1269,6 +1296,31 @@ export function makeIt(brand: string) {
       replyField: 'La tua risposta (fino a 600 caratteri)',
       replyButton: 'Pubblica la risposta',
       replied: 'Risposta pubblicata.',
+    },
+    // ---- La caparra vista dall'Ospite (D52): «Saldo allo stabilimento» al posto di
+    // «Saldo al lido» — deroga scritta ai testi dell'esperto, decisa dalla direzione. ----
+    deposit: {
+      now: 'Caparra adesso',
+      balance: 'Saldo allo stabilimento',
+      total: 'Totale',
+      explain: (amount: string, balance: string) => `Paghi ${amount} adesso per confermare; i restanti ${balance} li saldi allo stabilimento.`,
+      paidNow: 'Pagato adesso',
+      paidInFull: 'Pagato',
+    },
+    // ---- Le condizioni di annullamento viste dall'Ospite (D53): il testo predefinito
+    // di piattaforma e il gesto dal conto. I testi definitivi li deciderà il committente. ----
+    cancel: {
+      defaultPolicy: (hours: number) =>
+        `Puoi annullare gratis fino a ${hours} ore prima dell'arrivo, contate dalla mezzanotte del giorno d'arrivo: ti rimborsiamo tutto quello che hai pagato. Dopo quel termine rivolgiti allo stabilimento, che decide caso per caso. Se lo stabilimento ha condizioni sue, le trovi pubblicate qui.`,
+      deadline: (date: string) => `Annullamento gratuito fino al ${date}`,
+      deadlinePassed: (date: string) => `Il termine per annullare gratis è passato il ${date}.`,
+      button: 'Annulla la prenotazione',
+      confirm: (amount: string) => `Annullare davvero? Perdi le postazioni e ti rimborsiamo ${amount}.`,
+      confirmYes: 'Sì, annulla',
+      confirmNo: 'No, tienila',
+      done: (amount: string) => `Prenotazione annullata. Ti rimborsiamo ${amount}: il rimborso arriva con lo stesso mezzo del pagamento.`,
+      doneNoRefund: "Prenotazione annullata. Non c'era nulla da rimborsare.",
+      tooLate: 'Il termine per annullare gratis è passato. Rivolgiti allo stabilimento: è lui che può annullare.',
     },
     // ---- Pagamento online (D52): intero oppure caparra, con il saldo allo stabilimento ----
     paySettings: {
@@ -1546,6 +1598,11 @@ export function makeIt(brand: string) {
           {
             q: 'Dove è attivo il servizio?',
             a: 'Il servizio è in preparazione e partirà da una zona pilota. Gli stabilimenti attivi compariranno nella pagina Ricerca ombrellone.',
+          },
+          // Niente profilazione (D54): la risposta spiega anche l'assenza del banner.
+          {
+            q: `${brand} mi traccia o mi mostra pubblicità?`,
+            a: 'No. Non usiamo cookie di profilazione né pubblicità e non ti seguiamo da un sito all\'altro. Usiamo solo cookie tecnici, quelli che servono perché il sito funzioni: ricordano la tua sessione, il carrello e la lingua. Per questo non vedi nessun banner dei cookie.',
           },
         ],
         nextTitle: 'Cerca una giornata al mare',

@@ -13,6 +13,37 @@ export interface ApiBeach {
   /** Null until the manager sets the position: the club then stays off the map. */
   latitude: number | null;
   longitude: number | null;
+  /** The amenities chosen from the fixed catalogue (D49), in catalogue order. */
+  amenities: string[];
+  /** Average (one decimal) and number of the verified reviews (D51); null without any. */
+  rating: { average: number; count: number } | null;
+}
+
+/** How the online payment at confirmation is sized (D52). */
+export interface ApiPayment {
+  mode: 'full' | 'deposit';
+  depositPercent: number;
+}
+
+/** The cancellation terms of a club (D53), with the deadline of one arrival day when known. */
+export interface ApiCancellation {
+  deadlineHours: number;
+  /** ISO instant: midnight of the arrival day minus the hours, in the club's zone. */
+  deadline: string | null;
+  policyIt: string | null;
+  policyEn: string | null;
+}
+
+/** A public review (D51): the account name, never the email; flagged ones stay visible. */
+export interface ApiReview {
+  rating: number;
+  body: string | null;
+  authorName: string;
+  from: string;
+  to: string;
+  reply: string | null;
+  status: 'published' | 'flagged';
+  createdAt: string;
 }
 
 /** A beach club in a search by day: what it can sell for those guests, and from which price. */
@@ -29,12 +60,16 @@ export interface BeachSearch {
   to?: string;
   guests?: number;
   sharedOnly?: boolean;
+  /** Catalogue identifiers (D49): only the clubs that offer them ALL are kept. */
+  amenities?: string[];
 }
 
 /** A spot as the map draws it. The price is there only when the spot can be bought. */
 export interface ApiMapSpot {
   spotId: string;
   code: string;
+  /** Name of the manager's named zone (D50); null when the spot belongs to none. */
+  zoneName: string | null;
   zone: SpotZone;
   rowNumber: number;
   /** Column inside the row: the drawing may leave holes, drawn as plain sand. */
@@ -53,6 +88,8 @@ export interface ApiMapSpot {
 export interface ApiSpot {
   spotId: string;
   code: string;
+  /** Name of the manager's named zone (D50); null when the spot belongs to none. */
+  zoneName: string | null;
   zone: SpotZone;
   rowNumber: number;
   col: number;
@@ -148,7 +185,11 @@ export interface ApiHold extends ApiQuote {
   /** The whole dal–al period of the hold (D39); from = to = day for a single day. */
   from: string;
   to: string;
-  spot: { code: string; rowNumber: number; umbrellas: number; sunbeds: number };
+  spot: { code: string; zoneName: string | null; rowNumber: number; umbrellas: number; sunbeds: number };
+  /** What is due now with the deposit (D52) and the terms before paying (D53). */
+  dueNowCents: number;
+  balanceCents: number;
+  cancellation: ApiCancellation;
 }
 
 export type ApiResult<T> = { ok: true; data: T } | { ok: false; status: number; code: string; message?: string };
@@ -213,6 +254,8 @@ function searchQuery(search: BeachSearch): string {
     if (search.guests) query.set('guests', String(search.guests));
     if (search.sharedOnly) query.set('sharedOnly', 'true');
   }
+  // The chosen amenities (D49), comma separated: the API keeps the clubs that have them ALL.
+  if (search.amenities && search.amenities.length > 0) query.set('amenities', search.amenities.join(','));
   const text = query.toString();
   return text ? `?${text}` : '';
 }
@@ -220,11 +263,31 @@ function searchQuery(search: BeachSearch): string {
 export const api = {
   beaches: (search: BeachSearch = {}) => call<{ beaches: ApiBeachOffer[] }>(`/v1/beaches${searchQuery(search)}`),
   beach: (slug: string) =>
-    call<{ beach: ApiBeach; nextAvailableDay: string | null; site: { template: SiteTemplate; content: SiteContent } | null }>(`/v1/beaches/${encodeURIComponent(slug)}`),
+    call<{
+      beach: ApiBeach;
+      nextAvailableDay: string | null;
+      site: { template: SiteTemplate; content: SiteContent } | null;
+      // «Caparra adesso, saldo allo stabilimento» (D52) and the cancellation terms (D53).
+      payment: ApiPayment;
+      cancellation: ApiCancellation;
+    }>(`/v1/beaches/${encodeURIComponent(slug)}`),
+  // The verified reviews of one club (D51): the most recent first, at most 50.
+  reviews: (slug: string) => call<{ beach: ApiBeach; reviews: ApiReview[] }>(`/v1/beaches/${encodeURIComponent(slug)}/reviews`),
   // With guests the answer also carries the recommended spot for that party (spec §3.3).
   // With `to` the spots are the ones free on EVERY day of the dal–al period, priced as its total (D39).
   availability: (slug: string, day: string, guests?: number, to?: string) =>
-    call<{ spots: ApiSpot[]; layout: ApiMapSpot[]; gaps: ApiZoneGaps; seaSide: SeaSide; elements: ApiLayoutElement[]; guests?: number; suggestedSpotId?: string | null }>(
+    call<{
+      spots: ApiSpot[];
+      layout: ApiMapSpot[];
+      gaps: ApiZoneGaps;
+      seaSide: SeaSide;
+      elements: ApiLayoutElement[];
+      guests?: number;
+      suggestedSpotId?: string | null;
+      // How this club is paid (D52) and its terms with the deadline of THIS arrival day (D53).
+      payment: ApiPayment;
+      cancellation: ApiCancellation;
+    }>(
       `/v1/beaches/${encodeURIComponent(slug)}/availability?day=${encodeURIComponent(day)}${to && to !== day ? `&to=${encodeURIComponent(to)}` : ''}${guests ? `&guests=${guests}` : ''}`,
     ),
   // The active extra services of one club: public only here, inside its booking flow (spec §4.2).
@@ -311,6 +374,11 @@ function dayParts(day: string, locale: 'it' | 'en'): DayParts {
 /** Two days as one period, in lower case: "dal 1º al 30 novembre 2026", "from 1 to 30 November 2026". */
 export function formatPeriod(from: string, to: string, locale: 'it' | 'en'): string {
   return getDictionary(locale, config.brandName).dates.period(dayParts(from, locale), dayParts(to, locale));
+}
+
+/** The review average with one decimal in the locale's own writing: «4,6» / "4.6" (D51). */
+export function formatRating(average: number, locale: 'it' | 'en'): string {
+  return new Intl.NumberFormat(dateLocale[locale], { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(average);
 }
 
 /** Number of calendar days of a dal–al period, boundaries included. */

@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { connection } from 'next/server';
-import { accountPath, beachPath, config, formatMoney, getDictionary, pathFor, type InnerPageId, type Locale } from '@ombre/shared';
-import { api, formatDay, formatPeriod, isDay, periodDays, today, type ApiBeachOffer } from '@/lib/api';
+import { accountPath, beachAmenities, beachPath, config, formatMoney, getDictionary, pathFor, type BeachAmenity, type InnerPageId, type Locale } from '@ombre/shared';
+import { api, formatDay, formatPeriod, formatRating, isDay, periodDays, today, type ApiBeachOffer } from '@/lib/api';
 import { breadcrumbData, JsonLd, pageUrl } from '@/lib/seo';
 import { Contact, NextStep, PageHead } from './PageShell';
 import { MapPanel, type MapLabels, type MapMarker } from './map-panel';
@@ -27,6 +27,8 @@ export interface ExploreSearch {
   to: string | null;
   guests: number;
   sharedOnly: boolean;
+  /** The ticked amenities of the catalogue (D49), in catalogue order. */
+  amenities: BeachAmenity[];
 }
 
 /** Reads a search from the address. What is not valid is left out, never refused. */
@@ -34,12 +36,15 @@ export function readSearch(query: Query): ExploreSearch {
   const day = first(query.day);
   const to = first(query.to);
   const guests = Number(first(query.guests));
+  // The ticked boxes arrive as repeated `srv` values (D49): only catalogue identifiers count.
+  const ticked = query.srv === undefined ? [] : Array.isArray(query.srv) ? query.srv : [query.srv];
   return {
     place: (first(query.place) ?? '').trim().slice(0, 80),
     day: isDay(day) ? day : null,
     to: isDay(day) && isDay(to) && to !== day ? to : null,
     guests: Number.isInteger(guests) && guests >= 1 && guests <= maxGuests ? guests : defaultGuests,
     sharedOnly: first(query.shared) === '1',
+    amenities: beachAmenities.filter((id) => ticked.includes(id)),
   };
 }
 
@@ -51,6 +56,7 @@ export function searchQuery(search: ExploreSearch): string {
   if (search.day && search.to) query.set('to', search.to);
   if (search.day || search.guests !== defaultGuests) query.set('guests', String(search.guests));
   if (search.sharedOnly) query.set('shared', '1');
+  for (const id of search.amenities) query.append('srv', id);
   const text = query.toString();
   return text ? `?${text}` : '';
 }
@@ -89,6 +95,7 @@ function mapLabels(locale: Locale, where: 'home' | 'search'): MapLabels {
 /** Plain form that opens the explore page with the search in the address. It works without scripts. */
 function SearchForm({ locale, search, minDay }: { locale: Locale; search: ExploreSearch; minDay?: string }) {
   const t = getDictionary(locale, config.brandName).search;
+  const a = getDictionary(locale, config.brandName).amenities;
   return (
     <form className="portal-search" method="get" action={`${pathFor('search', locale)}#${resultsAnchor}`} role="search" aria-label={t.title}>
       <div className="field portal-search__place">
@@ -117,6 +124,20 @@ function SearchForm({ locale, search, minDay }: { locale: Locale; search: Explor
           {t.sharedHint}
         </p>
       </div>
+      {/* Le caselle dei servizi (D49): stesso nome `srv` ripetuto, funziona senza script.
+          Dopo l'invio i filtri scelti restano spuntati, letti dall'indirizzo. */}
+      <fieldset className="portal-search__services">
+        <legend>{a.filterLegend}</legend>
+        <p className="portal-search__hint">{a.filterHint}</p>
+        <div className="portal-search__services-grid">
+          {beachAmenities.map((id) => (
+            <label className="portal-check" key={id} htmlFor={`cerca-srv-${id}`}>
+              <input id={`cerca-srv-${id}`} name="srv" type="checkbox" value={id} defaultChecked={search.amenities.includes(id)} />
+              <span>{a[id]}</span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
       <button className="button portal-search__submit" type="submit">
         {t.submit}
       </button>
@@ -185,7 +206,7 @@ export function HomePage({ locale }: PageProps) {
                 </li>
               </ul>
             </nav>
-            <SearchForm locale={locale} search={{ place: '', day: null, to: null, guests: defaultGuests, sharedOnly: false }} />
+            <SearchForm locale={locale} search={{ place: '', day: null, to: null, guests: defaultGuests, sharedOnly: false, amenities: [] }} />
           </div>
         </div>
       </section>
@@ -231,6 +252,32 @@ export function HomePage({ locale }: PageProps) {
   );
 }
 
+/** The amenity badges of a result card (D49): at most four, then «+n». */
+function AmenityBadges({ locale, amenities }: { locale: Locale; amenities: string[] }) {
+  const a = getDictionary(locale, config.brandName).amenities;
+  const known = beachAmenities.filter((id) => amenities.includes(id));
+  if (known.length === 0) return null;
+  const shown = known.slice(0, 4);
+  return (
+    <ul className="portal-club__amenities">
+      {shown.map((id) => (
+        <li className="badge" key={id}>
+          {a[id]}
+        </li>
+      ))}
+      {known.length > shown.length ? <li className="badge">{a.overflow(known.length - shown.length)}</li> : null}
+    </ul>
+  );
+}
+
+/** The review average of a club (D51): «4,6 su 5 · 12 recensioni», the singular its own form. */
+export function RatingLine({ locale, rating }: { locale: Locale; rating: { average: number; count: number } | null }) {
+  if (!rating) return null;
+  const r = getDictionary(locale, config.brandName).reviews;
+  const average = formatRating(rating.average, locale);
+  return <p className="rating-line">{rating.count === 1 ? r.averageOne(average) : r.average(average, rating.count)}</p>;
+}
+
 function BeachCard({ locale, beach, day, to }: { locale: Locale; beach: ApiBeachOffer; day: string | null; to: string | null }) {
   const t = getDictionary(locale, config.brandName);
   const copy = t.pages.search;
@@ -244,6 +291,8 @@ function BeachCard({ locale, beach, day, to }: { locale: Locale; beach: ApiBeach
       )}
       <h3>{beach.name}</h3>
       <p>{beach.locality}</p>
+      <RatingLine locale={locale} rating={beach.rating} />
+      <AmenityBadges locale={locale} amenities={beach.amenities} />
       {day && beach.freeSpots ? (
         <p className="portal-club__offer">
           <span className="portal-club__free">{copy.freeSpots(beach.freeSpots)}</span>
@@ -282,6 +331,7 @@ async function SearchPage({ locale, query = {} }: PageProps & { query?: Query })
     to: search.to ?? undefined,
     guests: search.guests,
     sharedOnly: search.sharedOnly,
+    amenities: search.amenities,
   });
   // A refused period (D39) comes back in words: over 31 days, or written backwards.
   const periodError = !result.ok && result.status === 409 ? (result.code === 'cap_reached' ? t.booking.periodTooLong : t.booking.periodBackwards) : null;

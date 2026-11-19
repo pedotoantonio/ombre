@@ -42,6 +42,8 @@ export function makeEn(brand: string): Dictionary {
       tagline: 'Your place in the sun, worry-free.',
       status: `${brand} is a project in development. Names and content may change before launch.`,
       pagesTitle: 'Pages',
+      // No profiling (D54): the line is the promise, the missing banner is the message.
+      privacy: 'No profiling cookies and no advertising: only technical cookies, for your session, cart and language.',
     },
     contact: {
       title: 'Contact',
@@ -277,6 +279,11 @@ export function makeEn(brand: string): Dictionary {
         zone_name_taken: 'A zone with this name already exists.',
         zone_limit: 'At most 20 zones per beach club.',
         review_already_flagged: 'This review has already been reported to the platform.',
+        review_not_allowed: 'You can only review a stay that has ended.',
+        review_exists: 'You have already reviewed this stay.',
+        // The owner's cancellation (D53): past the deadline, or once the stay has started, the beach club decides.
+        cancel_not_allowed: 'This booking cannot be cancelled from the account. Contact the beach club: only it can cancel now.',
+        cancel_deadline_passed: 'The free-cancellation deadline has passed. Contact the beach club: only it can cancel now.',
       },
       // ---- Registration and password change (D44) ----
       registerTitle: 'Create an account',
@@ -527,6 +534,8 @@ export function makeEn(brand: string): Dictionary {
       confirmLead: 'A single payment for every item. Confirmation takes all the reserves together: if one day is not free, no item is reserved.',
       confirmBlocked: 'Remove or fix the flagged items before confirming.',
       confirmButton: 'Confirm and pay',
+      // With a deposit (D52) the button says what is paid NOW.
+      confirmButtonAmount: (amount: string) => `Confirm and pay ${amount}`,
     },
     // ---- The order summary (D46): one booking per item, each with its own pass ----
     order: {
@@ -1239,9 +1248,27 @@ export function makeEn(brand: string): Dictionary {
       nameTaken: 'A zone with this name already exists.',
       spots: (count: number) => (count === 1 ? '1 spot' : `${count} spots`),
     },
-    // ---- Verified reviews (D51): the moderation panel of the manager ----
+    // ---- Verified reviews (D51): the public page, the Guest's form and the manager's panel ----
     reviews: {
       short: 'Reviews',
+      title: 'Guest reviews',
+      // The average "{avg} out of 5 · {n} reviews": the singular is its own form.
+      average: (avg: string, n: number) => `${avg} out of 5 · ${n} reviews`,
+      averageOne: (avg: string) => `${avg} out of 5 · 1 review`,
+      verified: 'Verified review: a real stay.',
+      flaggedNote: 'Reported to the platform.',
+      // The form from the Guest's account: the surprises (immutable text, visible name) said FIRST.
+      formTitle: 'How was your stay?',
+      ratingLabel: 'Rating, from 1 to 5',
+      ratingScale: '1 = poor · 5 = excellent',
+      bodyLabel: 'Tell us more, if you like (optional)',
+      bodyHint: '600 characters at most. You cannot edit the text after sending.',
+      submit: 'Publish your review',
+      thanks: 'Thank you, your review has been published.',
+      onlyCompleted: 'You can only review a stay that has ended.',
+      alreadyDone: 'You have already reviewed this stay.',
+      publicName: 'Your account name will be shown, never your email.',
+      yours: 'Your review',
       manageTitle: 'Guest reviews',
       manageLead: 'You can reply to any review and report to the platform those that break the rules.',
       none: 'No reviews yet.',
@@ -1257,6 +1284,31 @@ export function makeEn(brand: string): Dictionary {
       replyField: 'Your reply (up to 600 characters)',
       replyButton: 'Publish the reply',
       replied: 'Reply published.',
+    },
+    // ---- The deposit as the Guest sees it (D52): «Saldo allo stabilimento» mirrors as
+    // "at the beach club" — the written deviation from the expert's «Saldo al lido». ----
+    deposit: {
+      now: 'Deposit now',
+      balance: 'Balance at the beach club',
+      total: 'Total',
+      explain: (amount: string, balance: string) => `You pay ${amount} now to confirm; you settle the remaining ${balance} at the beach club.`,
+      paidNow: 'Paid now',
+      paidInFull: 'Paid',
+    },
+    // ---- The cancellation conditions as the Guest sees them (D53): the platform default
+    // text and the gesture from the account. The final texts are the client's decision. ----
+    cancel: {
+      defaultPolicy: (hours: number) =>
+        `You can cancel for free up to ${hours} hours before arrival, counted back from midnight at the start of your arrival day: everything you paid is refunded. After that deadline, contact the beach club, which decides case by case. If the beach club has its own conditions, you will find them published here.`,
+      deadline: (date: string) => `Free cancellation until ${date}`,
+      deadlinePassed: (date: string) => `The free-cancellation deadline passed on ${date}.`,
+      button: 'Cancel the booking',
+      confirm: (amount: string) => `Cancel for real? You lose the spots and we refund ${amount}.`,
+      confirmYes: 'Yes, cancel',
+      confirmNo: 'No, keep it',
+      done: (amount: string) => `Booking cancelled. We refund ${amount}: the refund goes back by the same method as the payment.`,
+      doneNoRefund: 'Booking cancelled. There was nothing to refund.',
+      tooLate: 'The free-cancellation deadline has passed. Contact the beach club: only it can cancel now.',
     },
     // ---- Online payment (D52): in full, or a deposit with the balance at the beach club ----
     paySettings: {
@@ -1534,6 +1586,11 @@ export function makeEn(brand: string): Dictionary {
           {
             q: 'Where is the service available?',
             a: 'The service is in preparation and will start from a pilot area. Active beach clubs will appear on the Umbrella search page.',
+          },
+          // No profiling (D54): the answer also explains the missing banner.
+          {
+            q: `Does ${brand} track me or show ads?`,
+            a: 'No. We use no profiling cookies and no advertising, and we do not follow you from site to site. We only use technical cookies, the ones the site needs to work: they remember your session, your cart and your language. That is why you see no cookie banner.',
           },
         ],
         nextTitle: 'Search for a day at the beach',
