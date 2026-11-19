@@ -22,6 +22,7 @@
     "smoke:site": "node scripts/smoke-site.ts",
     "smoke:conto": "node scripts/smoke-conto.ts",
     "smoke:mercato": "node scripts/smoke-mercato.ts",
+    "smoke:spiaggia": "node scripts/smoke-spiaggia.ts",
     "smoke:2fa": "node scripts/smoke-2fa.ts",
     "collaudo": "sh scripts/collaudo.sh"
   },
