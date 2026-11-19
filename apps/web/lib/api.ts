@@ -1,4 +1,4 @@
-import { config, getDictionary, type AnyDecorationSign, type DayParts, type LayoutElementKind, type SeaSide, type SiteContent, type SiteTemplate, type SpotMark, type SpotZone, type WalkwayOrientation } from '@ombre/shared';
+import { config, getDictionary, type AnyDecorationSign, type DayParts, type LayoutElementKind, type SeaSide, type SiteContent, type SiteTemplate, type SpotMark, type SpotZone, type TypeCardContent, type WalkwayOrientation } from '@ombre/shared';
 
 // Server-side client of the Ombrè API. The address is read at request time.
 
@@ -185,11 +185,23 @@ export interface ApiHold extends ApiQuote {
   /** The whole dal–al period of the hold (D39); from = to = day for a single day. */
   from: string;
   to: string;
-  spot: { code: string; zoneName: string | null; rowNumber: number; umbrellas: number; sunbeds: number };
+  spot: { code: string; typeName: string; zoneName: string | null; rowNumber: number; umbrellas: number; sunbeds: number };
   /** What is due now with the deposit (D52) and the terms before paying (D53). */
   dueNowCents: number;
   balanceCents: number;
   cancellation: ApiCancellation;
+}
+
+/** A spot type offered by the club with its custom card content, or null for the platform default (D61, D63). */
+export interface ApiTypeCard {
+  typeId: string;
+  name: string;
+  mark: SpotMark;
+  umbrellas: number;
+  sunbeds: number;
+  maxGuests: number;
+  content: TypeCardContent | null;
+  customized: boolean;
 }
 
 export type ApiResult<T> = { ok: true; data: T } | { ok: false; status: number; code: string; message?: string; detail?: Record<string, unknown> };
@@ -297,6 +309,9 @@ export const api = {
     }>(
       `/v1/beaches/${encodeURIComponent(slug)}/availability?day=${encodeURIComponent(day)}${to && to !== day ? `&to=${encodeURIComponent(to)}` : ''}${guests ? `&guests=${guests}` : ''}`,
     ),
+  // The spot types in use at one club, each with the custom card content or null (D61, D63):
+  // the site resolves the default fields itself with the shared resolveTypeCard.
+  spotTypes: (slug: string) => call<{ beach: ApiBeach; types: ApiTypeCard[] }>(`/v1/beaches/${encodeURIComponent(slug)}/spot-types`),
   // The active extra services of one club: public only here, inside its booking flow (spec §4.2).
   extras: (slug: string) => call<{ beach: ApiBeach; currency: string; extras: ApiExtraService[] }>(`/v1/beaches/${encodeURIComponent(slug)}/extras`),
   quote: (request: DayRequest) => post<ApiQuote>('/v1/quotes', request),

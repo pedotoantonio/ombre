@@ -2021,7 +2021,7 @@ export function createApp(options: AppOptions): Hono {
       day: held.day,
       from: held.from,
       to: held.to,
-      spot: { code: held.spotCode, zoneName: held.zoneName, rowNumber: held.rowNumber, umbrellas: held.umbrellas, sunbeds: held.sunbeds },
+      spot: { code: held.spotCode, typeName: held.typeName, zoneName: held.zoneName, rowNumber: held.rowNumber, umbrellas: held.umbrellas, sunbeds: held.sunbeds },
       ...purchaseMoney(held.quote),
       // The riepilogo says what is due now (D52) and the cancellation terms (D53).
       ...dueNowOf(beach, held.quote.total),

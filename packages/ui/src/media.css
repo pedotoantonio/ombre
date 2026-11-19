@@ -40,3 +40,42 @@
   border-radius: var(--raggio);
   background: var(--spuma);
 }
+
+/* La scheda della postazione (D63): didascalie delle foto, note e riquadro dei tipi. */
+.type-photos figure {
+  margin: 0;
+}
+
+.type-photos figcaption {
+  margin-top: var(--spazio-1);
+  font-size: 0.9rem;
+  color: var(--testo-secondario);
+}
+
+.type-note {
+  color: var(--testo-secondario);
+}
+
+.type-panel {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--spazio-3);
+  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+}
+
+.type-panel li {
+  display: flex;
+  align-items: center;
+  gap: var(--spazio-3);
+}
+
+.type-panel img {
+  width: 5.5rem;
+  height: auto;
+  aspect-ratio: 3 / 2;
+  object-fit: cover;
+  border-radius: var(--raggio-piccolo);
+  background: var(--spuma);
+}

@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import QRCode from 'qrcode';
-import { beachPath, cartSegment, config, formatMoney, getDictionary, orderSegment, type Locale } from '@ombre/shared';
+import { beachPath, cartPath, cartSegment, config, formatMoney, getDictionary, orderPath, orderSegment, type Locale } from '@ombre/shared';
 import {
   apiCall,
   api,
@@ -23,6 +23,7 @@ import { cartTicket, signedIn } from '@/lib/session';
 import { Hidden, Notice } from './account';
 import { CancellationBlock, crumbsFor, DemoBadge, DepositExplain, ExtraQuantityFields, loadBeach, otherLocale } from './beach';
 import { PageHead, PageShell } from './PageShell';
+import { spotTypesOf, typeByName, typeCardHref } from './type-card';
 
 type Query = Record<string, string | string[] | undefined>;
 const first = (value: string | string[] | undefined): string | undefined => (Array.isArray(value) ? value[0] : value);
@@ -66,7 +67,22 @@ interface ApiCartView {
 }
 
 /** One cart item: period, live prices, the inline «per chi è» form and the way out. */
-function CartItem({ locale, beach, cartId, item, catalogue }: { locale: Locale; beach: ApiBeach; cartId: string; item: ApiCartItem; catalogue: ApiExtraService[] }) {
+function CartItem({
+  locale,
+  beach,
+  cartId,
+  item,
+  catalogue,
+  cardHref,
+}: {
+  locale: Locale;
+  beach: ApiBeach;
+  cartId: string;
+  item: ApiCartItem;
+  catalogue: ApiExtraService[];
+  /** Address of the card of this item's type (D63): the type name becomes the link. */
+  cardHref?: string;
+}) {
   const t = getDictionary(locale, config.brandName);
   const c = t.cart;
   const b = t.booking;
@@ -76,9 +92,17 @@ function CartItem({ locale, beach, cartId, item, catalogue }: { locale: Locale; 
   const common = { lang: locale, beach: beach.slug, cart: cartId, item: item.itemId };
   const z = t.zone;
   return (
-    <div className="panel">
+    <div className="panel" id={`voce-${item.itemId}`}>
       <h3>
-        {b.spot(item.spot.code)} · {item.spot.typeName}
+        {b.spot(item.spot.code)} ·{' '}
+        {/* Il tipo della voce è un collegamento alla sua scheda (D63), col ritorno a questa voce. */}
+        {cardHref ? (
+          <Link href={cardHref} prefetch={false}>
+            {item.spot.typeName}
+          </Link>
+        ) : (
+          item.spot.typeName
+        )}
         {/* La zona con nome della voce (D50), con le stesse parole di ovunque. */}
         {item.spot.zoneName ? ` · ${z.badge(item.spot.zoneName)}` : ''}
       </h3>
@@ -187,6 +211,12 @@ export async function CartPage({ lang, section, slug, step, query }: { lang: str
   const cart = view?.ok ? view.data : null;
   const catalogueResult = await api.extras(beach.slug);
   const catalogue = catalogueResult.ok ? catalogueResult.data.extras : [];
+  // I tipi del lido (D63): il tipo di ogni voce diventa un collegamento alla sua scheda.
+  const types = await spotTypesOf(beach.slug);
+  const cardHrefOf = (typeName: string, itemId: string): string | undefined => {
+    const type = typeByName(types, typeName);
+    return type ? typeCardHref(locale, beach.slug, type.typeId, `${cartPath(locale, beach.slug)}#voce-${itemId}`) : undefined;
+  };
 
   // I termini di annullamento per voce (D53): con una data sola il blocco porta quel
   // termine; con date diverse il termine compare per voce, accanto al codice.
@@ -224,7 +254,7 @@ export async function CartPage({ lang, section, slug, step, query }: { lang: str
             <>
               <p className="prose">{c.notReserved}</p>
               {cart.items.map((item) => (
-                <CartItem key={item.itemId} locale={locale} beach={beach} cartId={cart.cartId} item={item} catalogue={catalogue} />
+                <CartItem key={item.itemId} locale={locale} beach={beach} cartId={cart.cartId} item={item} catalogue={catalogue} cardHref={cardHrefOf(item.spot.typeName, item.itemId)} />
               ))}
               <div className="panel">
                 <h2>{c.confirmTitle}</h2>
@@ -290,6 +320,8 @@ export async function CartPage({ lang, section, slug, step, query }: { lang: str
 interface ApiOrderItem {
   code: string;
   spotCode: string;
+  /** Il nome del tipo della voce, per il collegamento alla sua scheda (D63). */
+  typeName: string;
   /** La zona con nome della voce (D50); null quando la postazione non ne ha. */
   zoneName: string | null;
   from: string;
@@ -355,6 +387,15 @@ export async function OrderPage({ lang, section, slug, step, orderId, token }: {
     ),
   );
   const common = { lang: locale, beach: beach.slug, order: orderId, t: token };
+
+  // I tipi del lido (D63): il tipo di ogni voce diventa un collegamento alla sua scheda,
+  // col ritorno esatto a questa pagina d'ordine (il biglietto firmato resta nella query).
+  const types = await spotTypesOf(beach.slug);
+  const orderSelf = `${orderPath(locale, beach.slug, orderId)}?t=${encodeURIComponent(token)}`;
+  const cardHrefOf = (typeName: string, code: string): string | undefined => {
+    const type = typeByName(types, typeName);
+    return type ? typeCardHref(locale, beach.slug, type.typeId, `${orderSelf}#voce-${code}`) : undefined;
+  };
 
   return (
     <PageShell
@@ -426,14 +467,23 @@ export async function OrderPage({ lang, section, slug, step, orderId, token }: {
           {order.items.map((item) => {
             const qr = passes.get(item.code);
             const period = item.from === item.to ? formatDate(item.from, locale) : b.periodValue(formatPeriod(item.from, item.to, locale), periodDays(item.from, item.to));
+            const cardHref = cardHrefOf(item.typeName, item.code);
             return (
-              <div className="panel" key={item.code}>
+              <div className="panel" key={item.code} id={`voce-${item.code}`}>
                 <h3>{t.checkout.bookingTitle(item.code)}</h3>
                 <p className="prose">
                   {/* La zona con nome accanto alla postazione (D50), con le stesse parole. */}
                   {b.spot(item.spotCode)}
-                  {item.zoneName ? `, ${t.zone.label.toLowerCase()} ${item.zoneName}` : ''}. {period}. {a.guest}: {item.guestName}. {a.booking}:{' '}
-                  {a.bookingStates[item.status]}. {b.total}: {formatMoney(item.totalCents, locale)}.
+                  {item.zoneName ? `, ${t.zone.label.toLowerCase()} ${item.zoneName}` : ''},{' '}
+                  {/* Il tipo della voce è un collegamento alla sua scheda (D63). */}
+                  {cardHref ? (
+                    <Link href={cardHref} prefetch={false}>
+                      {item.typeName}
+                    </Link>
+                  ) : (
+                    item.typeName
+                  )}
+                  . {period}. {a.guest}: {item.guestName}. {a.booking}: {a.bookingStates[item.status]}. {b.total}: {formatMoney(item.totalCents, locale)}.
                 </p>
                 {qr ? (
                   <div className="pass">

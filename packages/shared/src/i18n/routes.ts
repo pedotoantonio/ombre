@@ -100,6 +100,13 @@ export function orderPath(locale: Locale, beachSlug: string, orderId: string): s
   return `${beachPath(locale, beachSlug)}/${orderSegment[locale]}/${orderId}`;
 }
 
+/** The public card of a spot type (D63): /bagni/{slug}/postazioni/{typeId}. */
+export const spotTypesSegment: Record<Locale, string> = { it: 'postazioni', en: 'spot-types' };
+
+export function spotTypeCardPath(locale: Locale, beachSlug: string, typeId: string): string {
+  return `${beachPath(locale, beachSlug)}/${spotTypesSegment[locale]}/${typeId}`;
+}
+
 export const accountSection: Record<Locale, string> = { it: 'area', en: 'account' };
 export const accountPages = {
   signIn: { it: 'accesso', en: 'sign-in' },
@@ -205,8 +212,16 @@ export function manageCollectPath(locale: Locale, beachSlug: string): string {
   return `${accountPath(locale, 'manage', beachSlug)}/${manageCollectSegment[locale]}`;
 }
 
+/** Last segment of the «Postazioni» page (D63): the spot type cards, under the management page. */
+export const manageSpotTypesSegment: Record<Locale, string> = { it: 'postazioni', en: 'spot-types' };
+
+/** Address of the spot type cards page of a beach club, inside the reserved area. */
+export function manageSpotTypesPath(locale: Locale, beachSlug: string): string {
+  return `${accountPath(locale, 'manage', beachSlug)}/${manageSpotTypesSegment[locale]}`;
+}
+
 /** The pages one level under the management page of a beach club: the depth whitelist. */
-const manageSubPages: Record<Locale, string>[] = [beachLayoutSegment, manageCabinsSegment, manageTodaySegment, managePlannerSegment, manageStatsSegment, manageDealsSegment, manageExtrasSegment, manageCommsSegment, manageCollectSegment, manageReviewsSegment];
+const manageSubPages: Record<Locale, string>[] = [beachLayoutSegment, manageCabinsSegment, manageTodaySegment, managePlannerSegment, manageStatsSegment, manageDealsSegment, manageExtrasSegment, manageCommsSegment, manageCollectSegment, manageReviewsSegment, manageSpotTypesSegment];
 
 /**
  * The temporary public payment page /paga/{token} (spec §4.3): a new first-level
@@ -242,7 +257,7 @@ export function readAddress(pathname: string): { locale: Locale; known: boolean 
     const known =
       rest.length === 2 ||
       (rest.length === 3 && (third === bookSegment[locale] || third === cartSegment[locale])) ||
-      (rest.length === 4 && (third === holdSegment[locale] || third === bookingSegment[locale] || third === orderSegment[locale]));
+      (rest.length === 4 && (third === holdSegment[locale] || third === bookingSegment[locale] || third === orderSegment[locale] || third === spotTypesSegment[locale]));
     return { locale, known };
   }
   if (first === accountSection[locale]) {

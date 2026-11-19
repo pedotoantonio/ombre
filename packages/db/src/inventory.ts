@@ -396,6 +396,8 @@ export interface HoldView {
   from: string;
   to: string;
   spotCode: string;
+  /** Name of the spot type, so the summary can link its card (D63). */
+  typeName: string;
   /** Name of the manager's named zone (D50); null when the spot belongs to none. */
   zoneName: string | null;
   rowNumber: number;
@@ -446,6 +448,7 @@ export async function getHold(db: Database, beachId: string, holdId: string): Pr
         live: sql<boolean>`${hold.status} = 'active' and ${hold.expiresAt} > now()`,
         day: inventoryDay.day,
         spotCode: spot.code,
+        typeName: spotType.name,
         zoneName: beachZone.name,
         rowNumber: spot.rowNumber,
         umbrellas: spot.umbrellas,
@@ -454,6 +457,7 @@ export async function getHold(db: Database, beachId: string, holdId: string): Pr
       .from(hold)
       .innerJoin(inventoryDay, eq(inventoryDay.id, hold.inventoryDayId))
       .innerJoin(spot, eq(spot.id, inventoryDay.spotId))
+      .innerJoin(spotType, eq(spotType.id, spot.typeId))
       .leftJoin(beachZone, eq(beachZone.id, spot.namedZoneId))
       .where(eq(hold.id, holdId));
     if (!row || row.hold.parentHoldId !== null) throw new DomainError('not_found', 'Hold not found');
@@ -467,6 +471,7 @@ export async function getHold(db: Database, beachId: string, holdId: string): Pr
       from: members[0]?.day ?? row.day,
       to: members[members.length - 1]?.day ?? row.day,
       spotCode: row.spotCode,
+      typeName: row.typeName,
       zoneName: row.zoneName,
       rowNumber: row.rowNumber,
       umbrellas: row.umbrellas,

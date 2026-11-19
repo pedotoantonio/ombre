@@ -111,7 +111,9 @@ const bar = /<aside class="plan-bar"[^>]*>[^]*?<\/aside>/.exec(selected.html)?.[
 const bookHref = /href="(\/bagni\/bagno-delle-dune\/prenota\?spot=[0-9a-f-]{36}&day=\d{4}-\d{2}-\d{2})"/.exec(bar)?.[1] ?? '';
 check(bookHref === `${beach}/prenota?spot=${spotId}&day=${day}`, `choice: the bar does not lead to the summary of the chosen spot (${bookHref})`);
 // The title of the bar names the spot with its zone and row: "Postazione A02, ombrelloni, fila 1".
-check(bar.includes('30,00') && /fila \d/.test(bar) && bar.includes('ombrellone') && count(bar, /<a /g) === 1, 'choice: the bar does not show row, equipment and price with one button');
+// Two links: the type name towards its card (D63) and the one step forward.
+check(bar.includes('30,00') && /fila \d/.test(bar) && bar.includes('ombrellone') && count(bar, /<a /g) === 2, 'choice: the bar does not show row, equipment and price with one button');
+check(/<a [^>]*href="\/bagni\/bagno-delle-dune\/postazioni\/[0-9a-f-]{36}\?torna=[^"]*%23scelta"/.test(bar), 'choice: the type name in the bar does not link its card with the exact return');
 check(count(selected.html, /<a class="plan-spot[^"]*plan-spot--selected"[^>]*aria-current="true"/g) === 1, 'choice: the chosen spot is not marked on the map');
 check(selected.html.includes('Hai scelto la postazione') && selected.html.includes('href="#scelta"'), 'choice: the choice is not stated in words');
 check(!(await page(`${beach}?day=${day}&spot=non-valido`)).html.includes('class="plan-bar"'), 'choice: an invalid spot opened the bar');

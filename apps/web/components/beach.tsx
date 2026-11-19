@@ -58,6 +58,7 @@ import { ElementSymbol, Legend, SeaBand, SpotSymbol, type LegendItem, type SpotA
 import { RatingLine } from './pages';
 import { PageHead, PageShell, type Crumb } from './PageShell';
 import { BeachSite, localBusinessData } from './site-view';
+import { spotTypesOf, typeByName, TypeCardLink, typeCardHref, TypeCardsPanel, typesPanelAnchor } from './type-card';
 
 type Query = Record<string, string | string[] | undefined>;
 
@@ -385,7 +386,26 @@ export async function stepMetadata(lang: string, section: string, slug: string, 
 /** Where the day picker and the map start: the target of the button under the lead. */
 const pickerAnchor = 'disponibilita';
 
-function SpotCard({ locale, beach, spot, day, to, selected, suggested }: { locale: Locale; beach: ApiBeach; spot: ApiSpot; day: string; to?: string; selected: boolean; suggested: boolean }) {
+function SpotCard({
+  locale,
+  beach,
+  spot,
+  day,
+  to,
+  selected,
+  suggested,
+  cardHref,
+}: {
+  locale: Locale;
+  beach: ApiBeach;
+  spot: ApiSpot;
+  day: string;
+  to?: string;
+  selected: boolean;
+  suggested: boolean;
+  /** Address of the card of this spot's type (D63), with its exact return point. */
+  cardHref?: string;
+}) {
   const t = getDictionary(locale, config.brandName).booking;
   const z = getDictionary(locale, config.brandName).zone;
   const href = `${bookPath(locale, beach.slug)}?spot=${spot.spotId}&day=${day}${to ? `&to=${to}` : ''}`;
@@ -393,6 +413,12 @@ function SpotCard({ locale, beach, spot, day, to, selected, suggested }: { local
     <li className={selected ? 'spot plan-chosen' : 'spot'} aria-current={selected ? 'true' : undefined}>
       <span className="spot__code">{spot.code}</span>
       <p>{spot.typeName}</p>
+      {/* «Vedi la scheda» col nome del tipo per gli screen reader (D63, testi vagliati). */}
+      {cardHref ? (
+        <p>
+          <TypeCardLink locale={locale} href={cardHref} typeName={spot.typeName} />
+        </p>
+      ) : null}
       {/* La zona con nome del Gestore (D50), identica nelle due lingue. */}
       {spot.zoneName ? <p>{z.badge(spot.zoneName)}</p> : null}
       <p>{t.equipment(spot.umbrellas, spot.sunbeds)}</p>
@@ -952,7 +978,22 @@ function BeachMap({
 }
 
 /** Bottom bar with the chosen spot and the one step forward. It stays in the flow of the page, so it never hides its end. */
-function SelectionBar({ locale, beach, spot, day, to }: { locale: Locale; beach: ApiBeach; spot: ApiMapSpot & { priceCents: number }; day: string; to?: string }) {
+function SelectionBar({
+  locale,
+  beach,
+  spot,
+  day,
+  to,
+  cardHref,
+}: {
+  locale: Locale;
+  beach: ApiBeach;
+  spot: ApiMapSpot & { priceCents: number };
+  day: string;
+  to?: string;
+  /** Address of the card of the chosen type (D63): the type name becomes the link. */
+  cardHref?: string;
+}) {
   const t = getDictionary(locale, config.brandName).booking;
   const c = getDictionary(locale, config.brandName).cart;
   const z = getDictionary(locale, config.brandName).zone;
@@ -966,6 +1007,17 @@ function SelectionBar({ locale, beach, spot, day, to }: { locale: Locale; beach:
         </p>
         <p className="plan-bar__price">{formatMoney(spot.priceCents, locale)}</p>
         <p className="plan-bar__detail">
+          {/* Il nome del tipo è il collegamento alla sua scheda (D63). */}
+          {cardHref ? (
+            <>
+              <Link href={cardHref} prefetch={false}>
+                {spot.typeName}
+              </Link>
+              {'. '}
+            </>
+          ) : (
+            `${spot.typeName}. `
+          )}
           {/* Con un periodo il prezzo della barra è il totale dal–al (D39). */}
           {to ? `${t.periodValue(formatPeriod(day, to, locale), periodDays(day, to))}. ` : ''}
           {t.equipment(spot.umbrellas, spot.sunbeds)}. {t.guests(spot.maxGuests)}.{spot.status === 'shared' ? ` ${t.sharedDay}.` : ''}
@@ -997,6 +1049,8 @@ export async function BeachView({ lang, section, slug, query }: { lang: string; 
   // Le recensioni pubbliche (D51): se l'elenco non si legge, la sezione non inventa nulla.
   const reviewsResult = await api.reviews(beach.slug);
   const reviews = reviewsResult.ok ? reviewsResult.data.reviews : null;
+  // I tipi offerti con la loro scheda (D61, D63): riquadro e collegamenti «Vedi la scheda».
+  const types = await spotTypesOf(beach.slug);
   const asked = first(query.day);
   const day = isDay(asked) ? asked : nextDay;
   // «Al» facoltativo (D39): vuoto o uguale a «dal», la pagina resta di una giornata.
@@ -1029,6 +1083,14 @@ export async function BeachView({ lang, section, slug, query }: { lang: string; 
   const suggested = suggestedId ? layout.find((spot) => spot.spotId === suggestedId) : undefined;
   const alternateQuery = isDay(asked) ? `?day=${asked}${to ? `&to=${to}` : ''}${guests ? `&guests=${guests}` : ''}${selected ? `&spot=${selected.spotId}` : ''}` : '';
 
+  // Il «torna» degli ingressi (D63): questa stessa pagina con la query e l'àncora giuste.
+  const selfQuery = day ? `?day=${day}${to ? `&to=${to}` : ''}${guests ? `&guests=${guests}` : ''}${selected ? `&spot=${selected.spotId}` : ''}` : '';
+  const self = beachPath(locale, beach.slug) + selfQuery;
+  const cardHrefFor = (typeName: string, anchor: string): string | undefined => {
+    const type = typeByName(types, typeName);
+    return type ? typeCardHref(locale, beach.slug, type.typeId, `${self}#${anchor}`) : undefined;
+  };
+
   return (
     <PageShell locale={locale} page="search" alternatePath={beachPath(otherLocale(locale), beach.slug) + alternateQuery} crumbs={crumbsFor(locale, beach)}>
       <PageHead title={beach.name} lead={t.beachLead(beach.locality)}>
@@ -1053,6 +1115,8 @@ export async function BeachView({ lang, section, slug, query }: { lang: string; 
       ) : null}
       {/* I servizi del catalogo per esteso, con le icone sobrie (D49). */}
       <AmenitiesSection locale={locale} beach={beach} hasSite={Boolean(site && texts)} />
+      {/* Il riquadro «I tipi di postazione» (D63): i tipi offerti, miniatura e collegamento. */}
+      <TypeCardsPanel locale={locale} beachSlug={beach.slug} types={types} torna={`${self}#${typesPanelAnchor}`} />
       <section className="section" id={pickerAnchor}>
         <div className="container">
           {first(query.taken) ? <p className="alert" role="alert">{to ? t.takenPeriodNotice : t.takenNotice}</p> : null}
@@ -1153,6 +1217,7 @@ export async function BeachView({ lang, section, slug, query }: { lang: string; 
                                     to={to}
                                     selected={spot.spotId === selected?.spotId}
                                     suggested={spot.spotId === suggestedId}
+                                    cardHref={cardHrefFor(spot.typeName, 'elenco')}
                                   />
                                 ))}
                               </ul>
@@ -1171,7 +1236,7 @@ export async function BeachView({ lang, section, slug, query }: { lang: string; 
       </section>
       {/* «Le recensioni degli Ospiti» (D51): dal più recente, con replica e nota di segnalazione. */}
       {reviews !== null ? <ReviewsSection locale={locale} reviews={reviews} /> : null}
-      {selected && day ? <SelectionBar locale={locale} beach={beach} spot={selected} day={day} to={to} /> : null}
+      {selected && day ? <SelectionBar locale={locale} beach={beach} spot={selected} day={day} to={to} cardHref={cardHrefFor(selected.typeName, 'scelta')} /> : null}
     </PageShell>
   );
 }
@@ -1184,7 +1249,8 @@ export function PriceSummary({
   deposit,
 }: {
   locale: Locale;
-  rows: [string, string][];
+  /** Label and value; the value may carry a link, like the spot type row (D63). */
+  rows: [string, ReactNode][];
   quote: { listPriceCents: number; discountCents: number; extrasCents: number; totalCents: number; promoCode: string | null; extras: ApiExtraLine[] };
   /** The days of a dal–al period (D39), one priced line each. Listed only beyond one day. */
   days?: { day: string; totalCents: number }[];
@@ -1373,6 +1439,29 @@ export async function BookView({ lang, section, slug, step, query }: { lang: str
   const selfHref = bookPath(locale, beach.slug);
   const alternate = `${bookPath(otherLocale(locale), beach.slug)}?spot=${spotId}&day=${day}${toQuery}`;
 
+  // Il tipo della voce è un collegamento alla sua scheda (D63), col ritorno ESATTO a
+  // questo riepilogo: stessa query, codice promozionale e quantità degli extra compresi.
+  const types = await spotTypesOf(beach.slug);
+  const typeEntry = spot ? typeByName(types, spot.typeName) : undefined;
+  const tornaBook =
+    `${selfHref}?spot=${spotId}&day=${day}${toQuery}` +
+    (quote.ok && quote.data.promoCode ? `&promo=${encodeURIComponent(quote.data.promoCode)}` : '') +
+    chosen.map((entry) => `&extra-${entry.serviceId}=${entry.quantity}`).join('');
+  const typeRow: [string, ReactNode][] = spot
+    ? [
+        [
+          getDictionary(locale, config.brandName).typeCards.typeRow,
+          typeEntry ? (
+            <Link key="tipo" href={typeCardHref(locale, beach.slug, typeEntry.typeId, tornaBook)} prefetch={false}>
+              {spot.typeName}
+            </Link>
+          ) : (
+            spot.typeName
+          ),
+        ],
+      ]
+    : [];
+
   return (
     <PageShell locale={locale} page="search" alternatePath={alternate} crumbs={crumbsFor(locale, beach, t.summaryTitle)}>
       <PageHead title={t.bookTitle(beach.name)} lead={t.holdNote} />
@@ -1403,6 +1492,8 @@ export async function BookView({ lang, section, slug, step, query }: { lang: str
                     ? [t.periodRow, t.periodValue(formatPeriod(day, to, locale), periodDays(day, to))]
                     : [t.dayRow, formatDay(day, locale)],
                   [t.spotRow, `${spot.code}, ${t.row(spot.rowNumber)}`],
+                  // Il tipo della voce, collegato alla sua scheda (D63).
+                  ...typeRow,
                   // La zona con nome (D50), quando la postazione ne ha una.
                   ...(spot.zoneName ? ([[z.label, spot.zoneName]] as [string, string][]) : []),
                   [t.equipmentRow, t.equipment(spot.umbrellas, spot.sunbeds)],
@@ -1498,6 +1589,23 @@ export async function HoldView({ lang, section, slug, step, holdId }: { lang: st
   const c = getDictionary(locale, config.brandName).checkout;
   const alternate = `${beachPath(otherLocale(locale), beach.slug)}/${holdSegment[otherLocale(locale)]}/${holdId}`;
 
+  // Il tipo della riserva è un collegamento alla sua scheda (D63), col ritorno a questa pagina.
+  const types = await spotTypesOf(beach.slug);
+  const typeEntry = typeByName(types, held.spot.typeName);
+  const tornaHold = `${beachPath(locale, beach.slug)}/${holdSegment[locale]}/${holdId}`;
+  const typeRow: [string, ReactNode][] = [
+    [
+      getDictionary(locale, config.brandName).typeCards.typeRow,
+      typeEntry ? (
+        <Link key="tipo" href={typeCardHref(locale, beach.slug, typeEntry.typeId, tornaHold)} prefetch={false}>
+          {held.spot.typeName}
+        </Link>
+      ) : (
+        held.spot.typeName
+      ),
+    ],
+  ];
+
   return (
     <PageShell locale={locale} page="search" alternatePath={alternate} crumbs={crumbsFor(locale, beach, t.holdTitle)}>
       <PageHead
@@ -1520,6 +1628,8 @@ export async function HoldView({ lang, section, slug, step, holdId }: { lang: st
                     ? [t.periodRow, t.periodValue(formatPeriod(held.from, held.to, locale), periodDays(held.from, held.to))]
                     : [t.dayRow, formatDay(held.day, locale)],
                   [t.spotRow, `${held.spot.code}, ${t.row(held.spot.rowNumber)}`],
+                  // Il tipo della voce, collegato alla sua scheda (D63).
+                  ...typeRow,
                   // La zona con nome (D50), quando la postazione ne ha una.
                   ...(held.spot.zoneName ? ([[getDictionary(locale, config.brandName).zone.label, held.spot.zoneName]] as [string, string][]) : []),
                   [t.equipmentRow, t.equipment(held.spot.umbrellas, held.spot.sunbeds)],

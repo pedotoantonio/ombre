@@ -9,7 +9,7 @@ import { recordRefundDue, recordSale } from './ledger';
 import type { Actor } from './manage';
 import { apportionPaid, orderQuotaByGroup, paidCentsByGroup, paidCentsOfGroup, paymentStateOf, type PaymentState } from './payments';
 import { cancellationDeadlines } from './settings';
-import { accessEvent, allocation, auditEvent, beach, beachZone, booking, bookingExtra, bookingGroup, cart, cartItem, cartItemExtra, hold, holdExtra, hotelConvention, inventoryDay, ledgerEntry, orderGroup, pass, payment, paymentRequest, promotion, providerEvent, refund, spot } from './schema';
+import { accessEvent, allocation, auditEvent, beach, beachZone, booking, bookingExtra, bookingGroup, cart, cartItem, cartItemExtra, hold, holdExtra, hotelConvention, inventoryDay, ledgerEntry, orderGroup, pass, payment, paymentRequest, promotion, providerEvent, refund, spot, spotType } from './schema';
 
 /** Signs identifiers so that links and passes cannot be guessed and need no stored secret per row. */
 function sign(secret: string, purpose: string, id: string): string {
@@ -1338,6 +1338,8 @@ export async function confirmOrder(db: Database, beachId: string, input: Confirm
 export interface OrderItemView {
   code: string;
   spotCode: string;
+  /** Name of the spot type, so the order summary can link its card (D63). */
+  typeName: string;
   /** Name of the manager's named zone (D50); null when the spot belongs to none. */
   zoneName: string | null;
   from: string;
@@ -1387,10 +1389,11 @@ export function getOrder(db: Database, beachId: string, orderId: string, accessT
     const passOf = new Map(passes.map((row) => [row.groupId, row]));
     const dayRows = groupIds.length > 0
       ? await tx
-          .select({ groupId: booking.groupId, status: booking.status, guestName: booking.guestName, day: inventoryDay.day, spotCode: spot.code, zoneName: beachZone.name })
+          .select({ groupId: booking.groupId, status: booking.status, guestName: booking.guestName, day: inventoryDay.day, spotCode: spot.code, typeName: spotType.name, zoneName: beachZone.name })
           .from(booking)
           .innerJoin(inventoryDay, eq(inventoryDay.id, booking.inventoryDayId))
           .innerJoin(spot, eq(spot.id, inventoryDay.spotId))
+          .innerJoin(spotType, eq(spotType.id, spot.typeId))
           .leftJoin(beachZone, eq(beachZone.id, spot.namedZoneId))
           .where(inArray(booking.groupId, groupIds))
           .orderBy(asc(inventoryDay.day))
@@ -1446,6 +1449,7 @@ export function getOrder(db: Database, beachId: string, orderId: string, accessT
       return {
         code: group.code,
         spotCode: members[0]?.spotCode ?? '',
+        typeName: members[0]?.typeName ?? '',
         zoneName: members[0]?.zoneName ?? null,
         from,
         to: total?.to ?? members[members.length - 1]?.day ?? '',
