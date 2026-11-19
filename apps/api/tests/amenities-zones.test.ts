@@ -37,6 +37,10 @@ describe.skipIf(!testAdminUrl)('amenities and named zones over the API (D49, D50
   const reception = () => tokens.reception!;
 
   it('replaces the amenity set from the settings panel and shows it on the public card', async () => {
+    // The seed already chose a set (D49): the card starts from it, in catalogue order.
+    const seeded = (await (await send('GET', `/v1/beaches/${slug}`)).json()) as { beach: { amenities: string[] } };
+    expect(seeded.beach.amenities).toEqual(['bar', 'hot_showers', 'accessible', 'wifi', 'cabins']);
+
     // Only the manager (site.edit): the reception sets no amenities.
     expect((await send('PUT', `${manage}/amenities`, { amenities: ['bar'] }, reception())).status).toBe(403);
     expect((await send('PUT', `${manage}/amenities`, { amenities: ['bar'] })).status).toBe(401);
@@ -70,7 +74,8 @@ describe.skipIf(!testAdminUrl)('amenities and named zones over the API (D49, D50
     expect((await send('POST', `${manage}/zones`, { name: 'Zona Relax' }, manager())).status).toBe(409);
     expect((await send('POST', `${manage}/zones`, { name: 'X' }, manager())).status).toBe(400);
 
-    // The row gesture, like the rental per row: row 1 of the umbrellas (A01–A04).
+    // The row gesture, like the rental per row: row 1 of the umbrellas (A01–A04),
+    // taken over from the seeded zone «Prima fila».
     const rowed = await send('PUT', `${manage}/layout/rows/zone`, { zone: 'ombrelloni', rowNumber: 1, zoneId }, manager());
     expect(rowed.status).toBe(200);
     expect(await rowed.json()).toEqual({ updated: 4 });
@@ -81,19 +86,22 @@ describe.skipIf(!testAdminUrl)('amenities and named zones over the API (D49, D50
     expect(a02).toMatchObject({ namedZoneId: zoneId, zoneName: 'Zona Relax' });
     expect((await send('PUT', `${manage}/layout/spots/${a02.spotId}`, { namedZoneId: null }, manager())).status).toBe(204);
 
-    expect((await send('PUT', `${manage}/zones/${zoneId}`, { name: 'Prima fila' }, manager())).status).toBe(204);
+    // A rename cannot collide with another zone's name — the seeded «Prima fila» holds it.
+    expect((await send('PUT', `${manage}/zones/${zoneId}`, { name: 'Prima fila' }, manager())).status).toBe(409);
+    expect((await send('PUT', `${manage}/zones/${zoneId}`, { name: 'Fila a riva' }, manager())).status).toBe(204);
 
     // The public map carries the name next to the code, nothing denormalized.
     const publicMap = (await (await send('GET', `/v1/beaches/${slug}/availability?day=${demoBeach.day}`)).json()) as { layout: { code: string; zoneName: string | null }[] };
     const nameOf = new Map(publicMap.layout.map((place) => [place.code, place.zoneName]));
-    expect(nameOf.get('A01')).toBe('Prima fila');
+    expect(nameOf.get('A01')).toBe('Fila a riva');
     expect(nameOf.get('A02')).toBeNull();
     expect(nameOf.get('B01')).toBeNull();
 
     const removed = await send('DELETE', `${manage}/zones/${zoneId}`, undefined, manager());
     expect(removed.status).toBe(200);
     expect(await removed.json()).toEqual({ detachedSpots: 3 });
-    const zones = (await (await send('GET', `${manage}/zones`, undefined, manager())).json()) as { zones: unknown[] };
-    expect(zones.zones).toEqual([]);
+    // The seeded zone stays, now without spots: the row gesture above took them.
+    const zones = (await (await send('GET', `${manage}/zones`, undefined, manager())).json()) as { zones: { name: string; spots: number }[] };
+    expect(zones.zones).toMatchObject([{ name: 'Prima fila', spots: 0 }]);
   });
 });

@@ -1,15 +1,20 @@
 import pg from 'pg';
 import { demoImage, type DemoMediaId, type Locale, type MembershipRole, type SiteContent, type SiteTexts } from '@ombre/shared';
+import { relinkBookings } from './account';
+import { setAmenities } from './amenities';
 import { applyPaymentOutcome, cancelByBeachClub, checkAccess, deskBooking, startCheckout } from './bookings';
 import { assignCabin, createCabin, decideSublet, proposeSublet } from './cabins';
-import { connect } from './client';
+import { connect, type Database } from './client';
 import { acquireHold } from './inventory';
 import { addElement, addSpot } from './layout';
 import { closeDay } from './ledger';
 import { publishDay, type Actor } from './manage';
+import { createReview, replyToReview } from './reviews';
 import { demoAccounts, demoHolderEmail } from './seed';
+import { setCancellationPolicy, setPaymentSettings } from './settings';
 import { decideProposal, listProposals, proposeDays } from './sharing';
 import { createSpotType, listSpotTypes, updateSpotType } from './spot-types';
+import { assignZoneToRow, createZone } from './zones';
 
 /**
  * "Lido Aurora": a larger fictional beach club for demonstrations, with pictures, prices by
@@ -33,6 +38,9 @@ export const showcaseHolders = [
 
 /** Demonstrative cabin holder: CAB1 is assigned to this account. */
 export const showcaseCabinHolder = { email: 'cabina@lidoaurora.example', name: 'Titolare di cabina dimostrativo' } as const;
+
+/** Demonstrative guest (D51): owns concluded stays at Lido Aurora and reviews them. */
+export const showcaseGuest = { email: 'ospite@ombre.example', name: 'Ospite dimostrativo' } as const;
 
 const rows = [
   { letter: 'A', priceCents: 4500, sunbeds: 2, maxGuests: 2 },
@@ -93,6 +101,120 @@ function siteTexts(locale: Locale): SiteTexts {
   };
 }
 
+/**
+ * «Cala del Moro»: a small third beach club to show «caparra adesso, saldo al
+ * lido» (D52) and its own cancellation terms (D53) — ten spots in two rows,
+ * two weeks on sale, a minimal published website.
+ */
+export const calaBeach = {
+  slug: 'cala-del-moro',
+  name: 'Cala del Moro',
+  locality: 'Porto Selvaggio',
+  // Porto Selvaggio exists, the beach club does not: plausible Ionian coordinates, sample data.
+  latitude: 40.1537,
+  longitude: 17.9655,
+} as const;
+
+export const calaManagerEmail = 'gestore@caladelmoro.example';
+
+const calaRows = [
+  { letter: 'A', priceCents: 3500 },
+  { letter: 'B', priceCents: 2800 },
+] as const;
+const calaSpotsPerRow = 5;
+const calaPublishedDays = 14;
+
+function calaSiteTexts(locale: Locale): SiteTexts {
+  // A minimal site: the cover and three pictures from the demo library, nothing new.
+  const gallery: DemoMediaId[] = ['tramonto', 'passerella', 'docce'];
+  const images = { cover: demoImage('riva', locale), gallery: gallery.map((id) => demoImage(id, locale)) };
+  if (locale === 'en') {
+    return {
+      tagline: 'A quiet cove, ten umbrellas and the sea',
+      description:
+        'Cala del Moro is a small fictional beach club created to try the deposit flow: ten spots in two rows over a quiet cove. Every name, price and picture here is sample data.',
+      services: ['Beach bar', 'Parking'],
+      openingPeriod: 'From 1 June to 15 September',
+      openingHours: 'Every day from 9:00 to 19:00',
+      address: 'Baia di Porto Selvaggio 3, Porto Selvaggio (fictional address)',
+      phone: '+39 000 000 0003',
+      accessibility: 'A short path leads down to the sand; help on request.',
+      images,
+    };
+  }
+  return {
+    tagline: 'Una cala tranquilla, dieci ombrelloni e il mare',
+    description:
+      'Cala del Moro è un piccolo stabilimento di fantasia creato per provare la caparra: dieci postazioni in due file su una cala tranquilla. Nomi, prezzi e immagini sono dati di esempio.',
+    services: ['Chiosco bar', 'Parcheggio'],
+    openingPeriod: 'Dal 1º giugno al 15 settembre',
+    openingHours: 'Tutti i giorni dalle 9:00 alle 19:00',
+    address: 'Baia di Porto Selvaggio 3, Porto Selvaggio (indirizzo di fantasia)',
+    phone: '+39 000 000 0003',
+    accessibility: 'Un breve sentiero scende fino alla sabbia; aiuto su richiesta.',
+    images,
+  };
+}
+
+/** Creates Cala del Moro once; guarded by its own slug, like the main showcase club. */
+async function seedCalaDelMoro(client: pg.Client, db: Database): Promise<void> {
+  const existing = await client.query('SELECT 1 FROM beach WHERE slug = $1', [calaBeach.slug]);
+  if ((existing.rowCount ?? 0) > 0) return;
+
+  const clock = await client.query<{ today: string }>("SELECT (now() AT TIME ZONE 'Europe/Rome')::date::text AS today");
+  const today = clock.rows[0]!.today;
+
+  // ---- Fixed data in one transaction: beach club, spots, calendar, manager, website ----
+  await client.query('BEGIN');
+  const beach = await client.query<{ id: string }>(
+    `INSERT INTO beach (slug, name, locality, status, demo, latitude, longitude)
+     VALUES ($1, $2, $3, 'active', true, $4, $5) RETURNING id`,
+    [calaBeach.slug, calaBeach.name, calaBeach.locality, calaBeach.latitude, calaBeach.longitude],
+  );
+  const beachId = beach.rows[0]!.id;
+  for (const [index, row] of calaRows.entries()) {
+    for (let number = 1; number <= calaSpotsPerRow; number += 1) {
+      const code = `${row.letter}${String(number).padStart(2, '0')}`;
+      const created = await client.query<{ id: string }>(
+        'INSERT INTO spot (beach_id, code, row_number, umbrellas, sunbeds, max_guests) VALUES ($1, $2, $3, 1, 2, 2) RETURNING id',
+        [beachId, code, index + 1],
+      );
+      for (let offset = 0; offset < calaPublishedDays; offset += 1) {
+        await client.query(
+          "INSERT INTO inventory_day (beach_id, spot_id, day, state, price_cents) VALUES ($1, $2, $3::date + $4::int, 'available', $5)",
+          [beachId, created.rows[0]!.id, today, offset, row.priceCents],
+        );
+      }
+    }
+  }
+  // No season pass here, but a sale still splits between beach club and platform.
+  await client.query('INSERT INTO split_rule (beach_id, season_holder_bps, beach_club_bps, platform_bps) VALUES ($1, 0, 9000, 1000)', [beachId]);
+  // The manager account with a random password, like the demo seed: sign-in
+  // would come only from a later, explicit password.
+  const managerId = await ensureUser(client, calaManagerEmail, 'Gestore di Cala del Moro');
+  await client.query("INSERT INTO membership (user_id, beach_id, role) VALUES ($1, $2, 'manager') ON CONFLICT DO NOTHING", [managerId, beachId]);
+  const content: SiteContent = { it: calaSiteTexts('it'), en: calaSiteTexts('en') };
+  await client.query(
+    "INSERT INTO site_revision (beach_id, number, status, template, content, created_by, published_at) VALUES ($1, 1, 'published', 'boutique', $2, $3, now())",
+    [beachId, JSON.stringify(content), managerId],
+  );
+  await client.query('COMMIT');
+
+  // ---- Through the product's own functions, as the manager ----
+  const actor: Actor = { userId: managerId, beachId, role: 'manager' };
+  // «Caparra adesso, saldo al lido» (D52): 30% online, the rest at the beach.
+  await setPaymentSettings(db, actor, { mode: 'deposit', depositPercent: 30 });
+  // Its own cancellation terms (D53): 72 hours, with the club's short texts.
+  await setCancellationPolicy(db, actor, {
+    deadlineHours: 72,
+    policyIt: 'Annullamento gratuito fino a 72 ore prima del giorno di arrivo; oltre, la caparra non viene restituita.',
+    policyEn: 'Free cancellation up to 72 hours before the arrival day; after that, the deposit is not returned.',
+  });
+  await setAmenities(db, actor, { amenities: ['bar', 'parking', 'hot_showers', 'wifi'] });
+  const primaFila = await createZone(db, actor, { name: 'Prima fila' });
+  await assignZoneToRow(db, actor, { zone: 'ombrelloni', rowNumber: 1, zoneId: primaFila.zoneId });
+}
+
 async function ensureUser(client: pg.Client, email: string, name: string): Promise<string> {
   // A random password nobody knows: sign-in becomes possible only when a demo password is set afterwards.
   const result = await client.query<{ id: string }>(
@@ -109,6 +231,10 @@ export async function seedShowcase(adminUrl: string, signingSecret: string): Pro
   // The scenario runs as the restricted application role: the same rules as the real product.
   const app = connect(adminUrl, { role: 'ombre_app', max: 4 });
   try {
+    // The small club with the deposit first, behind its own guard: it exists
+    // even when Lido Aurora is already there from an earlier run.
+    await seedCalaDelMoro(client, app.db);
+
     const existing = await client.query<{ id: string }>('SELECT id FROM beach WHERE slug = $1', [showcaseBeach.slug]);
     if (existing.rows[0]) return { created: false, beachId: existing.rows[0].id };
 
@@ -211,6 +337,17 @@ export async function seedShowcase(adminUrl: string, signingSecret: string): Pro
     const manager: Actor = { userId: staff.manager!, beachId, role: 'manager' };
     const reception: Actor = { userId: staff.reception!, beachId, role: 'reception' };
 
+    // Amenities (D49) from the fixed catalogue and named zones (D50): «Prima fila»
+    // on row A, «Vicino al bar» on the land-side sunbeds next to the drawn Bar,
+    // «Area famiglie» on row E, the one with the most sunbeds.
+    await setAmenities(db, manager, { amenities: ['bar', 'restaurant', 'parking', 'hot_showers', 'playground', 'pets', 'wifi', 'lifeguard'] });
+    const primaFila = await createZone(db, manager, { name: 'Prima fila' });
+    await assignZoneToRow(db, manager, { zone: 'ombrelloni', rowNumber: 1, zoneId: primaFila.zoneId });
+    const vicinoAlBar = await createZone(db, manager, { name: 'Vicino al bar' });
+    await assignZoneToRow(db, manager, { zone: 'monte', rowNumber: 1, zoneId: vicinoAlBar.zoneId });
+    const areaFamiglie = await createZone(db, manager, { name: 'Area famiglie' });
+    await assignZoneToRow(db, manager, { zone: 'ombrelloni', rowNumber: 5, zoneId: areaFamiglie.zoneId });
+
     // The drawing: a central vertical walkway, a horizontal one after row C,
     // the bar on the land side and a block of four sea cabins.
     await addElement(db, manager, { kind: 'walkway', orientation: 'vertical', colStart: 4 });
@@ -288,10 +425,10 @@ export async function seedShowcase(adminUrl: string, signingSecret: string): Pro
     await decide('C02', 2, true);
     await decide('D01', 1, true);
 
-    const book = async (code: string, offset: number, guestName: string, options: { promo?: string; locale?: Locale; pay?: boolean } = {}) => {
+    const book = async (code: string, offset: number, guestName: string, options: { promo?: string; locale?: Locale; pay?: boolean; email?: string } = {}) => {
       const onDay = day(offset);
       const held = await acquireHold(db, beachId, { spotId: spots[code]!, day: onDay, promoCode: options.promo, idempotencyKey: `showcase-${code}-${onDay}`, ttlSeconds: 900 });
-      const email = `${guestName.toLowerCase().replace(/[^a-z]+/g, '.')}@example.org`;
+      const email = options.email ?? `${guestName.toLowerCase().replace(/[^a-z]+/g, '.')}@example.org`;
       const started = await startCheckout(db, beachId, { holdId: held.holdId, guestName, guestEmail: email, locale: options.locale ?? 'it' }, signingSecret);
       if (options.pay !== false) {
         await applyPaymentOutcome(db, { provider: 'sandbox', eventId: `showcase-${started.bookingId}`, reference: started.payment.reference, outcome: 'succeeded' });
@@ -322,16 +459,21 @@ export async function seedShowcase(adminUrl: string, signingSecret: string): Pro
     await book('A04', 3, 'Marta Leone', { pay: false });
 
     // Past days, to show completed bookings and accrued shares: sold on far days, then moved back.
-    const history: [string, number, number, string][] = [
+    // The last three stays belong to the demonstrative guest, who reviews them below (D51).
+    const history: [string, number, number, string, string?][] = [
       ['E01', 15, -1, 'Nicola Bruno'],
       ['E02', 15, -1, 'Laura Gatti'],
       ['B04', 15, -1, 'Simone Fabbri'],
       ['E03', 16, -2, 'Alice Marino'],
       ['E04', 16, -2, 'Fabio Testa'],
+      ['E05', 17, -1, showcaseGuest.name, showcaseGuest.email],
+      ['E06', 18, -2, showcaseGuest.name, showcaseGuest.email],
+      ['E07', 19, -3, showcaseGuest.name, showcaseGuest.email],
     ];
     const sequence = new Map<string, number>();
-    for (const [code, soldOn, movedTo, guestName] of history) {
-      const sold = await book(code, soldOn, guestName);
+    const guestGroups: string[] = [];
+    for (const [code, soldOn, movedTo, guestName, email] of history) {
+      const sold = await book(code, soldOn, guestName, email ? { email } : {});
       const past = day(movedTo);
       const next = (sequence.get(past) ?? 0) + 1;
       sequence.set(past, next);
@@ -342,9 +484,30 @@ export async function seedShowcase(adminUrl: string, signingSecret: string): Pro
       await client.query('UPDATE booking_group SET code = $1 WHERE id = (SELECT group_id FROM booking WHERE id = $2)', [renamed, sold.bookingId]);
       await client.query('UPDATE booking SET code = $1 WHERE id = $2', [renamed, sold.bookingId]);
       await publish(code, day(soldOn));
+      if (email) {
+        const group = await client.query<{ group_id: string }>('SELECT group_id FROM booking WHERE id = $1', [sold.bookingId]);
+        guestGroups.push(group.rows[0]!.group_id);
+      }
     }
     await closeDay(db, beachId, day(-1));
     await closeDay(db, beachId, day(-2));
+    await closeDay(db, beachId, day(-3));
+
+    // Verified reviews (D51): the guest account takes its concluded stays by email,
+    // the way a real registration relinks them, and reviews each one; the manager
+    // answers the first. No flagged review here: the public showcase stays clean,
+    // flagging is exercised by the test suites.
+    const guestId = await ensureUser(client, showcaseGuest.email, showcaseGuest.name);
+    await relinkBookings(db, guestId, showcaseGuest.email);
+    const reviewTexts = [
+      { rating: 5, body: 'Spiaggia curata e personale gentilissimo. La prima fila vale ogni centesimo: torneremo di sicuro.' },
+      { rating: 4, body: 'Ombrelloni comodi e mare pulito; al chiosco un po’ di coda all’ora di pranzo.' },
+      { rating: 4, body: 'Prenotazione semplice e pass subito sul telefono. Docce calde ottime.' },
+    ] as const;
+    for (const [index, entry] of reviewTexts.entries()) {
+      const created = await createReview(db, { userId: guestId, groupId: guestGroups[index]!, rating: entry.rating, body: entry.body });
+      if (index === 0) await replyToReview(db, manager, { reviewId: created.reviewId, reply: 'Grazie di cuore! Vi aspettiamo di nuovo in prima fila.' });
+    }
 
     return { created: true, beachId };
   } catch (error) {

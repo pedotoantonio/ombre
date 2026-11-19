@@ -125,6 +125,10 @@ describe.skipIf(!testAdminUrl)('sign-in, roles and inventory management', () => 
       'SELECT a.action, u.email FROM audit_event a JOIN app_user u ON u.id = a.actor_user_id ORDER BY a.created_at',
     );
     expect(trail.rows.map((row) => `${row.email.split('@')[0]}:${row.action}`)).toEqual([
+      // The first three come from the seed: amenities and the zone «Prima fila» (D49, D50).
+      'gestore:beach.amenities',
+      'gestore:zone.create',
+      'gestore:zone.assign-row',
       'gestore:inventory.publish',
       'gestore:inventory.publish',
       'reception:inventory.block',

@@ -1,13 +1,14 @@
 # Ambiente dimostrativo: cosa c'è e cosa provare
 
-L'ambiente dimostrativo contiene due stabilimenti di fantasia. Nessun dato è reale:
+L'ambiente dimostrativo contiene tre stabilimenti di fantasia. Nessun dato è reale:
 nomi, prezzi, persone e immagini sono esempi, e il pagamento passa da un fornitore di
 prova che non muove denaro.
 
 | Stabilimento | A cosa serve |
 |---|---|
-| **Lido Aurora**, Marina Azzurra | La spiaggia finta completa: 40 postazioni in cinque file, immagini, abbonamenti, proposte in attesa, prenotazioni in ogni stato. È quello da usare per provare la gestione |
-| **Bagno delle Dune**, Lido di Pomposa | L'esempio dei documenti di progetto: 8 postazioni il 17/06/2027 a €30 con la promozione MARE10. Lo usano i collaudi automatici |
+| **Lido Aurora**, Marina Azzurra | La spiaggia finta completa: 40 postazioni in cinque file, immagini, abbonamenti, proposte in attesa, prenotazioni in ogni stato, servizi, zone con nome e recensioni con replica. È quello da usare per provare la gestione |
+| **Bagno delle Dune**, Lido di Pomposa | L'esempio dei documenti di progetto: 8 postazioni il 17/06/2027 a €30 con la promozione MARE10, cinque servizi e la zona «Prima fila». Lo usano i collaudi automatici |
+| **Cala del Moro**, Porto Selvaggio | Lo stabilimento piccolo con la caparra: dieci postazioni in due file, due settimane in vendita, caparra del 30% e annullamento entro 72 ore con testi propri |
 
 ## Accessi
 
@@ -23,6 +24,11 @@ L'accesso è in fondo a ogni pagina, «Area riservata».
 | Stagionale Bruno | `bruno@lidoaurora.example` | Postazioni C02 e C05 di Lido Aurora |
 | Stagionale | `stagionale@bagnodelledune.example` | B02 del Bagno delle Dune, D01 e D06 di Lido Aurora |
 | Titolare di cabina | `cabina@lidoaurora.example` | Solo le proprie cabine del mare di Lido Aurora, con proposte di subaffitto |
+| Ospite | `ospite@ombre.example` | «Le mie prenotazioni»: tre soggiorni conclusi a Lido Aurora, già recensiti |
+
+Il gestore di Cala del Moro (`gestore@caladelmoro.example`) esiste solo nei registri,
+con una password casuale che nessuno conosce: quello stabilimento serve a mostrare il
+lato pubblico della caparra, non la gestione.
 
 ## Lido Aurora in breve
 
@@ -59,6 +65,15 @@ L'accesso è in fondo a ogni pagina, «Area riservata».
 - **Ripartizione illustrativa**: 50% stagionale, 40% stabilimento, 10% piattaforma.
 - **Sito**: modello Riviera, testi in italiano e inglese, copertina e galleria con
   illustrazioni di esempio.
+- **Servizi** (D49): otto distintivi dal catalogo fisso — bar, ristorante, parcheggio,
+  docce calde, area giochi, animali ammessi, wifi, salvataggio. Compaiono sulla scheda
+  e nei filtri della «Ricerca ombrellone».
+- **Zone con nome** (D50): «Prima fila» (fila A), «Vicino al bar» (i lettini del lato
+  monte accanto al Bar disegnato), «Area famiglie» (fila E). I nomi compaiono in
+  planimetria, nel riepilogo e nel conto.
+- **Recensioni** (D51): tre recensioni verificate (5, 4, 4) dell'Ospite dimostrativo
+  sui suoi soggiorni conclusi; alla prima il gestore ha risposto. Nessuna recensione
+  segnalata: la segnalazione si prova dalla pagina «Recensioni» del gestore.
 
 ## Cosa trovi già pronto
 
@@ -68,7 +83,7 @@ L'accesso è in fondo a ogni pagina, «Area riservata».
 | Domani e dopodomani | Vendite ordinarie e condivise, una con `ESTATE5` |
 | Domani | Una prenotazione annullata dallo stabilimento, con il rimborso da eseguire |
 | Fra tre giorni | Una prenotazione «in verifica»: l'ospite non ha ancora pagato |
-| Ieri e l'altro ieri | Cinque prenotazioni concluse, con le quote già maturate |
+| Giorni scorsi | Otto prenotazioni concluse con le quote già maturate; tre sono dell'Ospite dimostrativo, già recensite |
 | Proposte | Quattro proposte degli stagionali aspettano la decisione del gestore; una è stata rifiutata |
 
 Convenzioni hotel, servizi extra e richieste di pagamento non hanno dati dimostrativi

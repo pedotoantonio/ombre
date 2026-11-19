@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { holderStatement, listAvailability, seedDemo, seedShowcase, showcaseBeach } from '../src/index';
+import { holderStatement, listAvailability, seedDemo, seedShowcase, showcaseBeach, showcaseGuest } from '../src/index';
 import { createTestDatabase, testAdminUrl, type TestDatabase } from '../src/testing';
 
 const signingSecret = 'segreto-di-prova-lungo-almeno-32-caratteri';
@@ -75,7 +75,8 @@ describe.skipIf(!testAdminUrl)('showcase beach club', () => {
 
   it('holds bookings in every state, made through the product itself', async () => {
     const states = await database.admin.query<{ status: string; n: string }>('SELECT status, count(*) AS n FROM booking WHERE beach_id = $1 GROUP BY status', [beachId]);
-    expect(Object.fromEntries(states.rows.map((row) => [row.status, Number(row.n)]))).toEqual({ confirmed: 10, completed: 5, cancelled: 1, under_review: 1 });
+    // Eight concluded stays: five of passing guests, three of the demonstrative guest who reviews them.
+    expect(Object.fromEntries(states.rows.map((row) => [row.status, Number(row.n)]))).toEqual({ confirmed: 10, completed: 8, cancelled: 1, under_review: 1 });
     const presence = await database.admin.query<{ presence: string; n: string }>("SELECT presence, count(*) AS n FROM booking WHERE beach_id = $1 AND status = 'confirmed' GROUP BY presence", [beachId]);
     expect(Object.fromEntries(presence.rows.map((row) => [row.presence, Number(row.n)]))).toEqual({ expected: 7, inside: 2, outside_reentry_allowed: 1 });
     expect(await count("booking WHERE beach_id = $1 AND source = 'desk'", [beachId])).toBe(1);
@@ -112,6 +113,47 @@ describe.skipIf(!testAdminUrl)('showcase beach club', () => {
     );
     const statement = await holderStatement(database.app.db, anna.rows[0]!.user_id, anna.rows[0]!.contract_id);
     expect(statement.filter((row) => row.sold)).toEqual([expect.objectContaining({ proposal: 'approved', sold: true, shareCents: 1600, shareState: 'accrued' })]);
+  });
+
+  it('chooses amenities, names three zones and carries three reviews with one reply (D49–D51)', async () => {
+    expect(await count('beach_amenity WHERE beach_id = $1', [beachId])).toBe(8);
+    const zones = await database.admin.query<{ name: string; spots: string }>(
+      'SELECT z.name, count(s.id) AS spots FROM beach_zone z LEFT JOIN spot s ON s.named_zone_id = z.id WHERE z.beach_id = $1 GROUP BY z.name ORDER BY z.name',
+      [beachId],
+    );
+    expect(zones.rows.map((row) => ({ name: row.name, spots: Number(row.spots) }))).toEqual([
+      { name: 'Area famiglie', spots: 8 },
+      { name: 'Prima fila', spots: 8 },
+      { name: 'Vicino al bar', spots: 4 },
+    ]);
+    // The demonstrative guest owns the three concluded stays and reviewed each once.
+    const reviews = await database.admin.query<{ rating: number; status: string; reply: string | null; email: string }>(
+      'SELECT r.rating, r.status, r.reply, u.email FROM review r JOIN app_user u ON u.id = r.user_id WHERE r.beach_id = $1 ORDER BY r.rating DESC',
+      [beachId],
+    );
+    expect(reviews.rows.map((row) => ({ rating: row.rating, status: row.status, replied: row.reply !== null, email: row.email }))).toEqual([
+      { rating: 5, status: 'published', replied: true, email: showcaseGuest.email },
+      { rating: 4, status: 'published', replied: false, email: showcaseGuest.email },
+      { rating: 4, status: 'published', replied: false, email: showcaseGuest.email },
+    ]);
+  });
+
+  it('creates Cala del Moro, small, with the deposit and its own cancellation terms (D52, D53)', async () => {
+    const cala = await database.admin.query<{ id: string; payment_mode: string; deposit_percent: number; cancel_deadline_hours: number; cancel_policy_it: string | null }>(
+      "SELECT id, payment_mode, deposit_percent, cancel_deadline_hours, cancel_policy_it FROM beach WHERE slug = 'cala-del-moro'",
+    );
+    const club = cala.rows[0]!;
+    expect(club.payment_mode).toBe('deposit');
+    expect(club.deposit_percent).toBe(30);
+    expect(club.cancel_deadline_hours).toBe(72);
+    expect(club.cancel_policy_it).toMatch(/72 ore/);
+    expect(await count('spot WHERE beach_id = $1', [club.id])).toBe(10);
+    expect(await count('inventory_day WHERE beach_id = $1', [club.id])).toBe(10 * 14);
+    expect(await count('beach_amenity WHERE beach_id = $1', [club.id])).toBe(4);
+    const zone = await database.admin.query<{ name: string }>('SELECT name FROM beach_zone WHERE beach_id = $1', [club.id]);
+    expect(zone.rows).toEqual([{ name: 'Prima fila' }]);
+    expect(await count("spot WHERE beach_id = $1 AND named_zone_id IS NOT NULL AND row_number = 1", [club.id])).toBe(5);
+    expect(await count("site_revision WHERE beach_id = $1 AND status = 'published'", [club.id])).toBe(1);
   });
 
   it('publishes a website with texts in two languages and sample pictures', async () => {

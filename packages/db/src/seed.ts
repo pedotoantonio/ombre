@@ -1,5 +1,9 @@
 import pg from 'pg';
 import { demoImage, type DemoMediaId, type Locale, type SiteContent, type SiteTexts } from '@ombre/shared';
+import { setAmenities } from './amenities';
+import { connect } from './client';
+import type { Actor } from './manage';
+import { assignZoneToRow, createZone } from './zones';
 
 export const demoBeach = {
   slug: 'bagno-delle-dune',
@@ -123,6 +127,9 @@ export async function seedDemo(adminUrl: string): Promise<{ beachId: string }> {
        ON CONFLICT (email) DO UPDATE SET name = app_user.name RETURNING id`,
       [manager.email, manager.name],
     );
+    // The manager's membership lives in the seed: the amenities and the zone
+    // below are set through the product's functions, which check it.
+    await client.query("INSERT INTO membership (user_id, beach_id, role) VALUES ($1, $2, 'manager') ON CONFLICT DO NOTHING", [managerUser.rows[0]!.id, beachId]);
     const siteContent: SiteContent = { it: demoSiteTexts('it'), en: demoSiteTexts('en') };
     await client.query(
       `INSERT INTO site_revision (beach_id, number, status, template, content, created_by, published_at)
@@ -137,9 +144,24 @@ export async function seedDemo(adminUrl: string): Promise<{ beachId: string }> {
       [beachId],
     );
     await client.query('COMMIT');
+
+    // Amenities (D49) and the named zone «Prima fila» (D50), through the
+    // product's own functions as the manager, like the showcase scenario does.
+    const app = connect(adminUrl, { role: 'ombre_app', max: 2 });
+    try {
+      const actor: Actor = { userId: managerUser.rows[0]!.id, beachId, role: 'manager' };
+      await setAmenities(app.db, actor, { amenities: ['bar', 'hot_showers', 'accessible', 'wifi', 'cabins'] });
+      const zones = await client.query('SELECT 1 FROM beach_zone WHERE beach_id = $1', [beachId]);
+      if (zones.rowCount === 0) {
+        const primaFila = await createZone(app.db, actor, { name: 'Prima fila' });
+        await assignZoneToRow(app.db, actor, { zone: 'ombrelloni', rowNumber: 1, zoneId: primaFila.zoneId });
+      }
+    } finally {
+      await app.close();
+    }
     return { beachId };
   } catch (error) {
-    await client.query('ROLLBACK');
+    await client.query('ROLLBACK').catch(() => undefined);
     throw error;
   } finally {
     await client.end();
