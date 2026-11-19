@@ -7,6 +7,7 @@ import {
   accountPages,
   accountPath,
   accountSection,
+  beachAmenities,
   beachLayoutPath,
   beachLayoutSegment,
   can,
@@ -417,8 +418,9 @@ interface DeskConvention {
 
 async function ManageView({ locale, beachSlug, query }: { locale: Locale; beachSlug: string; query: Query }) {
   if (!slugPattern.test(beachSlug)) notFound();
-  const t = getDictionary(locale, config.brandName).account;
-  const b = getDictionary(locale, config.brandName).booking;
+  const all = getDictionary(locale, config.brandName);
+  const t = all.account;
+  const b = all.booking;
   const extraLine = b.extraLine;
   const { me, token } = await requireMe(locale);
   const membership = me.memberships.find((entry) => entry.beachSlug === beachSlug);
@@ -432,7 +434,7 @@ async function ManageView({ locale, beachSlug, query }: { locale: Locale; beachS
   const month = `${day.slice(0, 8)}01`;
   const monthEnd = new Date(Date.UTC(Number(day.slice(0, 4)), Number(day.slice(5, 7)), 0)).toISOString().slice(0, 10);
 
-  const [inventory, bookings, proposals, settings, contracts, report, beachCard, deskDeals] = await Promise.all([
+  const [inventory, bookings, proposals, settings, contracts, report, beachCard, deskDeals, clubCard] = await Promise.all([
     can(role, 'inventory.read') ? apiCall<{ spots: InventoryRow[] }>('GET', `${base}/inventory?day=${day}`, { token }) : null,
     can(role, 'bookings.read') ? apiCall<{ bookings: BookingRow[] }>('GET', `${base}/bookings?day=${day}`, { token }) : null,
     can(role, 'sharing.manage') ? apiCall<{ proposals: Proposal[] }>('GET', `${base}/proposals?status=proposed`, { token }) : null,
@@ -443,6 +445,15 @@ async function ManageView({ locale, beachSlug, query }: { locale: Locale; beachS
     can(role, 'layout.edit') ? api.beach(beachSlug) : null,
     // The conventions the desk may pick for the day, active and valid on it (spec §4.1).
     can(role, 'bookings.create') ? apiCall<{ conventions: DeskConvention[] }>('GET', `${base}/desk-conventions?day=${day}`, { token }) : null,
+    // The settings panels (D49, D52, D53) prefill from the public card: amenities,
+    // payment mode and cancellation terms are public by nature.
+    can(role, 'site.edit') || can(role, 'sharing.manage')
+      ? apiCall<{
+          beach: { amenities: string[] };
+          payment: { mode: 'full' | 'deposit'; depositPercent: number };
+          cancellation: { deadlineHours: number; policyIt: string | null; policyEn: string | null };
+        }>('GET', `/v1/beaches/${beachSlug}`)
+      : null,
   ]);
   // The active extras of the club: the desk sells them with the spot, same catalogue as online (spec §4.2).
   const deskExtras = can(role, 'bookings.create') ? await api.extras(beachSlug) : null;
@@ -570,6 +581,95 @@ async function ManageView({ locale, beachSlug, query }: { locale: Locale; beachS
                   ) : null}
                 </div>
                 <button className="button button--secondary" type="submit">{t.savePosition}</button>
+              </form>
+            </div>
+          ) : null}
+          {/* I servizi del catalogo (D49): un modulo a caselle che sostituisce l'intero insieme. */}
+          {can(role, 'site.edit') && clubCard?.ok ? (
+            <div className="panel" id="servizi">
+              <h2>{all.amenities.listTitle}</h2>
+              <p className="prose">{all.amenities.manageLead}</p>
+              <form method="post" action="/azioni/gestione-servizi" className="stack">
+                <Hidden values={common} />
+                <fieldset className="checks">
+                  <legend className="visually-hidden">{all.amenities.listTitle}</legend>
+                  {beachAmenities.map((amenity) => (
+                    <label key={amenity}>
+                      <input type="checkbox" name="srv" value={amenity} defaultChecked={clubCard.data.beach.amenities.includes(amenity)} /> {all.amenities[amenity]}
+                    </label>
+                  ))}
+                </fieldset>
+                <button className="button button--secondary" type="submit">{all.amenities.save}</button>
+              </form>
+            </div>
+          ) : null}
+          {/* Pagamento online (D52): intero oppure caparra con la percentuale. */}
+          {can(role, 'sharing.manage') && clubCard?.ok ? (
+            <div className="panel" id="pagamento">
+              <h2>{all.paySettings.title}</h2>
+              <form method="post" action="/azioni/gestione-pagamenti" className="form-row">
+                <Hidden values={common} />
+                <fieldset className="checks">
+                  <legend className="visually-hidden">{all.paySettings.title}</legend>
+                  <label>
+                    <input type="radio" name="mode" value="full" defaultChecked={clubCard.data.payment.mode === 'full'} /> {all.paySettings.full}
+                  </label>
+                  <label>
+                    <input type="radio" name="mode" value="deposit" defaultChecked={clubCard.data.payment.mode === 'deposit'} /> {all.paySettings.deposit}
+                  </label>
+                </fieldset>
+                <div className="field">
+                  <label htmlFor="caparra-percento">{all.paySettings.percent}</label>
+                  <input
+                    id="caparra-percento"
+                    name="percent"
+                    type="number"
+                    inputMode="numeric"
+                    min={10}
+                    max={90}
+                    defaultValue={clubCard.data.payment.depositPercent}
+                    required
+                    aria-describedby="caparra-percento-nota"
+                  />
+                  <p className="field__hint" id="caparra-percento-nota">{all.paySettings.percentHint}</p>
+                </div>
+                <button className="button button--secondary" type="submit">{all.paySettings.save}</button>
+              </form>
+            </div>
+          ) : null}
+          {/* Condizioni di annullamento (D53): termine in ore e testi facoltativi it/en. */}
+          {can(role, 'sharing.manage') && clubCard?.ok ? (
+            <div className="panel" id="condizioni">
+              <h2>{all.cancelSettings.title}</h2>
+              <form method="post" action="/azioni/gestione-condizioni" className="stack">
+                <Hidden values={common} />
+                <div className="form-row">
+                  <div className="field">
+                    <label htmlFor="annullo-ore">{all.cancelSettings.hours}</label>
+                    <input
+                      id="annullo-ore"
+                      name="hours"
+                      type="number"
+                      inputMode="numeric"
+                      min={0}
+                      max={336}
+                      defaultValue={clubCard.data.cancellation.deadlineHours}
+                      required
+                      aria-describedby="annullo-ore-nota"
+                    />
+                    <p className="field__hint" id="annullo-ore-nota">{all.cancelSettings.hoursHint}</p>
+                  </div>
+                </div>
+                <div className="field">
+                  <label htmlFor="annullo-testo-it">{all.cancelSettings.textIt}</label>
+                  <textarea id="annullo-testo-it" name="policyIt" lang="it" maxLength={600} rows={4} defaultValue={clubCard.data.cancellation.policyIt ?? ''} aria-describedby="annullo-testi-nota" />
+                </div>
+                <div className="field">
+                  <label htmlFor="annullo-testo-en">{all.cancelSettings.textEn}</label>
+                  <textarea id="annullo-testo-en" name="policyEn" lang="en" maxLength={600} rows={4} defaultValue={clubCard.data.cancellation.policyEn ?? ''} aria-describedby="annullo-testi-nota" />
+                </div>
+                <p className="field__hint" id="annullo-testi-nota">{all.cancelSettings.textHint}</p>
+                <button className="button button--secondary" type="submit">{all.cancelSettings.save}</button>
               </form>
             </div>
           ) : null}

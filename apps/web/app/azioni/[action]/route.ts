@@ -481,6 +481,24 @@ const actions: Record<string, (request: Request, form: Form, lang: Locale) => Pr
       sharedPriceCents: price === '' ? null : (parseEuro(price) ?? -1),
     });
   },
+  // I servizi del catalogo (D49): le caselle spuntate sostituiscono l'intero insieme.
+  'gestione-servizi': (request, form, lang) => {
+    const ticked = form('amenities');
+    return manage(request, form, lang, '/amenities', 'PUT', { amenities: ticked === '' ? [] : ticked.split(',') });
+  },
+  // Pagamento online (D52): intero oppure caparra, con la percentuale.
+  'gestione-pagamenti': (request, form, lang) =>
+    manage(request, form, lang, '/payment-settings', 'PUT', {
+      mode: form('mode') === 'deposit' ? 'deposit' : 'full',
+      depositPercent: wholeNumber(form('percent')),
+    }),
+  // Condizioni di annullamento (D53): termine in ore e testi facoltativi it/en.
+  'gestione-condizioni': (request, form, lang) =>
+    manage(request, form, lang, '/cancellation-policy', 'PUT', {
+      deadlineHours: wholeNumber(form('hours')),
+      policyIt: annotation(form('policyIt')),
+      policyEn: annotation(form('policyEn')),
+    }),
   'gestione-proposta': (request, form, lang) =>
     manage(request, form, lang, `/proposals/${encodeURIComponent(form('proposal'))}/decision`, 'POST', { approve: form('approve') === 'yes' }),
   'gestione-abbonamento': (request, form, lang) =>
@@ -1258,9 +1276,9 @@ export async function POST(request: Request, context: { params: Promise<{ action
       return pairs.join(',');
     }
     // Checkboxes with the same name arrive as several values: they are joined.
-    const field = name === 'weekdays' ? 'weekday' : name === 'spots' ? 'spot' : name;
+    const field = name === 'weekdays' ? 'weekday' : name === 'spots' ? 'spot' : name === 'amenities' ? 'srv' : name;
     const values = data.getAll(field).filter((value): value is string => typeof value === 'string');
-    return name === 'weekdays' || name === 'gallery' || name === 'spots' ? values.join(',') : (values[0] ?? '');
+    return name === 'weekdays' || name === 'gallery' || name === 'spots' || name === 'amenities' ? values.join(',') : (values[0] ?? '');
   };
   const lang = form('lang');
   if (!isLocale(lang)) return bad();
