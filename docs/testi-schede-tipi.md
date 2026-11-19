@@ -4,8 +4,9 @@ Redazione del 19/11/2026 per la commessa «La scheda della postazione»
 ([specifica](specifica-scheda-postazione.md), §1, livello 1). Sono i testi
 che un lido mostra quando il Gestore stabilimento non ha scritto nulla.
 Destinazione: `packages/shared/src/domain/type-cards.ts`, chiavi
-`typeCards.{segno}.{campo}`. Una proposta sola per voce; il vaglio
-spetta all'esperto di usabilità.
+`typeCards.{segno}.{campo}`. I testi qui sotto sono la versione **dopo il
+vaglio d'usabilità** del 19/11/2026 (sezione in fondo): le voci corrette
+hanno preso il posto della proposta originale.
 
 ## Regole seguite
 
@@ -27,50 +28,53 @@ spetta all'esperto di usabilità.
    guide del sito). In inglese «spot», «beach club» e i nomi dei segni già
    presenti nel dizionario: Umbrella, Single sunbed, Deck chair, Gazebo,
    Tent, Daybed, Canvas gazebo, Canoe, SUP, Pedal boat, Jet ski.
-5. **Lunghezze.** Descrizione 2–4 frasi; dotazione una frase breve;
-   consiglio una frase, presente solo dove aggiunge qualcosa di vero
-   (per il lettino singolo manca di proposito).
+5. **Lunghezze.** Descrizione 2–3 frasi brevi; dotazione una frase breve;
+   consiglio una frase, presente solo dove aggiunge qualcosa di vero e di
+   nuovo (manca per ombrellone, lettino singolo e tenda a telo).
 6. **Tono** del sito: seconda persona singolare («trovi», «controlla»),
    frasi asciutte, nessun punto esclamativo.
 7. **Domande della perizia**, tenute presenti scrivendo: vero oggi (ogni
    frase vale per il tipo in generale); serve qui (ciascuna aiuta a capire
    che cosa si prenota); semplice (parole d'uso corrente, niente gergo
    nautico oltre al nome del mezzo); lessico unico; non duplica (la
-   dotazione e la capienza esatte non si ripetono: stanno nei dati).
+   dotazione e la capienza esatte non si ripetono: stanno nei dati; e la
+   descrizione non ripete la nota di dotazione).
 
 ## Contenuti comuni (una volta sola)
 
 | Chiave | Italiano | Inglese |
 |---|---|---|
-| `typeCards.panel.title` | Le postazioni | The spots |
-| `typeCards.link.label` | Vedi la scheda | See details |
+| `typeCards.panel.title` | I tipi di postazione | Spot types |
+| `typeCards.link.label` | Vedi la scheda | See the card |
 
-**Titolo del riquadro.** «Le postazioni» è già il nome fissato dalla
-specifica e usa la parola unica «postazione»; in inglese «The spots»
-rispecchia «free spots» e «spot» del dizionario (non «spaces», non «types»).
+**Titolo del riquadro.** Il riquadro elenca i tipi offerti dal lido, non
+le postazioni singole: «Le postazioni» si confondeva con «Elenco delle
+postazioni libere» della stessa pagina. «I tipi di postazione» dice che
+cosa si legge e usa la parola unica; in inglese «Spot types» (non
+«spaces», non «types» da solo).
 
-**Etichetta del collegamento.** Scelgo «Vedi la scheda» e non «Che cos'è?»:
-dice che cosa si apre (la «scheda della postazione») senza sembrare un
-dubbio sull'oggetto, e funziona anche per un nome che l'Ospite conosce già.
-Il frontend vi accosta il nome del tipo (testo nascosto agli occhi ma
-letto dagli screen reader: «Vedi la scheda: Ombrellone»), così ogni
-collegamento in elenco resta distinguibile; dove il nome del tipo è già
-esso stesso il collegamento (planimetria, barra di selezione) l'etichetta
-non serve.
+**Etichetta del collegamento.** «Vedi la scheda» dice che cosa si apre
+(la «scheda della postazione») senza sembrare un dubbio sull'oggetto. In
+inglese «See the card», che rispecchia «card» del dizionario («Open the
+card of …», «Close the card») invece del generico «details». Il frontend vi
+accosta il nome del tipo (testo nascosto agli occhi ma letto dagli screen
+reader: «Vedi la scheda: Ombrellone»), così ogni collegamento in elenco
+resta distinguibile; dove il nome del tipo è già esso stesso il
+collegamento (planimetria, barra di selezione) l'etichetta non serve.
 
 ## Ombrellone — `umbrella` (en: Umbrella)
 
 | Chiave | Italiano | Inglese |
 |---|---|---|
-| `typeCards.umbrella.description` | Una postazione con un ombrellone piantato nella sabbia, che fa ombra a chi sta sotto. Hai lo stesso posto per la giornata scelta, con fila e numero che vedi sulla planimetria. Quanti lettini o sdraio ci siano accanto lo dice la dotazione della postazione. | A spot with an umbrella fixed in the sand, giving shade to those underneath. You have the same place for the day you choose, with a row and number you can see on the beach map. How many sunbeds or deck chairs come with it is shown in the spot's equipment. |
-| `typeCards.umbrella.equipmentNote` | Di norma un ombrellone con lettini o sdraio; il numero preciso è nella dotazione della postazione. | Usually an umbrella with sunbeds or deck chairs; the exact number is in the spot's equipment. |
-| `typeCards.umbrella.tip` | Comodo per chi vuole un posto stabile dove lasciare le proprie cose. | Handy if you want a fixed place to leave your things. |
+| `typeCards.umbrella.description` | Una postazione con un ombrellone, che fa ombra a chi sta sotto. È la stessa per tutta la prenotazione, anche se scegli un periodo di più giornate. | A spot with an umbrella, giving shade to those underneath. It is the same spot for the whole booking, even if you choose a period of several days. |
+| `typeCards.umbrella.equipmentNote` | Di norma un ombrellone con lettini o sdraio, come indicato nella dotazione della postazione. | Usually an umbrella with sunbeds or deck chairs, as listed in the spot's equipment. |
+| `typeCards.umbrella.tip` | (nessun consiglio: ripeterebbe la descrizione) | (no tip: it would repeat the description) |
 
 ## Lettino singolo — `sunbed` (en: Single sunbed)
 
 | Chiave | Italiano | Inglese |
 |---|---|---|
-| `typeCards.sunbed.description` | Un lettino singolo per sdraiarsi, senza ombrellone. Di solito sta nelle file più vicine all'acqua, e lo vedi sulla planimetria con la sua fila e il suo numero. L'ombra non è compresa, salvo dove indicato. | A single sunbed to lie on, without an umbrella. It is usually in the rows closest to the water, and you can see it on the beach map with its row and number. Shade is not included unless stated. |
+| `typeCards.sunbed.description` | Un lettino singolo per stare distesi. L'ombra non è compresa, salvo dove indicato. | A single sunbed to lie on. Shade is not included unless stated. |
 | `typeCards.sunbed.equipmentNote` | Di norma un solo lettino, senza ombrellone. | Usually one sunbed, without an umbrella. |
 | `typeCards.sunbed.tip` | (nessun consiglio: non aggiunge nulla di vero a quanto già detto) | (no tip: it would add nothing true beyond what is said above) |
 
@@ -78,73 +82,73 @@ non serve.
 
 | Chiave | Italiano | Inglese |
 |---|---|---|
-| `typeCards.deckchair.description` | Una sdraio: una seggiola pieghevole con lo schienale reclinabile, su cui si sta più seduti che distesi. La prenoti come una postazione precisa, con fila e numero. Se c'è un ombrellone, o quanti posti ci sono, lo dice la dotazione della postazione. | A deck chair: a folding chair with a reclining back, on which you sit rather than lie flat. You book it as a specific spot, with a row and number. Whether there is an umbrella, and how many seats, is shown in the spot's equipment. |
+| `typeCards.deckchair.description` | Una sdraio: una sedia con lo schienale reclinabile, per stare seduti più che distesi. Si prenota da sola, come una postazione a sé. | A deck chair: a chair with a reclining back, for sitting rather than lying flat. It is booked on its own, as a spot in itself. |
 | `typeCards.deckchair.equipmentNote` | Di norma una sdraio; l'ombrellone c'è dove indicato. | Usually one deck chair; an umbrella is included where stated. |
-| `typeCards.deckchair.tip` | Comoda per chi preferisce stare seduto, per leggere o chiacchierare. | Comfortable if you prefer to sit, to read or chat. |
+| `typeCards.deckchair.tip` | Adatta a chi preferisce stare seduto, per esempio per leggere o chiacchierare. | Suits those who prefer to sit, for example to read or chat. |
 
 ## Gazebo — `gazebo` (en: Gazebo)
 
 | Chiave | Italiano | Inglese |
 |---|---|---|
-| `typeCards.gazebo.description` | Una struttura con il tetto, di norma aperta sui lati, che copre una postazione più ampia di un ombrellone. Dà ombra e un po' di riparo a più persone insieme. Capienza e dotazione sono quelle indicate dal lido per questa postazione. | A structure with a roof, usually open at the sides, covering a larger spot than an umbrella. It gives shade and some cover to several people together. Capacity and equipment are those the beach club states for this spot. |
-| `typeCards.gazebo.equipmentNote` | Di norma una struttura coperta con lettini o sedute; il resto, dove indicato. | Usually a covered structure with sunbeds or seats; anything else where stated. |
-| `typeCards.gazebo.tip` | Pensato per gruppi e famiglie: controlla quanti ospiti può contenere. | Meant for groups and families: check how many guests it holds. |
+| `typeCards.gazebo.description` | Una struttura con il tetto, di norma aperta sui lati, che copre più spazio di un ombrellone. Dà ombra e un po' di riparo a più persone insieme. | A structure with a roof, usually open at the sides, covering more space than an umbrella. It gives shade and some cover to several people together. |
+| `typeCards.gazebo.equipmentNote` | Di norma lettini o sedute sotto il tetto; il resto, dove indicato. | Usually sunbeds or seats under the roof; anything else where stated. |
+| `typeCards.gazebo.tip` | Per gruppi e famiglie: controlla quanti ospiti può contenere. | For groups and families: check how many guests it holds. |
 
 ## Tenda — `tent` (en: Tent)
 
 | Chiave | Italiano | Inglese |
 |---|---|---|
-| `typeCards.tent.description` | Una tenda con pareti di tela, aperta davanti o con una parte che si chiude. Ripara dal sole e in parte dal vento, e dà un angolo più riservato. La dotazione e il numero di ospiti dipendono dal lido e li trovi nella scheda. | A tent with canvas walls, open at the front or with a side that closes. It shelters from the sun and partly from the wind, and gives a more private corner. Equipment and number of guests depend on the beach club and are shown on the card. |
-| `typeCards.tent.equipmentNote` | Di norma una tenda con lettini o sedute; il resto, dove indicato. | Usually a tent with sunbeds or seats; anything else where stated. |
-| `typeCards.tent.tip` | Utile per chi cerca più riparo dal sole, per esempio con bambini piccoli. | Useful if you want more shelter from the sun, for example with small children. |
+| `typeCards.tent.description` | Una tenda con pareti di stoffa, di norma aperta davanti. Ripara dal sole e in parte dal vento, e dà un angolo più riservato. | A tent with fabric walls, usually open at the front. It shelters from the sun and partly from the wind, and gives a more private corner. |
+| `typeCards.tent.equipmentNote` | Di norma lettini o sedute dentro la tenda; il resto, dove indicato. | Usually sunbeds or seats inside the tent; anything else where stated. |
+| `typeCards.tent.tip` | Utile se cerchi più riparo dal sole, per esempio con bambini piccoli. | Useful if you want more shelter from the sun, for example with small children. |
 
 ## Lettone — `daybed` (en: Daybed)
 
 | Chiave | Italiano | Inglese |
 |---|---|---|
-| `typeCards.daybed.description` | Un lettone: un letto largo con materasso, su cui si sta distesi o seduti in più persone. Occupa più spazio di un lettino singolo e si prenota come una postazione precisa. Se c'è una copertura sopra, lo dice la dotazione. | A daybed: a wide bed with a mattress, where several people can lie or sit together. It takes up more room than a single sunbed and is booked as a specific spot. Whether there is a cover above it is shown in the equipment. |
-| `typeCards.daybed.equipmentNote` | Di norma un letto largo con materasso; ombrellone o copertura, dove indicato. | Usually a wide bed with a mattress; an umbrella or cover where stated. |
-| `typeCards.daybed.tip` | Pensato per due o più persone che vogliono stare vicine: controlla quanti ospiti può contenere. | Meant for two or more people who want to stay close: check how many guests it holds. |
+| `typeCards.daybed.description` | Un lettone: un letto largo con materasso, per stare distesi o seduti in più persone. Occupa più spazio di un lettino singolo. | A daybed: a wide bed with a mattress, for lying or sitting with several people. It takes up more room than a single sunbed. |
+| `typeCards.daybed.equipmentNote` | Di norma il lettone con il suo materasso; ombrellone o copertura, dove indicato. | Usually the daybed with its mattress; an umbrella or cover where stated. |
+| `typeCards.daybed.tip` | Prima di prenotare controlla quanti ospiti può contenere. | Before booking, check how many guests it holds. |
 
 ## Tenda a telo — `canopy` (en: Canvas gazebo)
 
 | Chiave | Italiano | Inglese |
 |---|---|---|
-| `typeCards.canopy.description` | Un telo teso su pali, senza pareti: fa ombra su un'area più ampia di un ombrellone, ma resta aperto da ogni lato. È una struttura leggera, quindi ripara dal sole più che dal vento. Dotazione e capienza sono quelle indicate dal lido. | A canvas sheet stretched over poles, without walls: it shades a larger area than an umbrella but stays open on every side. It is a light structure, so it shelters from the sun more than from the wind. Equipment and capacity are those the beach club states. |
-| `typeCards.canopy.equipmentNote` | Di norma un telo su pali con lettini o sedute; il resto, dove indicato. | Usually a sheet on poles with sunbeds or seats; anything else where stated. |
-| `typeCards.canopy.tip` | Per chi vuole un'ombra ampia senza pareti attorno. | For those who want wide shade without walls around. |
+| `typeCards.canopy.description` | Un telo teso su pali, senza pareti. Fa ombra su un'area più ampia di un ombrellone ma resta aperto da ogni lato, quindi ripara dal sole più che dal vento. | A canvas sheet stretched over poles, without walls. It shades a larger area than an umbrella but stays open on every side, so it shelters from the sun more than from the wind. |
+| `typeCards.canopy.equipmentNote` | Di norma lettini o sedute sotto il telo; il resto, dove indicato. | Usually sunbeds or seats under the sheet; anything else where stated. |
+| `typeCards.canopy.tip` | (nessun consiglio: ripeterebbe la descrizione) | (no tip: it would repeat the description) |
 
 ## Canoa — `canoe` (en: Canoe)
 
 | Chiave | Italiano | Inglese |
 |---|---|---|
-| `typeCards.canoe.description` | Una canoa da condurre a pagaia, da una o più persone. Prenoti il mezzo per la giornata scelta, non un posto in spiaggia. Come e dove uscire in acqua lo stabilisce il lido, con le sue regole di sicurezza. | A canoe paddled by hand, for one or more people. You book the craft for the day you choose, not a place on the beach. How and where to go out on the water is set by the beach club, with its safety rules. |
+| `typeCards.canoe.description` | Una canoa che si muove con la pagaia, per una o più persone. Prenoti il mezzo per la giornata o il periodo che scegli, non un posto in spiaggia. Dove e come uscire in acqua lo decide il lido. | A canoe moved with a paddle, for one or more people. You book the craft for the day or period you choose, not a place on the beach. Where and how to go out on the water is up to the beach club. |
 | `typeCards.canoe.equipmentNote` | Di norma la canoa con le pagaie; il giubbotto di salvataggio, dove indicato. | Usually the canoe with paddles; a life jacket where stated. |
-| `typeCards.canoe.tip` | Il mezzo si prenota intero: controlla quante persone può portare. | The craft is booked as a whole: check how many people it carries. |
+| `typeCards.canoe.tip` | Controlla quanti ospiti può portare. | Check how many guests it carries. |
 
 ## SUP — `sup` (en: SUP)
 
 | Chiave | Italiano | Inglese |
 |---|---|---|
-| `typeCards.sup.description` | Il SUP (stand up paddle) è una tavola su cui si sta in piedi o in ginocchio, spingendosi con una pagaia. Prenoti la tavola per la giornata scelta, non un posto in spiaggia. Come e dove uscire in acqua lo stabilisce il lido, con le sue regole di sicurezza. | A SUP (stand up paddle) is a board you stand or kneel on, pushing yourself along with a paddle. You book the board for the day you choose, not a place on the beach. How and where to go out on the water is set by the beach club, with its safety rules. |
+| `typeCards.sup.description` | Il SUP (stand up paddle) è una tavola su cui si sta in piedi o in ginocchio, spingendosi con una pagaia. Prenoti la tavola per la giornata o il periodo che scegli, non un posto in spiaggia. Dove e come uscire in acqua lo decide il lido. | A SUP (stand up paddle) is a board you stand or kneel on, pushing yourself along with a paddle. You book the board for the day or period you choose, not a place on the beach. Where and how to go out on the water is up to the beach club. |
 | `typeCards.sup.equipmentNote` | Di norma la tavola con la pagaia; il giubbotto di salvataggio, dove indicato. | Usually the board with a paddle; a life jacket where stated. |
-| `typeCards.sup.tip` | Richiede un po' di equilibrio: se è la prima volta, chiedilo al lido. | It takes some balance: if it is your first time, ask the beach club. |
+| `typeCards.sup.tip` | Richiede un po' di equilibrio: se è la prima volta, chiedi consiglio al lido. | It takes some balance: if it is your first time, ask the beach club for advice. |
 
 ## Pedalò — `pedalo` (en: Pedal boat)
 
 | Chiave | Italiano | Inglese |
 |---|---|---|
-| `typeCards.pedalo.description` | Un pedalò è un'imbarcazione che si muove pedalando, con i sedili affiancati. Si sta seduti e non serve una particolare esperienza. Prenoti il mezzo per la giornata scelta; come e dove uscire in acqua lo stabilisce il lido, con le sue regole di sicurezza. | A pedal boat moves by pedalling, with seats side by side. You sit and no particular experience is needed. You book the craft for the day you choose; how and where to go out on the water is set by the beach club, with its safety rules. |
+| `typeCards.pedalo.description` | Un pedalò è un'imbarcazione che si muove pedalando, stando seduti. Prenoti il mezzo per la giornata o il periodo che scegli, non un posto in spiaggia. Dove e come uscire in acqua lo decide il lido. | A pedal boat moves by pedalling, and you stay seated. You book the craft for the day or period you choose, not a place on the beach. Where and how to go out on the water is up to the beach club. |
 | `typeCards.pedalo.equipmentNote` | Di norma il pedalò; il giubbotto di salvataggio, dove indicato. | Usually the pedal boat; a life jacket where stated. |
-| `typeCards.pedalo.tip` | Si sta seduti: va bene per chi vuole stare in acqua senza pagaiare. Controlla quanti posti ha. | You stay seated: good if you want to be on the water without paddling. Check how many seats it has. |
+| `typeCards.pedalo.tip` | Per stare in acqua senza pagaiare: controlla quanti ospiti può portare. | For being on the water without paddling: check how many guests it carries. |
 
 ## Moto d'acqua — `jetski` (en: Jet ski)
 
 | Chiave | Italiano | Inglese |
 |---|---|---|
-| `typeCards.jetski.description` | Una moto d'acqua è un mezzo a motore che si guida con un manubrio, a uno o più posti. Prenoti il mezzo per la giornata scelta, non un posto in spiaggia. Chi può guidarlo, con quali documenti e in quali zone dipende dalle norme e dal lido, che li indica. | A jet ski is a motorised craft steered with handlebars, with one or more seats. You book the craft for the day you choose, not a place on the beach. Who may ride it, with what documents and in which areas depends on the regulations and the beach club, which states them. |
+| `typeCards.jetski.description` | Una moto d'acqua è un mezzo a motore che si guida con un manubrio, per una o più persone. Prenoti il mezzo per la giornata o il periodo che scegli, non un posto in spiaggia. Chi può guidarla, con quali documenti e in quali zone, dipende dalla legge e dal lido. | A jet ski is a motorised craft steered with handlebars, for one or more people. You book the craft for the day or period you choose, not a place on the beach. Who may ride it, with what documents and in which areas, depends on the law and on the beach club. |
 | `typeCards.jetski.equipmentNote` | Di norma la moto d'acqua; il giubbotto di salvataggio, dove indicato. | Usually the jet ski; a life jacket where stated. |
-| `typeCards.jetski.tip` | Prima di prenotare controlla i requisiti per guidarla. | Before booking, check the requirements to ride it. |
+| `typeCards.jetski.tip` | Prima di prenotare chiedi al lido che cosa serve per guidarla. | Before booking, ask the beach club what you need to ride it. |
 
 ## Note per il frontend e per il vaglio
 
@@ -153,16 +157,108 @@ non serve.
   (quella dei dati), con la stessa formattazione di una nota, non di un
   elenco di dotazioni.
 - Il consiglio (`.tip`) è facoltativo per segno: se assente, non si mostra
-  nulla (per `sunbed` è assente di proposito; la riga della tabella sopra è
-  solo un promemoria e non va copiata nel codice).
+  nulla (per `umbrella`, `sunbed` e `canopy` è assente di proposito; le
+  righe della tabella sopra sono solo un promemoria e non vanno copiate
+  nel codice).
 - Nessun testo contiene prezzi, orari o nomi di lidi. Nessun testo dipende
   dalla stagione.
 - Se il lido scrive una propria descrizione (livello 2), la predefinita non
   si mostra insieme: la risoluzione è per campo (specifica §1), quindi
   descrizione, dotazione e consiglio si possono sostituire uno per uno.
-- Dubbi dichiarati per l'esperto: (a) per la moto d'acqua il rimando a
-  «norme» è volutamente generico, perché i requisiti (età, patente,
-  documenti) variano e non vanno enunciati dalla piattaforma; (b) «tenda» e
-  «tenda a telo» sono distinte solo dalla presenza di pareti: se il
-  repertorio dei nomi in inglese («Tent» / «Canvas gazebo») risultasse
-  confondibile, la differenza è già detta nella descrizione.
+- I due dubbi dichiarati dal redattore (rimando alle «norme» per la moto
+  d'acqua; «tenda» e «tenda a telo») hanno risposta nel vaglio in fondo.
+
+## Vaglio d'usabilità (19/11/2026)
+
+**Metodo.** Ogni blocco it e en è passato alle cinque domande della
+perizia: (1) vero oggi per qualunque lido? (2) serve a chi sta per
+prenotare? (3) è semplice? (4) lessico unico, «spot» in inglese? (5)
+duplica quello che la pagina già dice (dotazione e capienza dai dati del
+tipo; la descrizione non deve ripetere la nota)? Dove un blocco non
+passava, la versione nuova è scritta al posto della vecchia, qui sopra.
+Nessuna voce aggiunta. Difetti ricorrenti trovati e tolti:
+
+- **Promesse non vere per ogni lido:** «piantato nella sabbia»,
+  «di solito nelle file più vicine all'acqua», «fila e numero»,
+  «i sedili affiancati», «non serve una particolare esperienza», «dove
+  lasciare le proprie cose». Ogni lido ha una spiaggia e una dotazione sua.
+- **Doppioni con la pagina o tra campi:** la planimetria già mostra fila e
+  numero; «dotazione e capienza sono quelle indicate dal lido» ripeteva la
+  nota di dotazione e la scheda stessa; la descrizione dell'ombrellone, del
+  lettone e della sdraio ripeteva la nota («lo dice la dotazione»); «La
+  dotazione … li trovi nella scheda» era un rimando alla pagina in cui il
+  testo già sta.
+- **Lessico:** le imbarcazioni dicevano solo «giornata scelta», ma il
+  sito prenota anche per periodo: ora «giornata o periodo»; «posti» e
+  «persone» alternati per «ospiti» nei consigli.
+- **Frasi lunghe e ripetute:** la formula «come e dove uscire in acqua lo
+  stabilisce il lido, con le sue regole di sicurezza» (due clausole, una
+  non verificabile) è ora «dove e come uscire in acqua lo decide il lido».
+- **Inglese non speculare:** «paddled by hand» (non traduce «a pagaia»),
+  «with one or more seats» (diverso da «una o più persone»), «See details»
+  (il dizionario dice «card»).
+
+### Verdetto per segno
+
+| Segno | Verdetto | Perché |
+|---|---|---|
+| Titolo riquadro | Riscritta | «Le postazioni» si confondeva con l'elenco delle postazioni libere della stessa pagina; il riquadro elenca i tipi |
+| Ombrellone | Riscritta | «Piantato nella sabbia» e «fila e numero» non valgono per ogni lido; la frase sulla dotazione ripeteva la nota; tip tolto (ripeteva «la stessa postazione») |
+| Lettino singolo | Riscritta | «Di solito nelle file più vicine all'acqua» è falso in generale; fila e numero duplicavano la planimetria |
+| Sdraio | Riscritta | «Seggiola pieghevole» poco corrente; frase su ombrellone e posti duplicava la nota; «fila e numero» non vero per ogni lido |
+| Gazebo | Riscritta (lieve) | «Capienza e dotazione sono quelle indicate dal lido» duplicava dati e nota; il resto reggeva |
+| Tenda | Riscritta | «Aperta davanti o con una parte che si chiude» promette una forma; «nella scheda» rimandava a sé stessa; «tela» ora riservato al telo, per distinguerla dall'altra |
+| Lettone | Riscritta | Due frasi su tre duplicavano la nota («si prenota come una postazione precisa», «se c'è una copertura»); consiglio lungo |
+| Tenda a telo | Riscritta | Due frasi dicevano «senza pareti» e «aperto da ogni lato»; capienza duplicata; tip tolto (ripeteva la descrizione) |
+| Canoa | Riscritta (lieve) | Solo «giornata», non il periodo; clausola sulla sicurezza non verificabile; EN «paddled by hand» |
+| SUP | Riscritta (lieve) | Solo «giornata»; stessa clausola; consiglio ambiguo («chiedilo» a chi?). Definizione del SUP: passata |
+| Pedalò | Riscritta | «Sedili affiancati» e «non serve una particolare esperienza» non verificabili (età, regole del lido); il consiglio ripeteva «si sta seduti» |
+| Moto d'acqua | Riscritta | Vedi risposta sotto: rimando alle norme trasformato in un'azione; stessa correzione sul periodo |
+
+Sono **passati** senza cambiare parola: le note di dotazione di sunbed,
+deckchair (parte «l'ombrellone c'è dove indicato»), canoe, sup, pedalo,
+jetski; la definizione del SUP; la descrizione del lettino singolo nella
+parte sull'ombra; l'assenza di consiglio per il lettino singolo. Iperboli
+residue: nessuna trovata, nessun superlativo. Il tono (seconda persona,
+frasi asciutte, niente punto esclamativo) è passato ovunque.
+
+### Risposta ai due punti del redattore
+
+**(a) Il rimando generico alle «norme» per la moto d'acqua.** La scelta di
+non enunciare requisiti è giusta: età, patente e documenti variano per
+luogo e per lido, e la piattaforma non può promettere nulla. Ma il rimando
+nudo («dipende dalle norme e dal lido, che li indica») fallisce due prove:
+dice «che li indica» come se ogni lido lo facesse (non verificabile) e non
+dice che cosa fare. Soluzione adottata: la descrizione dice soltanto *che
+cosa dipende* («chi può guidarla, con quali documenti e in quali zone,
+dipende dalla legge e dal lido»; «norme» passa a «legge», parola d'uso
+corrente) e il consiglio dà l'azione: «Prima di prenotare chiedi al lido
+che cosa serve per guidarla». Non si elencano requisiti.
+
+**(b) «Tenda» e «tenda a telo».** La distinzione per le pareti regge, ma
+solo se ciascuna descrizione la apre con ciò che le distingue e se le due
+non condividono il materiale: prima entrambe dicevano «tela» e «telo», e
+in inglese «canvas walls» contro «canvas sheet» (e il nome «Canvas
+gazebo» richiama anche il Gazebo). Ora la tenda ha «pareti di stoffa» («fabric
+walls») e il telo è «senza pareti», «aperto da ogni lato», con la sola
+parola «telo»/«canvas sheet». Per il Gazebo, il discrimine è il tetto
+contro il telo teso su pali. Resta una riserva fuori da questo file: in
+inglese il nome «Canvas gazebo» (dizionario, non dei testi) è il più
+confondibile dell'insieme; se il dizionario si potesse ritoccare, «Canopy»
+(il nome della chiave) sarebbe più chiaro. Non lo cambio qui: i nomi dei
+segni sono presupposto di questo vaglio.
+
+### Giudizio sulle etichette comuni
+
+- **«Le postazioni» / «The spots» — riscritta in «I tipi di postazione» /
+  «Spot types».** Il riquadro mostra i tipi offerti, non le postazioni
+  singole; la stessa pagina ha poi l'elenco delle postazioni libere e il
+  doppio senso è reale. Attenzione: la specifica (riga 60 di
+  `specifica-scheda-postazione.md`) nomina il riquadro «Le postazioni» e
+  va allineata dall'autore.
+- **«Vedi la scheda» — passata in italiano; «See details» riscritta in
+  «See the card».** In italiano è coerente con «scheda della postazione» e
+  con «Vedi le postazioni libere» già in uso; resta il rischio di essere
+  scambiata per la scheda del lido, attenuato dal nome del tipo accostato
+  (anche per gli screen reader). In inglese il dizionario chiama «card» la
+  stessa cosa; «details» era un'altra parola per lo stesso oggetto.
