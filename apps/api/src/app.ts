@@ -97,6 +97,8 @@ import {
   listMyBookings,
   listMyCarts,
   listSpotTypes,
+  listTypeCardsForManager,
+  listTypeCardsPublic,
   listZones,
   locateCartBeach,
   login,
@@ -114,6 +116,8 @@ import {
   removeElement,
   removeItem,
   renameZone,
+  resetTypeCard,
+  setTypeCard,
   replyToReview,
   reportSummary,
   resolveSession,
@@ -186,6 +190,7 @@ import {
   spotTypeNameMaxLength,
   spotZones,
   suggestSpot,
+  typeCardLimits,
   walkwayOrientations,
   zoneNameMaxLength,
   zoneNameMinLength,
@@ -350,6 +355,46 @@ const siteTextsSchema = z.object({
   phone: z.string().trim().max(siteTextLimits.phone).regex(/^[+0-9 ()./-]*$/),
   accessibility: plain(siteTextLimits.accessibility),
   images: z.object({ cover: siteImageSchema.nullable(), gallery: z.array(siteImageSchema).max(12) }).optional(),
+});
+// The custom card of a spot type (D61): plain text within the shared limits,
+// mirrored by parseTypeCardContent; unknown fields are refused. The photos are
+// keys of the sample library, checked against it in the domain (D62).
+const cardText = (max: number) => z.string().trim().min(1).max(max).regex(/^[^<>]*$/);
+const typeCardNoteSchema = z.strictObject({ it: cardText(typeCardLimits.note), en: cardText(typeCardLimits.note).optional() });
+const typeCardSchema = z.strictObject({
+  content: z
+    .strictObject({
+      title: cardText(typeCardLimits.title).optional(),
+      descriptionIt: cardText(typeCardLimits.description).optional(),
+      descriptionEn: cardText(typeCardLimits.description).optional(),
+      photos: z
+        .array(
+          z.strictObject({
+            id: z.string().regex(/^[a-z0-9-]{1,60}$/),
+            captionIt: cardText(typeCardLimits.caption).optional(),
+            captionEn: cardText(typeCardLimits.caption).optional(),
+          }),
+        )
+        .min(1)
+        .max(typeCardLimits.photos)
+        .optional(),
+      equipmentNote: typeCardNoteSchema.optional(),
+      capacityNote: typeCardNoteSchema.optional(),
+      details: z
+        .array(
+          z.strictObject({
+            labelIt: cardText(typeCardLimits.detailLabel),
+            labelEn: cardText(typeCardLimits.detailLabel).optional(),
+            valueIt: cardText(typeCardLimits.detailValue),
+            valueEn: cardText(typeCardLimits.detailValue).optional(),
+          }),
+        )
+        .min(1)
+        .max(typeCardLimits.details)
+        .optional(),
+    })
+    // An empty card customizes nothing: going back to the default is the DELETE.
+    .refine((content) => Object.keys(content).length > 0),
 });
 const siteDraftSchema = z.object({
   expectedVersion: z.number().int().min(1).nullable(),
@@ -1625,6 +1670,28 @@ export function createApp(options: AppOptions): Hono {
     return c.json(await restoreRevision(db, actor, revisionId));
   });
 
+  // ---- The spot type cards (D61): the public story of every type of the club ----
+  // The card is public storytelling like the website, so the three routes share
+  // the site permission (site.edit), reading included (D63).
+  route({ method: 'get', path: '/v1/manage/beaches/:slug/type-cards', summary: 'Every spot type of the beach club with its card state: custom content or platform default', tag: 'Beach club', auth: 'session', success: 200, errors: [401, 403] }, async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'site.edit');
+    const types = await listTypeCardsForManager(db, actor);
+    return c.json({ types: types.map(({ updatedAt, ...type }) => ({ ...type, updatedAt: updatedAt?.toISOString() ?? null })) });
+  });
+
+  route({ method: 'put', path: '/v1/manage/beaches/:slug/type-cards/:typeId', summary: 'Save the custom card of a spot type, whole; the photos come from the sample library of the site', tag: 'Beach club', auth: 'session', request: typeCardSchema, success: 200, errors: [400, 401, 403, 404, 409] }, async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'site.edit');
+    const typeId = parse(z.uuid(), c.req.param('typeId'), 'spot type');
+    const { content } = parse(typeCardSchema, await body(c.req.raw), 'card content');
+    return c.json(await setTypeCard(db, actor, { typeId, content }));
+  });
+
+  route({ method: 'delete', path: '/v1/manage/beaches/:slug/type-cards/:typeId', summary: 'Reset the card of a spot type to the platform default', tag: 'Beach club', auth: 'session', success: 204, errors: [400, 401, 403, 404] }, async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'site.edit');
+    await resetTypeCard(db, actor, { typeId: parse(z.uuid(), c.req.param('typeId'), 'spot type') });
+    return c.body(null, 204);
+  });
+
   // ---- Beach club: position on the map and layout of the beach ----
   route({ method: 'put', path: '/v1/manage/beaches/:slug/position', summary: 'Set or clear the coordinates of the beach club', tag: 'Beach club', auth: 'session', request: positionSchema, success: 204, errors: [400, 401, 403] }, async (c) => {
     const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'layout.edit');
@@ -1925,6 +1992,14 @@ export function createApp(options: AppOptions): Hono {
       beach: publicBeach(beach),
       reviews: reviews.map((entry) => ({ ...entry, createdAt: entry.createdAt.toISOString() })),
     });
+  });
+
+  // The types in use at the club, each with the custom card content or null: the
+  // site resolves the default fields itself with the shared module (D61, D63).
+  route({ method: 'get', path: '/v1/beaches/:slug/spot-types', summary: 'Spot types in use at this beach club, each with the custom card content of the club or null for the platform default', tag: 'Public', auth: 'none', success: 200, errors: [400, 404] }, async (c) => {
+    const slug = parse(slugSchema, c.req.param('slug'), 'beach club');
+    const beach = await beachBySlug(slug);
+    return c.json({ beach: publicBeach(beach), types: await listTypeCardsPublic(db, slug) });
   });
 
   // The dedicated route keeps the availability answer untouched; the unit prices of
