@@ -464,3 +464,69 @@ pagina d'accesso dice che chi entra con Google non ha parola d'ordine
 locale. Fornitore di prova `OMBRE_OIDC_PROVIDER=test` con pagina locale di
 consenso e codice firmato, come il fornitore di prova dei pagamenti; le
 chiavi vere del committente sono una dipendenza esterna aperta.
+
+## D49 — Servizi dello stabilimento e filtri — accettata (19/11/2026)
+
+Catalogo fisso e traducibile di dodici servizi con identificatori stabili
+(etichette solo nei dizionari it/en); tabella `beach_amenity` (migrazione
+021) scelta dal Gestore nel pannello impostazioni. La Ricerca ombrellone
+filtra con caselle GET (`srv` ripetuto, senza JavaScript) e l'API tiene
+gli stabilimenti che hanno **tutti** i servizi chiesti; distintivi sulle
+carte dei risultati (al più quattro, poi «+n»), elenco per esteso con
+icone sobrie sulla scheda. I `services` liberi del sito restano testo.
+
+## D50 — Zone con nome nella planimetria — accettata (19/11/2026)
+
+Tabella `beach_zone` (nome libero 2–40, unico per stabilimento, al più
+20) e `spot.named_zone_id` annullabile (migrazione 021). Il nome è un
+nome proprio del Gestore, identico nelle due lingue; la fascia fisica
+resta un concetto distinto. Gestione nella pagina planimetria (crea,
+rinomina, elimina, assegna per postazione e per fila). Il nome compare
+ovunque ci sia il codice della postazione: planimetria pubblica,
+proposta nella scheda, riepilogo, carrello, ordine, pass, conto,
+verifica all'ingresso e reception. La proposta nelle carte dei risultati
+di ricerca è rimandata (le carte oggi non propongono postazioni).
+
+## D51 — Recensioni verificate — accettata (19/11/2026)
+
+Tabella `review` (migrazione 022): una per soggiorno (`booking_group_id`
+unico), solo dal proprietario di un gruppo concluso e non annullato, voto
+1–5 e testo facoltativo (600), nome del conto e mai l'email, non
+modificabile (rimandato). Media e numero sulle carte dei risultati e
+sulla scheda, elenco pubblico dal più recente. Moderazione del Gestore
+nella sottopagina `recensioni` (permesso `reviews.moderate`): segnalazione
+alla piattaforma con motivo scritto e replica; la segnalata resta
+visibile con la replica finché la piattaforma non decide (console di
+piattaforma rimandata). Niente recensioni comprate o importate.
+
+## D52 — Caparra: acconto e saldo al lido — accettata (19/11/2026)
+
+`beach.payment_mode` (`full|deposit`) e `deposit_percent` (10–90,
+predefinito 30; migrazione 022), scelti dal Gestore. Con la caparra il
+pagamento online vale l'acconto, calcolato per gruppo (l'ordine somma gli
+acconti delle voci); la conferma resta piena: `recordSale` col totale
+intero, pass emesso, stato `partial`, saldo = residuo di oggi, incasso
+del saldo al banco con `banco-incassa` che esiste già. Acconto e saldo
+visibili in riepilogo, carrello, ordine, email, conto e reception.
+L'email di conferma smette di dire «Totale pagato» quando non è vero
+(vale anche per il banco «da incassare», che mentiva). Fornitore di prova.
+
+## D53 — Condizioni e termine di annullamento — accettata (19/11/2026)
+
+`beach.cancel_deadline_hours` (0–336, predefinito di piattaforma 48) e
+testi `cancel_policy_it/en` facoltativi (migrazione 022; vuoti ⇒ testo
+predefinito dei dizionari). Il termine si misura dalla mezzanotte del
+giorno d'arrivo nel fuso dello stabilimento. Condizioni e termine
+visibili prima di pagare in riepilogo, carrello e ordine. Gesto nuovo
+dell'Ospite dal conto: annullamento del gruppo confermato, non maturato,
+entro il termine, con rimborso pieno (cuore di `cancelByBeachClub`
+estratto in una funzione condivisa; la via del Gestore invariata); oltre
+il termine il gesto non compare e la pagina rimanda allo stabilimento.
+I testi e le percentuali definitivi li deciderà il committente (scritto).
+
+## D54 — Niente profilazione — accettata (19/11/2026)
+
+Riga nel piè di pagina pubblico nelle due lingue (`footer.privacy`):
+niente cookie di profilazione né pubblicità, solo cookie tecnici
+(sessione, carrello, lingua); voce nuova in Assistenza che lo spiega con
+parole piane. Nessun banner: la sua assenza è il messaggio.
