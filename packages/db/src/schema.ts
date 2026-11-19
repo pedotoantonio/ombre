@@ -21,6 +21,13 @@ export const beach = pgTable('beach', {
   shoreGapRows: smallint('shore_gap_rows').notNull().default(1),
   landGapRows: smallint('land_gap_rows').notNull().default(1),
   seaSide: text('sea_side', { enum: ['top', 'bottom'] }).notNull().default('top'),
+  /** «Caparra adesso, saldo al lido» (D52): with `deposit`, the online payment is the deposit. */
+  paymentMode: text('payment_mode', { enum: ['full', 'deposit'] }).notNull().default('full'),
+  depositPercent: integer('deposit_percent').notNull().default(30),
+  /** Cancellation terms (D53): hours before midnight of the arrival day, in the club's zone. */
+  cancelDeadlineHours: integer('cancel_deadline_hours').notNull().default(48),
+  cancelPolicyIt: text('cancel_policy_it'),
+  cancelPolicyEn: text('cancel_policy_en'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -476,6 +483,25 @@ export const notification = pgTable('notification', {
   provider: text('provider').notNull(),
   /** Full text of the message, to copy by hand until a provider exists. */
   body: text('body'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
+ * A verified review (D51): one per stay (booking_group_id UNIQUE), written by
+ * the account that owns the group. Flagged ones stay visible, with the reply.
+ */
+export const review = pgTable('review', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  beachId: uuid('beach_id').notNull(),
+  bookingGroupId: uuid('booking_group_id').notNull(),
+  userId: uuid('user_id').notNull(),
+  rating: integer('rating').notNull(),
+  body: text('body'),
+  status: text('status', { enum: ['published', 'flagged'] }).notNull().default('published'),
+  flagReason: text('flag_reason'),
+  flaggedAt: timestamp('flagged_at', { withTimezone: true }),
+  reply: text('reply'),
+  repliedAt: timestamp('replied_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
