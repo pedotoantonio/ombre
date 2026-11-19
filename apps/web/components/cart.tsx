@@ -2,10 +2,26 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import QRCode from 'qrcode';
 import { beachPath, cartSegment, config, formatMoney, getDictionary, orderSegment, type Locale } from '@ombre/shared';
-import { apiCall, api, formatDate, formatDay, formatPeriod, localName, periodDays, uuidPattern, type ApiBeach, type ApiExtraRequest, type ApiExtraService, type ApiQuoteDay } from '@/lib/api';
+import {
+  apiCall,
+  api,
+  formatDate,
+  formatDay,
+  formatInstant,
+  formatPeriod,
+  localName,
+  periodDays,
+  uuidPattern,
+  type ApiBeach,
+  type ApiCancellation,
+  type ApiExtraRequest,
+  type ApiExtraService,
+  type ApiPayment,
+  type ApiQuoteDay,
+} from '@/lib/api';
 import { cartTicket, signedIn } from '@/lib/session';
 import { Hidden, Notice } from './account';
-import { crumbsFor, DemoBadge, ExtraQuantityFields, loadBeach, otherLocale } from './beach';
+import { CancellationBlock, crumbsFor, DemoBadge, DepositExplain, ExtraQuantityFields, loadBeach, otherLocale } from './beach';
 import { PageHead, PageShell } from './PageShell';
 
 type Query = Record<string, string | string[] | undefined>;
@@ -15,7 +31,7 @@ const first = (value: string | string[] | undefined): string | undefined => (Arr
 interface ApiCartItem {
   itemId: string;
   spotId: string;
-  spot: { code: string; rowNumber: number; zone: string; typeName: string; typeMark: string; umbrellas: number; sunbeds: number };
+  spot: { code: string; zoneName: string | null; rowNumber: number; zone: string; typeName: string; typeMark: string; umbrellas: number; sunbeds: number };
   from: string;
   to: string;
   guestName: string;
@@ -29,6 +45,11 @@ interface ApiCartItem {
   extrasCents?: number;
   totalCents?: number;
   days?: ApiQuoteDay[];
+  /** La caparra della voce (D52): nulli quando la voce non è quotabile. */
+  dueNowCents: number | null;
+  balanceCents: number | null;
+  /** Le condizioni col termine del giorno d'arrivo di QUESTA voce (D53). */
+  cancellation: ApiCancellation;
 }
 
 interface ApiCartView {
@@ -36,6 +57,11 @@ interface ApiCartView {
   currency: string;
   items: ApiCartItem[];
   totalCents: number;
+  /** «Caparra adesso X · Saldo allo stabilimento Y» (D52) e le condizioni (D53). */
+  dueNowCents: number;
+  balanceCents: number;
+  payment: ApiPayment;
+  cancellation: ApiCancellation;
   allAvailable: boolean;
 }
 
@@ -48,10 +74,13 @@ function CartItem({ locale, beach, cartId, item, catalogue }: { locale: Locale; 
   const names = new Map(catalogue.map((service) => [service.serviceId, service]));
   const period = item.from === item.to ? formatDate(item.from, locale) : b.periodValue(formatPeriod(item.from, item.to, locale), periodDays(item.from, item.to));
   const common = { lang: locale, beach: beach.slug, cart: cartId, item: item.itemId };
+  const z = t.zone;
   return (
     <div className="panel">
       <h3>
         {b.spot(item.spot.code)} · {item.spot.typeName}
+        {/* La zona con nome della voce (D50), con le stesse parole di ovunque. */}
+        {item.spot.zoneName ? ` · ${z.badge(item.spot.zoneName)}` : ''}
       </h3>
       <p className="prose">
         {period}. {b.equipment(item.spot.umbrellas, item.spot.sunbeds)}.
@@ -92,6 +121,19 @@ function CartItem({ locale, beach, cartId, item, catalogue }: { locale: Locale; 
             </div>
           ) : null;
         })}
+        {/* La caparra della voce (D52): quanto si paga adesso e quanto resta allo stabilimento. */}
+        {typeof item.dueNowCents === 'number' && typeof item.balanceCents === 'number' && item.balanceCents > 0 ? (
+          <>
+            <div>
+              <dt>{t.deposit.now}</dt>
+              <dd>{formatMoney(item.dueNowCents, locale)}</dd>
+            </div>
+            <div>
+              <dt>{t.deposit.balance}</dt>
+              <dd>{formatMoney(item.balanceCents, locale)}</dd>
+            </div>
+          </>
+        ) : null}
         {typeof item.totalCents === 'number' ? (
           <div className="summary__total">
             <dt>{b.total}</dt>
@@ -146,6 +188,12 @@ export async function CartPage({ lang, section, slug, step, query }: { lang: str
   const catalogueResult = await api.extras(beach.slug);
   const catalogue = catalogueResult.ok ? catalogueResult.data.extras : [];
 
+  // I termini di annullamento per voce (D53): con una data sola il blocco porta quel
+  // termine; con date diverse il termine compare per voce, accanto al codice.
+  const withDeadline = cart ? cart.items.flatMap((item) => (item.cancellation.deadline ? [{ code: item.spot.code, deadline: item.cancellation.deadline }] : [])) : [];
+  const distinctDeadlines = [...new Set(withDeadline.map((entry) => entry.deadline))];
+  const deadlines = distinctDeadlines.length <= 1 ? withDeadline.slice(0, 1) : withDeadline;
+
   // The refusal of «Conferma e paga» names the culprit item: spot code and period (D46).
   const vspot = first(query.vspot);
   const vdal = first(query.vdal);
@@ -186,6 +234,27 @@ export async function CartPage({ lang, section, slug, step, query }: { lang: str
                     {c.total}: {formatMoney(cart.totalCents, locale)}
                   </strong>
                 </p>
+                {/* La caparra complessiva (D52): la somma degli acconti delle voci. */}
+                {cart.balanceCents > 0 ? (
+                  <p className="prose">
+                    {t.deposit.now}: <strong>{formatMoney(cart.dueNowCents, locale)}</strong> · {t.deposit.balance}:{' '}
+                    <strong>{formatMoney(cart.balanceCents, locale)}</strong>
+                  </p>
+                ) : null}
+                <DepositExplain locale={locale} dueNowCents={cart.dueNowCents} balanceCents={cart.balanceCents} />
+                {/* Le condizioni di annullamento prima di «Conferma e paga» (D53): il blocco
+                    una volta sola e, se le date differiscono, il termine per voce. */}
+                <h3>{t.booking.conditionsTitle}</h3>
+                <CancellationBlock locale={locale} cancellation={{ ...cart.cancellation, deadline: deadlines.length === 1 ? deadlines[0]!.deadline : null }} timezone={beach.timezone} />
+                {deadlines.length > 1
+                  ? deadlines.map((entry) => (
+                      <p className="prose" key={entry.code}>
+                        <strong>
+                          {entry.code} · {t.cancel.deadline(formatInstant(entry.deadline, locale, beach.timezone))}
+                        </strong>
+                      </p>
+                    ))
+                  : null}
                 {cart.allAvailable ? null : (
                   <p className="alert" role="alert">
                     {c.confirmBlocked}
@@ -201,8 +270,9 @@ export async function CartPage({ lang, section, slug, step, query }: { lang: str
                     <label htmlFor="conferma-email">{t.checkout.email}</label>
                     <input id="conferma-email" name="email" type="email" autoComplete="email" maxLength={200} defaultValue={session?.me.user.email ?? ''} required />
                   </div>
+                  {/* Il bottone dice quanto si paga ADESSO (D52): col pagamento intero è il totale. */}
                   <button className="button button--block" type="submit" disabled={!cart.allAvailable}>
-                    {c.confirmButton}
+                    {c.confirmButtonAmount(formatMoney(cart.dueNowCents, locale))}
                   </button>
                 </form>
               </div>
@@ -220,11 +290,18 @@ export async function CartPage({ lang, section, slug, step, query }: { lang: str
 interface ApiOrderItem {
   code: string;
   spotCode: string;
+  /** La zona con nome della voce (D50); null quando la postazione non ne ha. */
+  zoneName: string | null;
   from: string;
   to: string;
   guestName: string;
   status: 'draft' | 'under_review' | 'confirmed' | 'cancelled' | 'completed';
   totalCents: number;
+  /** La quota di questa voce nel pagamento dell'ordine (D52). */
+  dueNowCents: number;
+  balanceCents: number;
+  /** Le condizioni col termine del giorno d'arrivo di QUESTA voce (D53). */
+  cancellation: ApiCancellation;
   passCredential: string | null;
 }
 
@@ -233,10 +310,15 @@ interface ApiOrder {
   code: string;
   guestName: string;
   totalCents: number;
+  /** Il pagamento unico dell'ordine (D52): la somma degli acconti, o il totale. */
+  dueNowCents: number;
+  balanceCents: number;
   paidCents: number;
   remainingCents: number;
   paymentState: 'paid' | 'partial' | 'to_collect';
   payment: { provider: string; reference: string; status: 'not_started' | 'in_progress' | 'succeeded' | 'failed' | 'under_review' } | null;
+  /** Le condizioni del locale, col termine più vicino tra le voci (D53). */
+  cancellation: ApiCancellation;
   items: ApiOrderItem[];
 }
 
@@ -258,6 +340,10 @@ export async function OrderPage({ lang, section, slug, step, orderId, token }: {
   const a = t.account;
   const b = t.booking;
   const cancelled = order.items.length > 0 && order.items.every((item) => item.status === 'cancelled');
+  // I termini per voce (D53), come nel carrello: uno solo quando le date coincidono.
+  const withDeadline = order.items.flatMap((item) => (item.cancellation.deadline ? [{ code: item.spotCode, deadline: item.cancellation.deadline }] : []));
+  const distinctDeadlines = [...new Set(withDeadline.map((entry) => entry.deadline))];
+  const deadlines = distinctDeadlines.length <= 1 ? withDeadline.slice(0, 1) : withDeadline;
   const lead = cancelled ? o.cancelled : order.paymentState === 'paid' ? o.paid : o.toPay;
   const waiting = !cancelled && order.payment?.status === 'in_progress';
   const sandbox = Boolean(process.env.OMBRE_SANDBOX_WEBHOOK_SECRET);
@@ -286,17 +372,40 @@ export async function OrderPage({ lang, section, slug, step, orderId, token }: {
               <dt>{t.checkout.paymentRow}</dt>
               <dd>{a.paymentStates[order.paymentState]}</dd>
             </div>
+            {/* Con la caparra (D52): prima del pagamento quanto si paga adesso, dopo
+                «Pagato adesso» e il saldo che resta allo stabilimento. */}
+            {!cancelled && order.paidCents === 0 && order.balanceCents > 0 ? (
+              <>
+                <div>
+                  <dt>{t.deposit.now}</dt>
+                  <dd>{formatMoney(order.dueNowCents, locale)}</dd>
+                </div>
+                <div>
+                  <dt>{t.deposit.balance}</dt>
+                  <dd>{formatMoney(order.balanceCents, locale)}</dd>
+                </div>
+              </>
+            ) : null}
             {order.paidCents > 0 && order.paidCents !== order.totalCents ? (
-              <div>
-                <dt>{o.paidRow}</dt>
-                <dd>{formatMoney(order.paidCents, locale)}</dd>
-              </div>
+              <>
+                <div>
+                  <dt>{t.deposit.paidNow}</dt>
+                  <dd>{formatMoney(order.paidCents, locale)}</dd>
+                </div>
+                {!cancelled && order.remainingCents > 0 ? (
+                  <div>
+                    <dt>{t.deposit.balance}</dt>
+                    <dd>{formatMoney(order.remainingCents, locale)}</dd>
+                  </div>
+                ) : null}
+              </>
             ) : null}
             <div className="summary__total">
               <dt>{o.totalRow}</dt>
               <dd>{formatMoney(order.totalCents, locale)}</dd>
             </div>
           </dl>
+          {!cancelled && order.paidCents === 0 ? <DepositExplain locale={locale} dueNowCents={order.dueNowCents} balanceCents={order.balanceCents} /> : null}
           {waiting && sandbox ? (
             <div className="panel">
               <h2>{t.checkout.sandboxTitle}</h2>
@@ -321,8 +430,10 @@ export async function OrderPage({ lang, section, slug, step, orderId, token }: {
               <div className="panel" key={item.code}>
                 <h3>{t.checkout.bookingTitle(item.code)}</h3>
                 <p className="prose">
-                  {b.spot(item.spotCode)}. {period}. {a.guest}: {item.guestName}. {a.booking}: {a.bookingStates[item.status]}.{' '}
-                  {b.total}: {formatMoney(item.totalCents, locale)}.
+                  {/* La zona con nome accanto alla postazione (D50), con le stesse parole. */}
+                  {b.spot(item.spotCode)}
+                  {item.zoneName ? `, ${t.zone.label.toLowerCase()} ${item.zoneName}` : ''}. {period}. {a.guest}: {item.guestName}. {a.booking}:{' '}
+                  {a.bookingStates[item.status]}. {b.total}: {formatMoney(item.totalCents, locale)}.
                 </p>
                 {qr ? (
                   <div className="pass">
@@ -336,6 +447,26 @@ export async function OrderPage({ lang, section, slug, step, orderId, token }: {
               </div>
             );
           })}
+          {/* Le condizioni di annullamento dell'ordine (D53), come nel carrello. */}
+          {!cancelled ? (
+            <div>
+              <h2>{b.conditionsTitle}</h2>
+              <CancellationBlock
+                locale={locale}
+                cancellation={{ ...order.cancellation, deadline: deadlines.length === 1 ? deadlines[0]!.deadline : null }}
+                timezone={beach.timezone}
+              />
+              {deadlines.length > 1
+                ? deadlines.map((entry) => (
+                    <p className="prose" key={entry.code}>
+                      <strong>
+                        {entry.code} · {t.cancel.deadline(formatInstant(entry.deadline, locale, beach.timezone))}
+                      </strong>
+                    </p>
+                  ))
+                : null}
+            </div>
+          ) : null}
           <p className="prose">{t.checkout.keepPrivate}</p>
           <Link className="button button--secondary" href={beachPath(locale, beach.slug)}>
             {b.backToBeach}
