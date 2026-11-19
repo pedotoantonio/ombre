@@ -161,6 +161,8 @@ export function PageShell({ locale, page, highlight = true, alternatePath, crumb
         </div>
         <div className="container site-footer__note">
           <p>{t.footer.status}</p>
+          {/* Niente profilazione (D54): la riga è l'impegno, nessun banner serve. */}
+          <p className="site-footer__privacy">{t.footer.privacy}</p>
         </div>
       </footer>
     </>
