@@ -11,3 +11,4 @@ export * from './domain/recurrence';
 export * from './domain/site';
 export * from './domain/base32';
 export * from './domain/demo-media';
+export * from './domain/type-cards';

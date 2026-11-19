@@ -80,6 +80,18 @@ export const spotType = pgTable('spot_type', {
   builtin: boolean('builtin').notNull().default(false),
 });
 
+/**
+ * The custom card of a spot type (D61, migration 025): the beach club's own
+ * texts and pictures over the platform default. No row means the default card.
+ */
+export const spotTypeCard = pgTable('spot_type_card', {
+  typeId: uuid('type_id').primaryKey(),
+  beachId: uuid('beach_id').notNull(),
+  content: jsonb('content').notNull(),
+  updatedBy: uuid('updated_by'),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const layoutElement = pgTable('layout_element', {
   id: uuid('id').primaryKey().defaultRandom(),
   beachId: uuid('beach_id').notNull(),
