@@ -1,6 +1,6 @@
 import { and, asc, eq, inArray, sql } from 'drizzle-orm';
-import { can, decorationSigns, maxColumns, rentalNotesMaxLength, rentalTypeMaxLength, spotZones, walkwayOrientations } from '@ombre/shared';
-import type { DecorationSign, LayoutElementKind, SpotMark, WalkwayOrientation } from '@ombre/shared';
+import { allDecorationSigns, can, maxColumns, rentalNotesMaxLength, rentalTypeMaxLength, spotZones, walkwayOrientations } from '@ombre/shared';
+import type { AnyDecorationSign, LayoutElementKind, SpotMark, WalkwayOrientation } from '@ombre/shared';
 import { withActor, type Database, type Transaction } from './client';
 import { DomainError, periodMaxDays, zoneOrder, type SpotZone } from './inventory';
 import {
@@ -190,7 +190,7 @@ export type DraftOp =
   | { op: 'move_spot'; spotId: string; zone: SpotZone; row: number; col: number }
   | { op: 'edit_spot'; spotId: string; patch: DraftSpotPatch }
   | { op: 'delete_spot'; spotId: string }
-  | { op: 'add_element'; kind: LayoutElementKind; zone: SpotZone | null; row: number; col: number; span?: number; label?: string | null; sign?: DecorationSign; orientation?: WalkwayOrientation }
+  | { op: 'add_element'; kind: LayoutElementKind; zone: SpotZone | null; row: number; col: number; span?: number; label?: string | null; sign?: AnyDecorationSign; orientation?: WalkwayOrientation }
   | { op: 'move_element'; elementId: string; zone: SpotZone | null; row: number; col: number }
   | { op: 'remove_element'; elementId: string }
   | { op: 'assign_zone'; spotId: string; zoneId: string | null };
@@ -530,7 +530,7 @@ function reduceOp(state: DraftMachine, op: DraftOp, index: number): { descriptio
           input = { kind: 'walkway', orientation: 'vertical', zone: op.zone ?? null, colStart: op.col, label };
         }
       } else if (op.kind === 'decoration') {
-        if (!op.sign || !decorationSigns.includes(op.sign)) throw invalidOp('a decoration needs its sign from the repertoire');
+        if (!op.sign || !allDecorationSigns.includes(op.sign)) throw invalidOp('a decoration needs its sign from the repertoire');
         assertCell(op.zone, op.row, op.col);
         if (cellTaken(state, op.zone, op.row, op.col)) throw new DomainError('draft_cell_taken', `Cell ${op.zone}/${op.row}/${op.col} is already taken in the draft`);
         input = { kind: 'decoration', zone: op.zone, rowNumber: op.row, colStart: op.col, sign: op.sign, label };

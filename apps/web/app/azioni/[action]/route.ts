@@ -1,4 +1,4 @@
-import { accountPath, beachLayoutPath, beachPath, bookingPath, bookPath, cartPath, decorationSigns, holdPath, isLocale, manageCabinsPath, manageCollectPath, manageDealsPath, manageExtrasPath, manageReviewsPath, manageTodayPath, orderPath, parseEuro, payPath, type Locale } from '@ombre/shared';
+import { accountPath, beachLayoutPath, beachPath, bookingPath, bookPath, allDecorationSigns, cartPath, holdPath, isLocale, manageCabinsPath, manageCollectPath, manageDealsPath, manageExtrasPath, manageReviewsPath, manageTodayPath, orderPath, parseEuro, payPath, type Locale } from '@ombre/shared';
 import { api, apiCall, dayPattern, formatPeriod, periodDays, sandboxNotify, slugPattern, uuidPattern } from '@/lib/api';
 import { cartCookie, cartCookieHeader, clearCartCookieHeader, clearSessionCookieHeader, parseCartTicket, sessionCookie, sessionCookieHeader, type CartTicket } from '@/lib/session';
 
@@ -927,7 +927,7 @@ const actions: Record<string, (request: Request, form: Form, lang: Locale) => Pr
       const cell = drawCellPattern.exec(form('cella'));
       if (!cell) return bad();
       const sign = form('segno');
-      if (!(decorationSigns as readonly string[]).includes(sign)) return bad();
+      if (!(allDecorationSigns as readonly string[]).includes(sign)) return bad();
       const label = form('etichetta').trim().slice(0, 40);
       return queue({ op: 'add_element', kind: 'decoration', zone: cell[1], row: Number(cell[2]), col: Number(cell[3]), sign, ...(label ? { label } : {}) });
     }
@@ -970,7 +970,7 @@ const actions: Record<string, (request: Request, form: Form, lang: Locale) => Pr
       op = { op: 'add_element', kind: kind === 'struttura' ? 'structure' : 'cabin_block', zone, row, col, span, ...(label ? { label } : {}) };
     } else if (kind === 'decorazione') {
       const sign = form('sign');
-      if (!(decorationSigns as readonly string[]).includes(sign)) return bad();
+      if (!(allDecorationSigns as readonly string[]).includes(sign)) return bad();
       op = { op: 'add_element', kind: 'decoration', zone, row, col: from, sign, ...(label ? { label } : {}) };
     } else {
       return bad();

@@ -167,7 +167,7 @@ import {
   depositCents,
   cabinCodeMaxLength,
   cabinNotesMaxLength,
-  decorationSigns,
+  allDecorationSigns,
   elementLabelMaxLength,
   expandRecurrence,
   holderContactMaxLength,
@@ -491,7 +491,7 @@ const elementSchema = z.union([
   z.object({ kind: z.literal('walkway'), orientation: z.literal('vertical'), zone: zoneSchema.nullable().optional(), colStart: colSchema, label: elementLabelSchema.optional() }),
   z.object({ kind: z.literal('structure'), zone: zoneSchema, rowNumber: z.number().int().min(1).max(200), colStart: colSchema, colEnd: colSchema, label: elementLabelSchema }),
   z.object({ kind: z.literal('cabin_block'), zone: zoneSchema, rowNumber: z.number().int().min(1).max(200), colStart: colSchema, colEnd: colSchema, label: elementLabelSchema.optional() }),
-  z.object({ kind: z.literal('decoration'), zone: zoneSchema, rowNumber: z.number().int().min(1).max(200), colStart: colSchema, sign: z.enum(decorationSigns), label: elementLabelSchema.optional() }),
+  z.object({ kind: z.literal('decoration'), zone: zoneSchema, rowNumber: z.number().int().min(1).max(200), colStart: colSchema, sign: z.enum(allDecorationSigns), label: elementLabelSchema.optional() }),
 ]);
 // ---- Spot types ----
 const spotTypeFields = {
@@ -585,7 +585,7 @@ const draftOpSchema = z.discriminatedUnion('op', [
     col: colSchema,
     span: z.number().int().min(1).max(maxColumns).optional(),
     label: elementLabelSchema.nullable().optional(),
-    sign: z.enum(decorationSigns).optional(),
+    sign: z.enum(allDecorationSigns).optional(),
     orientation: z.enum(walkwayOrientations).optional(),
   }),
   z.object({ op: z.literal('move_element'), elementId: draftIdSchema, zone: zoneSchema.nullable(), row: z.number().int().min(0).max(200), col: colSchema }),

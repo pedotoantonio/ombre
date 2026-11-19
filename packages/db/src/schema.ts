@@ -91,9 +91,12 @@ export const layoutElement = pgTable('layout_element', {
   rowNumber: integer('row_number'),
   colStart: smallint('col_start'),
   colEnd: smallint('col_end'),
-  // Only a decoration carries a sign, always, from the fixed repertoire (D35).
+  // Only a decoration carries a sign, always, from the fixed repertoire (D35 + the D58 scenery of 024).
   sign: text('sign', {
-    enum: ['palma', 'chiosco', 'doccia', 'bandiera', 'salvagente', 'cartello', 'cestino', 'amaca', 'altalena', 'giochi', 'tavolino', 'grill', 'acqua', 'armadietti', 'campo', 'pingpong'],
+    enum: [
+      'palma', 'chiosco', 'doccia', 'bandiera', 'salvagente', 'cartello', 'cestino', 'amaca', 'altalena', 'giochi', 'tavolino', 'grill', 'acqua', 'armadietti', 'campo', 'pingpong',
+      'torretta', 'duna', 'vegetazione', 'beachvolley', 'bocce', 'pedalo', 'canoa', 'sup',
+    ],
   }),
 });
 

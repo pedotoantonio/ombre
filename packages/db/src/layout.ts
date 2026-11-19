@@ -1,5 +1,5 @@
 import { and, asc, eq, sql } from 'drizzle-orm';
-import { decorationSigns, maxColumns, maxGapRows, rentalNotesMaxLength, rentalTypeMaxLength, type DecorationSign, type SeaSide, type SpotMark, type WalkwayOrientation } from '@ombre/shared';
+import { allDecorationSigns, maxColumns, maxGapRows, rentalNotesMaxLength, rentalTypeMaxLength, type AnyDecorationSign, type SeaSide, type SpotMark, type WalkwayOrientation } from '@ombre/shared';
 import { withActor, type Database, type Transaction } from './client';
 import { DomainError, zoneOrder, type SpotZone } from './inventory';
 import type { Actor } from './manage';
@@ -546,7 +546,7 @@ export interface LayoutElementView {
   colStart: number | null;
   colEnd: number | null;
   /** Only a decoration has a sign; null elsewhere. */
-  sign: DecorationSign | null;
+  sign: AnyDecorationSign | null;
 }
 
 const elementColumns = {
@@ -589,8 +589,8 @@ export interface NewElement {
   rowNumber?: number;
   colStart?: number;
   colEnd?: number;
-  /** Only for a decoration, from the fixed repertoire (D35). */
-  sign?: DecorationSign;
+  /** Only for a decoration, from the fixed repertoire (D35 + the D58 scenery). */
+  sign?: AnyDecorationSign;
 }
 
 function assertColumns(colStart: number | undefined, colEnd: number | null | undefined): void {
@@ -655,7 +655,7 @@ export function addElementWithin(tx: Transaction, actor: Actor, input: NewElemen
   if (input.kind !== 'decoration' && input.sign !== undefined) throw new RangeError('only a decoration has a sign');
   if (input.kind === 'decoration') {
     // One cell with its sign from the repertoire: no orientation, no colEnd (D35).
-    if (!input.sign || !decorationSigns.includes(input.sign)) throw new RangeError('a decoration needs its sign from the repertoire');
+    if (!input.sign || !allDecorationSigns.includes(input.sign)) throw new RangeError('a decoration needs its sign from the repertoire');
     if (input.orientation !== undefined) throw new RangeError('only a walkway has an orientation');
     if (!input.zone) throw new RangeError('this element needs its zone');
     if (input.rowNumber === undefined || !Number.isInteger(input.rowNumber) || input.rowNumber < 1) throw new RangeError('rowNumber must be a whole number from 1');

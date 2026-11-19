@@ -6,7 +6,7 @@ import {
   beachLayoutPath,
   can,
   config,
-  decorationSigns,
+  allDecorationSigns,
   elementLabelMaxLength,
   formatMoney,
   getDictionary,
@@ -483,7 +483,7 @@ function DrawGrid({
         <div className="field draw__label-field">
           <label htmlFor="disegno-soggetto">{l.signField}</label>
           <select id="disegno-soggetto" name="segno" required>
-            {decorationSigns.map((sign) => (
+            {allDecorationSigns.map((sign) => (
               <option key={sign} value={sign}>
                 {t.booking.decorations[sign]}
               </option>
@@ -1341,7 +1341,7 @@ export async function BeachLayoutView({ locale, beachSlug, query }: { locale: Lo
                     <div className="field">
                       <label htmlFor="modulo-soggetto">{l.signField}</label>
                       <select id="modulo-soggetto" name="sign" aria-describedby="modulo-soggetto-aiuto">
-                        {decorationSigns.map((sign) => (
+                        {allDecorationSigns.map((sign) => (
                           <option key={sign} value={sign}>
                             {t.booking.decorations[sign]}
                           </option>
