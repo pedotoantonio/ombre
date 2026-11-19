@@ -1,5 +1,158 @@
 # Collaudo
 
+## Collaudo del 19/11/2026 (notte) — La scheda della postazione
+
+Collaudo della commessa «la scheda della postazione»
+([specifica](specifica-scheda-postazione.md), D61–D63, criteri §6 1–7): la
+scheda illustrativa di ogni tipo di postazione nel percorso d'acquisto, su due
+livelli (predefinita di piattaforma e personalizzata del lido, risolte campo
+per campo), con le fotografie a licenza registrata e il ritorno esatto al punto
+d'acquisto. Eseguito sullo stack **fisso** `ombre-collaudo` (web
+`127.0.0.1:3232`, API `127.0.0.1:3231`) **ricostruito dal codice corrente con
+volume nuovo** (`build` → `down -v` → `up`): migrazioni 001–**025**
+(`025_type_cards`), seed demo e vetrina (l'Aurora con **tre schede
+personalizzate** dal seme, Dune e Cala predefinite), stesse variabili dei
+collaudi precedenti. Gate statici (`pnpm lint`, `pnpm -s typecheck`,
+`pnpm -r build`), la suite dei test completa su un PostgreSQL usa-e-getta
+(`OMBRE_TEST_DB_PORT=54335`), poi le **undici** suite fumo nell'ordine di
+`collaudo.sh` — la nuova `smoke:schede` tra `smoke:spiaggia` e
+`smoke:booking`, `smoke:2fa` per ultima — col verde letto suite per suite in
+un giro solo sullo stack appena ricostruito. **L'ambiente resta acceso** alla
+fine, coi dati che il collaudo vi ha lasciato: il collaudo vive nel collaudo.
+
+### La suite nuova: `smoke:schede`
+
+`scripts/smoke-schede.ts` (**141 controlli numerati, stampati uno a uno**;
+cablata in `package.json` e in `scripts/collaudo.sh` dopo `smoke:spiaggia` e
+prima di `smoke:booking`) percorre da navigatore senza script, it e en, sul
+modello di smoke-mercato e smoke-spiaggia:
+
+- **gli ingressi veri dell'Aurora** (criterio 1): riquadro «I tipi di
+  postazione», elenco delle postazioni libere («Vedi la scheda»), barra di
+  selezione, riepilogo prima di pagare, pagina della riserva (creata via API)
+  e voce del carrello (aggiunta dal modulo vero, tolta in coda). Per ciascuno
+  la suite **estrae l'href con `torna` dalla pagina**, apre la scheda da quel
+  collegamento, legge in fondo «Torna a dove eri» e verifica che punti
+  **ESATTAMENTE** alla pagina di partenza, query e àncora comprese
+  (`#tipi-postazione`, `#elenco`, `#scelta`, `#voce-{id}`), poi la riapre;
+  tutto ripetuto **speculare in inglese** su `/en/…/spot-types/` (criterio 7);
+- **la predefinita della Dune** (criterio 2): scheda dell'Ombrellone con
+  titolo = nome del tipo, la **frase esatta del redattore**
+  (docs/testi-schede-tipi.md, it e en), la nota di dotazione vagliata parola
+  per parola, la foto `/demo/tipi/umbrella.jpg` servita (HTTP 200,
+  content-type immagine), nessuna nota «Scheda del lido», e senza `torna` il
+  ritorno alla scheda del lido;
+- **la personalizzazione dal gestionale della Dune** (criterio 3): la
+  sottopagina «Postazioni» (it e en) con gli stati «Predefinita di
+  Ombrè»/«Personalizzata», il tipo senza postazioni che resta in elenco con la
+  sua nota; il salvataggio dal **modulo** (titolo, descrizioni it/en, due foto
+  della libreria con didascalia, nota di dotazione, consiglio, dettaglio);
+  l'**anteprima IDENTICA al pubblico**: il corpo della scheda (foto con alt e
+  didascalie, descrizione, riga della dotazione, nota, consiglio, dettagli,
+  nota del lido) è estratto dalle due pagine e confrontato **campo per
+  campo**, stesso titolo compreso; il pubblico aggiornato subito; i rifiuti
+  dell'API (foto fuori dalla libreria → **409 `invalid_state`**, sette foto →
+  **400**) con la scheda salvata intatta; il **ripristino con conferma**
+  («Confermi il ripristino…», «Sì, torna alla predefinita», senza JavaScript)
+  e il pubblico di nuovo predefinito, foto di repertorio compresa;
+- **la differenza Aurora/Dune** (criterio 4): l'ombrellone dell'Aurora col
+  titolo proprio «Gli ombrelloni dell'Aurora», la nota «Scheda del lido»,
+  **3 fotografie** con didascalie e dettagli etichetta/valore (anche in
+  inglese), contro la Dune con una foto di repertorio, nessuna nota e nessun
+  dettaglio;
+- **il registro delle licenze** (criterio 5): le **11 fotografie**
+  `/demo/tipi/{segno}.jpg` servite come immagini e le 11 voci di
+  `docs/immagini-reali.md` lette dal disco, ciascuna con fonte e licenza;
+- **niente rotture** (criterio 6, leggero): il giorno del seme della Dune
+  ancora in vendita col suo riepilogo, il carrello dell'Aurora di nuovo vuoto
+  dopo la pulizia, il pianificatore della Dune col pannello della bozza e la
+  bozza vuota.
+
+Residui: la voce del carrello è tolta, la scheda personalizzata finisce
+**ripristinata alla predefinita**, l'unica riserva presa sull'Aurora scade da
+sola su un giorno che nessuna suite successiva usa: `smoke:booking`,
+`smoke:api` e `smoke:2fa` girano dopo e restano verdi.
+
+### Test e collaudi fumo
+
+| Parte | Controlli | Esito |
+|---|---|---|
+| Lint, tipi e build (`pnpm lint`, `pnpm -s typecheck`, `pnpm -r build`) | tutto il codice | Superati |
+| Test con PostgreSQL vero (`OMBRE_TEST_DB_PORT=54335 pnpm test:db`) | **287** (47 shared, 11 comms, 61 db, 161 api, 7 worker), contratto OpenAPI a **135 rotte** | Superati |
+| Pagine pubbliche (`smoke`) | 453 | Superati |
+| Ricerca, planimetria e riserva (`smoke:flow`) | 73 | Superati |
+| Aree riservate (`smoke:areas`) | 85 | Superati |
+| Sito dello stabilimento (`smoke:site`) | 25 | Superati |
+| Conto, Google e carrello (`smoke:conto`) | 139 | Superati |
+| Al passo col mercato (`smoke:mercato`) | 110 | Superati |
+| La spiaggia illustrata (`smoke:spiaggia`) | 121 | Superati |
+| **La scheda della postazione (`smoke:schede`, nuova)** | **141** | Superati |
+| Prenotazione end-to-end (`smoke:booking`) | 15 | Superati |
+| Presa simultanea (`smoke:api`) | 13 | Superati |
+| Due passaggi (`smoke:2fa`, per ultima) | 11 | Superati |
+
+In totale **1186 controlli fumo**, tutti superati, verde letto suite per suite.
+
+### Difetti trovati e aggiustati
+
+1. **`smoke:site` rosso sul conteggio delle miniature.** Il controllo
+   «editor: a gallery option has no thumbnail» contava le miniature con la
+   regex `/demo/[a-z]+\.jpg` e non prevedeva le undici foto dei tipi entrate
+   nella libreria del sito (D62), servite da `/demo/tipi/{segno}.jpg`: col
+   repertorio nuovo il conto non tornava più. Corretto il controllo
+   (`/demo/(?:tipi/)?[a-z]+\.jpg`); `smoke:site` rilanciata su stack vergine,
+   di nuovo verde a 25, e l'intera catena ripetuta dall'inizio.
+2. **Due correzioni alla suite nuova durante la messa a punto** (non difetti
+   del prodotto): il riquadro va seguito dalla pagina con `?day=…`, perché
+   senza giorno la pagina sceglie oggi e il `torna` lo porta con sé; e il tipo
+   personalizzato dal collaudo dev'essere un tipo **in vendita** (l'Ombrellone
+   della Dune), perché la pagina pubblica della scheda serve i tipi in uso —
+   il Lettino singolo senza postazioni resta nel gestionale con la sua nota,
+   e la suite lo verifica lì.
+
+### Criteri di accettazione (specifica §6)
+
+1. **Scheda raggiungibile da planimetria, elenco, riepilogo e carrello —
+   superato.** Dall'Aurora la suite segue i collegamenti VERI di riquadro,
+   elenco («Vedi la scheda» col nome del tipo per gli screen reader), barra di
+   selezione (il nome del tipo è il collegamento), riepilogo, riserva e voce
+   del carrello: ogni scheda si apre senza JavaScript e «Torna a dove eri»
+   riporta ESATTAMENTE alla pagina di partenza con query e àncora
+   (controlli 9–105 del giro verde). Tutto speculare in inglese su
+   `/en/beach-clubs/…/spot-types/…`.
+2. **La predefinita esiste comunque — superato.** L'Ombrellone della Dune,
+   mai curato, serve la scheda con titolo «Ombrellone», la descrizione e la
+   nota di dotazione ESATTE del redattore vagliate dall'usabilità, la
+   fotografia di repertorio `/demo/tipi/umbrella.jpg` (servita, content-type
+   immagine) e nessuna nota «Scheda del lido», it e en.
+3. **Personalizzazione con anteprima identica e ripristino — superato.** Il
+   Gestore della Dune salva dal modulo titolo, descrizioni, due foto della
+   libreria con didascalia, note e un dettaglio; lo stato passa a
+   «Personalizzata», l'anteprima del gestionale è IDENTICA al pubblico (corpo
+   confrontato campo per campo, stesso componente), il pubblico è aggiornato
+   subito; la foto fuori repertorio è rifiutata (409 `invalid_state`), sette
+   foto sono rifiutate (400) e la scheda non si muove; «Torna alla
+   predefinita» chiede conferma e riporta davvero alla predefinita, pubblico
+   compreso.
+4. **La differenza si vede — superato.** Nel seme l'Aurora cura tre schede:
+   quella dell'ombrellone ha titolo proprio, nota «Scheda del lido», tre
+   fotografie con didascalie (it/en) e dettagli; la Dune predefinita ha una
+   foto di repertorio, nessuna nota e nessun dettaglio.
+5. **Licenze registrate — superato.** Le undici fotografie dei tipi sono
+   servite e `docs/immagini-reali.md` porta le undici voci `tipi/{segno}.jpg`
+   con fonte, autore e licenza (Pexels License), controllate una per una;
+   nessuna immagine generata nel repertorio.
+6. **Niente rotture — superato.** Il giorno del seme della Dune è ancora in
+   vendita e il riepilogo della prenotazione rapida risponde; il carrello
+   dell'Aurora funziona e torna vuoto; il pianificatore della Dune risponde
+   con la bozza vuota. Le dieci suite precedenti, rilanciate TUTTE
+   nell'ordine di `collaudo.sh` sullo stack ricostruito, restano verdi
+   (1045 controlli oltre ai 141 nuovi).
+7. **Collaudato in due lingue con verbale — superato.** Ogni pagina toccata
+   è verificata anche in inglese (schede, ingressi, gestionale su
+   `/spot-types`), i criteri sono numerati nel verbale e la suite stampa i
+   141 controlli uno a uno.
+
 ## Collaudo del 19/11/2026 — La spiaggia illustrata e il pianificatore
 
 Collaudo della commessa «la spiaggia illustrata e il pianificatore»
