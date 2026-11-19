@@ -24,6 +24,8 @@ import {
   cabinHistory,
   cabinsToday,
   cancelByBeachClub,
+  cancelByOwner,
+  cancellationView,
   cartAccessToken,
   cartOwnerId,
   cartTokenIsValid,
@@ -38,6 +40,7 @@ import {
   createContract,
   createConvention,
   createExtraService,
+  createReview,
   createSpotType,
   createZone,
   decideProposal,
@@ -52,6 +55,7 @@ import {
   DomainError,
   endAssignment,
   findActiveBeach,
+  flagReview,
   getBooking,
   getCart,
   getHold,
@@ -80,6 +84,8 @@ import {
   listPaymentRequests,
   listPendingSublets,
   listProposals,
+  listPublicReviews,
+  listReviewsForManager,
   plannerGrid,
   plannerMaxDays,
   listMemberships,
@@ -103,6 +109,7 @@ import {
   removeElement,
   removeItem,
   renameZone,
+  replyToReview,
   reportSummary,
   resolveSession,
   restoreRevision,
@@ -112,10 +119,12 @@ import {
   setBeachPosition,
   setBlocked,
   setBlockedBulk,
+  setCancellationPolicy,
   setContractStatus,
   setConventionStatus,
   setExtraServiceStatus,
   setGapRows,
+  setPaymentSettings,
   setPrice,
   setRetired,
   setRowRental,
@@ -148,6 +157,7 @@ import { createRateLimiter, type RateLimiter } from './rate-limit';
 import {
   base32Encode,
   beachAmenities,
+  depositCents,
   cabinCodeMaxLength,
   cabinNotesMaxLength,
   decorationSigns,
@@ -241,6 +251,11 @@ const domainStatus: Record<DomainErrorCode, 401 | 403 | 404 | 409 | 422 | 429> =
   cart_mixed_beach: 422,
   // «Conferma e paga» is all or nothing: the message names the offending item.
   order_item_unavailable: 409,
+  // ---- Reviews (D51) and the owner's cancellation (D53) ----
+  review_not_allowed: 409,
+  review_exists: 409,
+  cancel_not_allowed: 409,
+  cancel_deadline_passed: 409,
 };
 
 const slugSchema = z.string().regex(/^[a-z0-9]+(-[a-z0-9]+)*$/).max(80);
@@ -531,6 +546,17 @@ const amenitiesQuerySchema = z
   .transform((raw) => raw.split(','))
   .pipe(z.array(z.enum(beachAmenities)).min(1).max(beachAmenities.length))
   .optional();
+// ---- Reviews (D51): the owner's vote and text, the manager's flag and reply ----
+const reviewSchema = z.object({ rating: z.number().int().min(1).max(5), body: plain(600).min(1).nullable().default(null) });
+const flagSchema = z.object({ reason: plain(200).min(3) });
+const replySchema = z.object({ reply: plain(600).min(1) });
+// ---- The deposit (D52) and the cancellation terms (D53) of the settings panel ----
+const paymentSettingsSchema = z.object({ mode: z.enum(['full', 'deposit']), depositPercent: z.number().int().min(10).max(90) });
+const cancellationPolicySchema = z.object({
+  deadlineHours: z.number().int().min(0).max(336),
+  policyIt: plain(600).min(1).nullable().default(null),
+  policyEn: plain(600).min(1).nullable().default(null),
+});
 // Guests, shared days and a period only mean something on a given day.
 const beachSearchSchema = z
   .object({
@@ -570,7 +596,14 @@ function purchaseMoney(quote: PurchaseQuote) {
 
 function publicBeach(beach: PublicBeach) {
   // Coordinates are null until the manager sets them: the club then stays off the map.
-  return { slug: beach.slug, name: beach.name, locality: beach.locality, timezone: beach.timezone, demo: beach.demo, latitude: beach.latitude, longitude: beach.longitude, amenities: beach.amenities };
+  // The rating (D51) rides every public beach object: cards and scheda show «4,6 · 12 recensioni».
+  return { slug: beach.slug, name: beach.name, locality: beach.locality, timezone: beach.timezone, demo: beach.demo, latitude: beach.latitude, longitude: beach.longitude, amenities: beach.amenities, rating: beach.rating };
+}
+
+/** The deposit block of a purchase answer (D52): what is due now and what remains. */
+function dueNowOf(beach: PublicBeach, totalCents: number): { dueNowCents: number; balanceCents: number } {
+  const dueNowCents = beach.paymentMode === 'deposit' ? depositCents(totalCents, beach.depositPercent) : totalCents;
+  return { dueNowCents, balanceCents: totalCents - dueNowCents };
 }
 
 // Requests per minute and per client on the routes most exposed to abuse.
@@ -781,6 +814,11 @@ export function createApp(options: AppOptions): Hono {
       // while the quote contributes the money fields and the priced lines in `days`.
       items: view.items.map(({ quote, ...item }) => ({ ...(quote ? purchaseMoney(quote) : {}), ...item })),
       totalCents: view.totalCents,
+      // «Caparra adesso X · Saldo al lido Y» (D52) and the terms before paying (D53).
+      dueNowCents: view.dueNowCents,
+      balanceCents: view.balanceCents,
+      payment: view.payment,
+      cancellation: view.cancellation,
       allAvailable: view.allAvailable,
     });
   });
@@ -827,6 +865,9 @@ export function createApp(options: AppOptions): Hono {
         code: order.code,
         currency: 'EUR',
         totalCents: order.totalCents,
+        // The deposit of the whole order (D52): the sum of the items' deposits.
+        dueNowCents: order.dueNowCents,
+        balanceCents: order.balanceCents,
         accessToken: order.accessToken,
         payment: { ...order.payment, currency: 'EUR' },
         items: order.items,
@@ -873,6 +914,21 @@ export function createApp(options: AppOptions): Hono {
       },
       201,
     );
+  });
+
+  // ---- Reviews (D51) and the owner's cancellation (D53), from the account ----
+  route({ method: 'post', path: '/v1/account/bookings/:groupId/review', summary: 'Review an own concluded stay: one review per stay, vote 1–5 and optional text', tag: 'Account', auth: 'session', request: reviewSchema, success: 201, errors: [400, 401, 403, 404, 409] }, async (c) => {
+    const user = await currentUser(c.req.header('Authorization'));
+    const groupId = parse(z.uuid(), c.req.param('groupId'), 'booking group');
+    const { rating, body: text } = parse(reviewSchema, await body(c.req.raw), 'review');
+    const created = await createReview(db, { userId: user.userId, groupId, rating, body: text });
+    return c.json({ reviewId: created.reviewId, rating: created.rating, body: created.body, createdAt: created.createdAt.toISOString() }, 201);
+  });
+
+  route({ method: 'post', path: '/v1/account/bookings/:groupId/cancel', summary: 'Cancel an own confirmed stay within the free-cancellation deadline, with a full refund of what was paid', tag: 'Account', auth: 'session', success: 204, errors: [400, 401, 403, 404, 409] }, async (c) => {
+    const user = await currentUser(c.req.header('Authorization'));
+    await cancelByOwner(db, { userId: user.userId, groupId: parse(z.uuid(), c.req.param('groupId'), 'booking group') });
+    return c.body(null, 204);
   });
 
   // ---- Sign-in with an external identity (D48) ----
@@ -1288,6 +1344,45 @@ export function createApp(options: AppOptions): Hono {
   route({ method: 'put', path: '/v1/manage/beaches/:slug/sharing-settings', summary: 'Set daily cap and price of shared days', tag: 'Beach club', auth: 'session', request: sharingSettingsSchema, success: 204, errors: [400, 401, 403] }, async (c) => {
     const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'sharing.manage');
     await setSharingSettings(db, actor, parse(sharingSettingsSchema, await body(c.req.raw), 'request'));
+    return c.body(null, 204);
+  });
+
+  // ---- The deposit (D52) and the cancellation terms (D53): settings of the manager ----
+  route({ method: 'put', path: '/v1/manage/beaches/:slug/payment-settings', summary: 'Choose between full payment online and «caparra adesso, saldo al lido», with the deposit percent', tag: 'Beach club', auth: 'session', request: paymentSettingsSchema, success: 200, errors: [400, 401, 403] }, async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'sharing.manage');
+    return c.json(await setPaymentSettings(db, actor, parse(paymentSettingsSchema, await body(c.req.raw), 'payment settings')));
+  });
+
+  route({ method: 'put', path: '/v1/manage/beaches/:slug/cancellation-policy', summary: 'Set the free-cancellation deadline in hours and the policy texts shown before paying', tag: 'Beach club', auth: 'session', request: cancellationPolicySchema, success: 200, errors: [400, 401, 403] }, async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'sharing.manage');
+    return c.json(await setCancellationPolicy(db, actor, parse(cancellationPolicySchema, await body(c.req.raw), 'cancellation policy')));
+  });
+
+  // ---- Moderation of the reviews (D51): manager only ----
+  route({ method: 'get', path: '/v1/manage/beaches/:slug/reviews', summary: 'Every review of the beach club, newest first, with flag details and reply', tag: 'Beach club', auth: 'session', success: 200, errors: [401, 403] }, async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'reviews.moderate');
+    const rows = await listReviewsForManager(db, actor);
+    return c.json({
+      reviews: rows.map((row) => ({
+        ...row,
+        createdAt: row.createdAt.toISOString(),
+        flaggedAt: row.flaggedAt?.toISOString() ?? null,
+        repliedAt: row.repliedAt?.toISOString() ?? null,
+      })),
+    });
+  });
+
+  route({ method: 'post', path: '/v1/manage/beaches/:slug/reviews/:reviewId/flag', summary: 'Flag a review to the platform, once, with a written reason; it stays visible', tag: 'Beach club', auth: 'session', request: flagSchema, success: 204, errors: [400, 401, 403, 404, 409] }, async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'reviews.moderate');
+    const { reason } = parse(flagSchema, await body(c.req.raw), 'flag');
+    await flagReview(db, actor, { reviewId: parse(z.uuid(), c.req.param('reviewId'), 'review'), reason });
+    return c.body(null, 204);
+  });
+
+  route({ method: 'post', path: '/v1/manage/beaches/:slug/reviews/:reviewId/reply', summary: 'Publish or rewrite the reply of the beach club under a review', tag: 'Beach club', auth: 'session', request: replySchema, success: 204, errors: [400, 401, 403, 404] }, async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'reviews.moderate');
+    const { reply } = parse(replySchema, await body(c.req.raw), 'reply');
+    await replyToReview(db, actor, { reviewId: parse(z.uuid(), c.req.param('reviewId'), 'review'), reply });
     return c.body(null, 204);
   });
 
@@ -1713,9 +1808,27 @@ export function createApp(options: AppOptions): Hono {
     },
   );
 
-  route({ method: 'get', path: '/v1/beaches/:slug', summary: 'A beach club, its next free day and its published website', tag: 'Public', auth: 'none', success: 200, errors: [400, 404] }, async (c) => {
+  route({ method: 'get', path: '/v1/beaches/:slug', summary: 'A beach club, its next free day, its published website, how it is paid and its cancellation terms', tag: 'Public', auth: 'none', success: 200, errors: [400, 404] }, async (c) => {
     const beach = await beachBySlug(parse(slugSchema, c.req.param('slug'), 'beach club'));
-    return c.json({ beach: publicBeach(beach), nextAvailableDay: await nextAvailableDay(db, beach), site: await getPublishedSite(db, beach.id) });
+    return c.json({
+      beach: publicBeach(beach),
+      nextAvailableDay: await nextAvailableDay(db, beach),
+      site: await getPublishedSite(db, beach.id),
+      // «Caparra adesso, saldo al lido» (D52) and the cancellation terms (D53):
+      // visible before any payment, on the scheda.
+      payment: { mode: beach.paymentMode, depositPercent: beach.depositPercent },
+      cancellation: await cancellationView(db, beach.id, null),
+    });
+  });
+
+  route({ method: 'get', path: '/v1/beaches/:slug/reviews', summary: 'Verified reviews of the beach club, the most recent first, at most 50, with the reply of the club', tag: 'Public', auth: 'none', success: 200, errors: [400, 404] }, async (c) => {
+    const slug = parse(slugSchema, c.req.param('slug'), 'beach club');
+    const beach = await beachBySlug(slug);
+    const reviews = await listPublicReviews(db, slug);
+    return c.json({
+      beach: publicBeach(beach),
+      reviews: reviews.map((entry) => ({ ...entry, createdAt: entry.createdAt.toISOString() })),
+    });
   });
 
   // The dedicated route keeps the availability answer untouched; the unit prices of
@@ -1739,6 +1852,9 @@ export function createApp(options: AppOptions): Hono {
       to: held.to,
       spot: { code: held.spotCode, zoneName: held.zoneName, rowNumber: held.rowNumber, umbrellas: held.umbrellas, sunbeds: held.sunbeds },
       ...purchaseMoney(held.quote),
+      // The riepilogo says what is due now (D52) and the cancellation terms (D53).
+      ...dueNowOf(beach, held.quote.total),
+      cancellation: await cancellationView(db, beach.id, held.from),
     });
   });
 
@@ -1775,6 +1891,10 @@ export function createApp(options: AppOptions): Hono {
         day,
         to,
         currency: 'EUR',
+        // How this club is paid (D52) and its cancellation terms with the deadline
+        // of THIS arrival day (D53): both visible before any payment.
+        payment: { mode: beach.paymentMode, depositPercent: beach.depositPercent },
+        cancellation: await cancellationView(db, beach.id, day),
         // The drawing: side of the sea, corridor rows between the zones, walkways and other elements.
         seaSide,
         gaps,
@@ -1811,6 +1931,9 @@ export function createApp(options: AppOptions): Hono {
         from: held.from,
         to: held.to,
         ...purchaseMoney(held.quote),
+        // What is due now with the deposit (D52) and the cancellation terms (D53).
+        ...dueNowOf(beach, held.quote.total),
+        cancellation: await cancellationView(db, beach.id, held.from),
       },
       held.replayed ? 200 : 201,
     );
