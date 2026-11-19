@@ -57,8 +57,9 @@ d'acquisto, senza JavaScript, it/en. Decisioni D61–D63.
   alla scheda del lido). Senza JavaScript, it/en.
 - **Ingressi**: planimetria e barra di selezione (il nome del tipo diventa
   collegamento), elenco delle postazioni, riepilogo prima di pagare, voci
-  del carrello, e un riquadro «Le postazioni» sulla scheda del lido coi
-  tipi offerti, miniatura e collegamento.
+  del carrello, e un riquadro «I tipi di postazione» (titolo dal vaglio
+  d'usabilità: non si confonde con l'elenco delle postazioni libere)
+  sulla scheda del lido coi tipi offerti, miniatura e collegamento.
 - **API**: `GET /v1/beaches/{slug}/spot-types` (tipi offerti con la scheda
   risolta e lo stato predefinita/personalizzata); di gestione
   `GET /v1/manage/beaches/{slug}/type-cards`,
