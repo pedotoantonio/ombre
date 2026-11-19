@@ -592,3 +592,34 @@ cambia fascia, fila e colonna e non tocca codice, prenotazioni, pass e
 storia. Il trascinamento con aggancio alla griglia è JavaScript
 progressivo che compila e invia lo stesso modulo della via senza
 JavaScript, mai l'unica via.
+
+## D61 — La scheda del tipo di postazione — accettata (19/11/2026)
+
+La scheda è del tipo, non della singola postazione. Due livelli: la
+predefinita di piattaforma per ognuno degli 11 segni del repertorio
+(testo del redattore vagliato dall'usabilità, foto di repertorio a
+licenza registrata, in codice condiviso) e la personalizzata del lido
+(`spot_type_card`, migrazione 025: titolo, descrizioni it/en con ripiego,
+1–6 foto dalla libreria del sito con didascalie, dotazione, capienza,
+fino a 6 dettagli). Risoluzione per campo: personalizzato dove c'è,
+predefinito altrove. «Cabina» e «tavolo» non sono tipi di postazione
+(cabine D26, tavolo scenografia): interpretazione scritta.
+
+## D62 — Le fotografie dei tipi — accettata (19/11/2026)
+
+Solo fotografie vere con licenza verificata e registrate in
+immagini-reali.md (regole D43), ritagli 3:2 1200×800 in
+`/demo/tipi/{segno}.jpg`, aggiunte anche alla libreria `demoMedia` così
+servono pure alle schede personalizzate. Niente immagini generate; il
+caricamento di foto proprie resta rimandato.
+
+## D63 — Pagina pubblica e sottopagina «Postazioni» — accettata (19/11/2026)
+
+Pagina pubblica `/bagni/{slug}/postazioni/{typeId}` (it `postazioni`, en
+`spot-types`) con ritorno esatto via `torna` convalidato; ingressi da
+planimetria, barra di selezione, elenco, riepilogo, carrello e riquadro
+«Le postazioni» sulla scheda del lido. Gestione nella sottopagina nuova
+«Postazioni» con anteprima identica al pubblico (stesso componente) e
+ripristino alla predefinita; permesso `site.edit`. Rotte nuove: pubblica
+`GET /v1/beaches/{slug}/spot-types`; di gestione GET/PUT/DELETE
+`…/type-cards[/{typeId}]`. Contratto da 131 a 135.
