@@ -1,6 +1,7 @@
 import { and, eq, sql } from 'drizzle-orm';
 import { withBeach, type Database, type Transaction } from './client';
 import { closeDay } from './ledger';
+import { paidCentsOfGroup } from './payments';
 import { beach, booking, hold, inventoryDay, notification, outbox, promotion, spot } from './schema';
 
 export type OutboxKind = 'booking.confirmed' | 'booking.cancelled' | 'refund.due' | 'account.created' | 'account.exists';
@@ -88,6 +89,8 @@ export interface BookingMailData {
   guestName: string;
   guestEmail: string | null;
   totalCents: number;
+  /** What really came in for the group (D52): succeeded payments plus the order quota. */
+  paidCents: number;
   day: string;
   /** The whole dal–al period of the group (D38), so the mail can write it out in full. */
   from: string;
@@ -105,13 +108,16 @@ export function bookingMailData(db: Database, beachId: string, bookingId: string
     const groupFrom = sql<string>`coalesce((select min(d2.day)::text from booking b2 join inventory_day d2 on d2.id = b2.inventory_day_id where b2.group_id = ${booking.groupId} and b2.status <> 'cancelled'), ${inventoryDay.day}::text)`;
     const groupTo = sql<string>`coalesce((select max(d2.day)::text from booking b2 join inventory_day d2 on d2.id = b2.inventory_day_id where b2.group_id = ${booking.groupId} and b2.status <> 'cancelled'), ${inventoryDay.day}::text)`;
     const [row] = await tx
-      .select({ bookingId: booking.id, code: booking.code, locale: sql<'it' | 'en'>`${booking.locale}`, guestName: booking.guestName, guestEmail: booking.guestEmail, totalCents: groupTotal, day: inventoryDay.day, from: groupFrom, to: groupTo, spotCode: spot.code, beachSlug: beach.slug, beachName: beach.name })
+      .select({ bookingId: booking.id, groupId: booking.groupId, code: booking.code, locale: sql<'it' | 'en'>`${booking.locale}`, guestName: booking.guestName, guestEmail: booking.guestEmail, totalCents: groupTotal, day: inventoryDay.day, from: groupFrom, to: groupTo, spotCode: spot.code, beachSlug: beach.slug, beachName: beach.name })
       .from(booking)
       .innerJoin(inventoryDay, eq(inventoryDay.id, booking.inventoryDayId))
       .innerJoin(spot, eq(spot.id, inventoryDay.spotId))
       .innerJoin(beach, eq(beach.id, booking.beachId))
       .where(eq(booking.id, bookingId));
-    return row ?? null;
+    if (!row) return null;
+    // The mail says what was paid now and what remains (D52): the group aggregate.
+    const { groupId, ...data } = row;
+    return { ...data, paidCents: await paidCentsOfGroup(tx, groupId) };
   });
 }
 

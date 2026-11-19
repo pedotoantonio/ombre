@@ -1,7 +1,9 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { and, asc, desc, eq, sql } from 'drizzle-orm';
+import { depositCents } from '@ombre/shared';
 import { withBeach, withUser, type Database, type Transaction } from './client';
 import { DomainError, normalizePromo, periodDays, priceExtras, quoteSpotWithin, type ExtraRequest, type PurchaseQuote } from './inventory';
+import { cancellationDeadlines } from './settings';
 import { beach, beachZone, cart, cartItem, cartItemExtra, spot, spotType } from './schema';
 
 // The cart (D46): it lives on the server, belongs to ONE beach club and
@@ -205,6 +207,11 @@ export interface CartItemView {
   reason: string | null;
   /** Live quote over the period, extras per line; null when the item is not ok. */
   quote: PurchaseQuote | null;
+  /** The item's deposit with `payment_mode = 'deposit'` (D52), its whole total otherwise; null when not ok. */
+  dueNowCents: number | null;
+  balanceCents: number | null;
+  /** The cancellation terms applied to THIS item's arrival day (D53). */
+  cancellation: { deadlineHours: number; deadline: string | null; policyIt: string | null; policyEn: string | null };
 }
 
 export interface CartView {
@@ -214,6 +221,12 @@ export interface CartView {
   items: CartItemView[];
   /** Sum of the quotable items: what «Conferma e paga» would charge today. */
   totalCents: number;
+  /** What would be paid NOW (D52): the sum of the items' deposits, or the whole total. */
+  dueNowCents: number;
+  balanceCents: number;
+  payment: { mode: 'full' | 'deposit'; depositPercent: number };
+  /** The club's terms with the earliest deadline among the items (D53). */
+  cancellation: { deadlineHours: number; deadline: string | null; policyIt: string | null; policyEn: string | null };
   /** True only when every item can be confirmed as it stands. */
   allAvailable: boolean;
 }
@@ -227,6 +240,17 @@ export interface CartView {
 export function getCart(db: Database, beachId: string, cartId: string): Promise<CartView> {
   return withBeach(db, beachId, async (tx) => {
     const found = await cartOrRefuse(tx, cartId);
+    const [club] = await tx
+      .select({
+        paymentMode: beach.paymentMode,
+        depositPercent: beach.depositPercent,
+        deadlineHours: beach.cancelDeadlineHours,
+        policyIt: beach.cancelPolicyIt,
+        policyEn: beach.cancelPolicyEn,
+      })
+      .from(beach)
+      .where(eq(beach.id, beachId));
+    if (!club) throw new DomainError('not_found', 'Cart not found');
     const rows = await tx
       .select({ item: cartItem, spot, typeName: spotType.name, typeMark: spotType.mark, zoneName: beachZone.name })
       .from(cartItem)
@@ -245,6 +269,15 @@ export function getCart(db: Database, beachId: string, cartId: string): Promise<
       extrasOf.set(row.cartItemId, list);
     }
 
+    // The cancellation deadline is computed per item (D53), on each arrival day.
+    const deadlines = await cancellationDeadlines(tx, beachId, rows.map((row) => row.item.dayFrom));
+    const cancellationOf = (arrival: string | null) => ({
+      deadlineHours: club.deadlineHours,
+      deadline: arrival ? (deadlines.get(arrival) ?? null) : null,
+      policyIt: club.policyIt,
+      policyEn: club.policyEn,
+    });
+
     const items: CartItemView[] = [];
     for (const row of rows) {
       const extras = extrasOf.get(row.item.id) ?? [];
@@ -256,7 +289,12 @@ export function getCart(db: Database, beachId: string, cartId: string): Promise<
         if (!(error instanceof DomainError)) throw error;
         reason = error.code;
       }
+      // The deposit is computed per item (D52): the order will sum exactly these.
+      const dueNowCents = quote === null ? null : club.paymentMode === 'deposit' ? depositCents(quote.total, club.depositPercent) : quote.total;
       items.push({
+        dueNowCents,
+        balanceCents: quote === null || dueNowCents === null ? null : quote.total - dueNowCents,
+        cancellation: cancellationOf(row.item.dayFrom),
         itemId: row.item.id,
         spotId: row.item.spotId,
         spot: { code: row.spot.code, zoneName: row.zoneName, rowNumber: row.spot.rowNumber, zone: row.spot.zone, typeName: row.typeName, typeMark: row.typeMark, umbrellas: row.spot.umbrellas, sunbeds: row.spot.sunbeds },
@@ -270,12 +308,19 @@ export function getCart(db: Database, beachId: string, cartId: string): Promise<
         quote,
       });
     }
+    const totalCents = items.reduce((sum, item) => sum + (item.quote?.total ?? 0), 0);
+    const dueNowCents = items.reduce((sum, item) => sum + (item.dueNowCents ?? 0), 0);
+    const earliestDeadline = items.map((item) => item.cancellation.deadline).filter((deadline): deadline is string => deadline !== null).sort()[0] ?? null;
     return {
       cartId: found.id,
       beachId: found.beachId,
       userId: found.userId,
       items,
-      totalCents: items.reduce((sum, item) => sum + (item.quote?.total ?? 0), 0),
+      totalCents,
+      dueNowCents,
+      balanceCents: totalCents - dueNowCents,
+      payment: { mode: club.paymentMode, depositPercent: club.depositPercent },
+      cancellation: { ...cancellationOf(null), deadline: earliestDeadline },
       allAvailable: items.length > 0 && items.every((item) => item.ok),
     };
   });

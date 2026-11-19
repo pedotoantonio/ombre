@@ -14,6 +14,16 @@ export function formatMoney(cents: Cents, locale: Locale): string {
   return new Intl.NumberFormat(numberLocale[locale], { style: 'currency', currency: 'EUR' }).format(cents / 100);
 }
 
+/**
+ * The deposit of a booking group (D52): rounding to the coin of
+ * total × percent / 100, computed PER GROUP — an order sums the deposits of its
+ * items, so the per-item accounts always add up.
+ */
+export function depositCents(totalCents: Cents, percent: number): Cents {
+  assertCents(totalCents, 'total');
+  return Math.round((totalCents * percent) / 100);
+}
+
 /** Reads an amount typed by a person, such as "30", "30,50" or "30.5", as whole cents. */
 export function parseEuro(text: string): Cents | null {
   const match = /^(\d{1,6})(?:[.,](\d{1,2}))?$/.exec(text.trim());

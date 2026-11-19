@@ -5,10 +5,12 @@ import { hashToken } from './auth';
 import { extraLinesByGroup } from './extras';
 import { DomainError, type ExtraRequest } from './inventory';
 import { enqueue } from './jobs';
-import { addExtrasToBooking, groupTotalsByGroup, paidCentsByGroup, passCredential, paymentStateOf, type PaymentState } from './bookings';
+import { addExtrasToBooking, groupTotalsByGroup, passCredential } from './bookings';
 import type { Actor } from './manage';
 import { createPaymentRequest, type CreatedPaymentRequest, type PayRequestMessageData } from './payment-requests';
-import { beach, beachZone, booking, bookingGroup, inventoryDay, pass, spot } from './schema';
+import { paidCentsByGroup, paymentStateOf, type PaymentState } from './payments';
+import { cancellationDeadlines } from './settings';
+import { beach, beachZone, booking, bookingGroup, inventoryDay, pass, review, spot } from './schema';
 
 // The guest's account (D44, D47, D48): registration with a generated password,
 // the forced first change, external identities and the history across beach clubs.
@@ -138,6 +140,12 @@ export interface MyBookingGroup {
   extras: { name: { it: string; en: string | null }; quantity: number }[];
   /** Only while a day is today or later and the pass is not revoked. */
   passCredential: string | null;
+  /** The owner's own review of this stay (D51); null while none exists. */
+  review: { rating: number; body: string | null } | null;
+  /** True for a concluded, not cancelled stay that has no review yet (D51). */
+  canReview: boolean;
+  /** The owner's cancellation gesture (D53): allowed only within the deadline, with no matured day. */
+  cancellation: { allowed: boolean; deadline: string | null };
 }
 
 export interface MyBookings {
@@ -185,6 +193,13 @@ export async function listMyBookings(db: Database, userId: string, secret: strin
       const lines = await extraLinesByGroup(tx, groupIds);
       const passes = await tx.select({ groupId: pass.groupId, passId: pass.id, revoked: pass.revoked }).from(pass).where(inArray(pass.groupId, groupIds));
       const passOf = new Map(passes.map((row) => [row.groupId, row]));
+      // The owner's own reviews (D51) and the cancellation deadlines (D53) of this club.
+      const reviews = await tx.select({ groupId: review.bookingGroupId, rating: review.rating, body: review.body }).from(review).where(inArray(review.bookingGroupId, groupIds));
+      const reviewOf = new Map(reviews.map((row) => [row.groupId, { rating: row.rating, body: row.body }]));
+      const termsRow = await tx.execute<{ deadline_hours: number; now_epoch: number }>(
+        sql`select cancel_deadline_hours as deadline_hours, extract(epoch from now())::double precision as now_epoch from beach where id = ${beachId}`,
+      );
+      const nowEpoch = Number(termsRow.rows[0]?.now_epoch ?? Date.now() / 1000);
       const dayRows = await tx
         .select({ groupId: booking.groupId, status: booking.status, guestName: booking.guestName, day: inventoryDay.day, spotCode: spot.code, zoneName: beachZone.name })
         .from(booking)
@@ -199,6 +214,7 @@ export async function listMyBookings(db: Database, userId: string, secret: strin
         list.push(row);
         daysOf.set(row.groupId, list);
       }
+      const deadlines = await cancellationDeadlines(tx, beachId, dayRows.map((row) => row.day));
 
       for (const group of groups) {
         const members = daysOf.get(group.groupId) ?? [];
@@ -212,6 +228,10 @@ export async function listMyBookings(db: Database, userId: string, secret: strin
         totalSpentCents += paidCents;
         const issued = passOf.get(group.groupId);
         const first = live[0] ?? members[0]!;
+        const own = reviewOf.get(group.groupId) ?? null;
+        // The gesture exists only within the deadline, with no matured day (D53).
+        const deadline = status === 'confirmed' ? (deadlines.get(first.day) ?? null) : null;
+        const allowed = status === 'confirmed' && live.every((member) => member.day >= today) && deadline !== null && nowEpoch * 1000 <= Date.parse(deadline);
         const view: MyBookingGroup & { sortKey: string } = {
           groupId: group.groupId,
           code: group.code,
@@ -229,6 +249,9 @@ export async function listMyBookings(db: Database, userId: string, secret: strin
           paymentState: paymentStateOf(totalCents, paidCents),
           extras: (lines.get(group.groupId) ?? []).map((line) => ({ name: line.name, quantity: line.quantity })),
           passCredential: issued && !issued.revoked && lastLiveDay !== null && lastLiveDay >= today ? passCredential(secret, issued.passId) : null,
+          review: own,
+          canReview: status === 'completed' && own === null,
+          cancellation: { allowed, deadline },
           sortKey: total?.from ?? first.day,
         };
         if (status === 'confirmed') {

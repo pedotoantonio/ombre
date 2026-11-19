@@ -1,12 +1,14 @@
 import { createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
-import { and, asc, desc, eq, inArray, isNotNull, like, or, sql } from 'drizzle-orm';
-import { canTransition } from '@ombre/shared';
-import { withActor, withBeach, type Database, type Transaction } from './client';
+import { and, asc, desc, eq, inArray, like, or, sql } from 'drizzle-orm';
+import { canTransition, depositCents } from '@ombre/shared';
+import { withActor, withBeach, withUser, type Database, type Transaction } from './client';
 import { extraLinesByGroup, groupExtraLines } from './extras';
 import { acquireHold, acquireHoldWithin, conventionAppliesOn, DomainError, periodDays, priceExtras, type ExtraLine, type ExtraRequest } from './inventory';
 import { enqueue } from './jobs';
 import { recordRefundDue, recordSale } from './ledger';
 import type { Actor } from './manage';
+import { apportionPaid, orderQuotaByGroup, paidCentsByGroup, paidCentsOfGroup, paymentStateOf, type PaymentState } from './payments';
+import { cancellationDeadlines } from './settings';
 import { accessEvent, allocation, auditEvent, beach, beachZone, booking, bookingExtra, bookingGroup, cart, cartItem, cartItemExtra, hold, holdExtra, hotelConvention, inventoryDay, ledgerEntry, orderGroup, pass, payment, paymentRequest, promotion, providerEvent, refund, spot } from './schema';
 
 /** Signs identifiers so that links and passes cannot be guessed and need no stored secret per row. */
@@ -25,66 +27,8 @@ export const bookingAccessToken = (secret: string, bookingId: string): string =>
 export const orderAccessToken = (secret: string, orderId: string): string => sign(secret, 'order', orderId);
 export const passCredential = (secret: string, passId: string): string => `${passId}.${sign(secret, 'pass', passId).slice(0, 32)}`;
 
-// ---- The payment aggregate (D31 at group level, D38, spec ruoli-periodo §2) ----
-// The residual is defined once: total of the group's days that are not cancelled
-// minus the payments of the group that really succeeded. The shown payment state
-// is derived from it, never stored.
-
-export type PaymentState = 'paid' | 'partial' | 'to_collect';
-
-export function paymentStateOf(totalCents: number, paidCents: number): PaymentState {
-  if (paidCents >= totalCents) return 'paid';
-  return paidCents > 0 ? 'partial' : 'to_collect';
-}
-
-/**
- * The slice of a succeeded ORDER payment that belongs to each group (D46): the
- * totals frozen in the group's holds, which are exactly what the order charged.
- * Extras added later never enter the quota, so they stay in the residual. Empty
- * for groups born outside an order, which keeps every older number unchanged.
- */
-async function orderQuotaByGroup(tx: Transaction, groupIds: string[]): Promise<Map<string, number>> {
-  if (groupIds.length === 0) return new Map();
-  const rows = await tx
-    .select({ groupId: booking.groupId, quota: sql<number>`coalesce(sum(${hold.totalCents}), 0)::int` })
-    .from(booking)
-    .innerJoin(hold, eq(hold.id, booking.holdId))
-    .innerJoin(bookingGroup, eq(bookingGroup.id, booking.groupId))
-    .where(
-      and(
-        inArray(booking.groupId, groupIds),
-        isNotNull(bookingGroup.orderId),
-        sql`exists (select 1 from payment po where po.order_id = ${bookingGroup.orderId} and po.status = 'succeeded')`,
-      ),
-    )
-    .groupBy(booking.groupId);
-  return new Map(rows.map((row) => [row.groupId, row.quota]));
-}
-
-/** Sum of the succeeded payments of one booking group, order quota included (D46), inside the current transaction. */
-export async function paidCentsOfGroup(tx: Transaction, groupId: string): Promise<number> {
-  const [row] = await tx
-    .select({ paid: sql<number>`coalesce(sum(${payment.amountCents}), 0)::int` })
-    .from(payment)
-    .where(and(eq(payment.groupId, groupId), eq(payment.status, 'succeeded')));
-  const quota = (await orderQuotaByGroup(tx, [groupId])).get(groupId) ?? 0;
-  return (row?.paid ?? 0) + quota;
-}
-
-/** Succeeded cents per group, for day lists: one query, a map back. */
-export async function paidCentsByGroup(tx: Transaction, groupIds: string[]): Promise<Map<string, number>> {
-  if (groupIds.length === 0) return new Map();
-  const rows = await tx
-    .select({ groupId: payment.groupId, paid: sql<number>`coalesce(sum(${payment.amountCents}), 0)::int` })
-    .from(payment)
-    .where(and(inArray(payment.groupId, groupIds), eq(payment.status, 'succeeded')))
-    .groupBy(payment.groupId);
-  const paid = new Map(rows.map((row) => [row.groupId!, row.paid]));
-  for (const [groupId, quota] of await orderQuotaByGroup(tx, groupIds)) {
-    paid.set(groupId, (paid.get(groupId) ?? 0) + quota);
-  }
-  return paid;
-}
+// The payment aggregate (D31 at group level, D38, D46) lives in payments.ts,
+// shared with the mail worker; this file keeps the booking paths that use it.
 
 /** One booking is one spot for one day: these are the days of one group, first day first. */
 async function bookingsOfGroup(tx: Transaction, groupId: string): Promise<{ booking: typeof booking.$inferSelect; day: string }[]> {
@@ -275,16 +219,20 @@ export function startCheckout(db: Database, beachId: string, request: CheckoutRe
     const totalCents = members.reduce((sum, member) => sum + member.held.totalCents, 0);
 
     const provider = request.source === 'desk' ? 'desk' : 'sandbox';
+    // «Caparra adesso, saldo al lido» (D52): the ONLINE payment at confirmation is
+    // the deposit of the group; the desk keeps collecting whole amounts as before.
+    const [club] = await tx.select({ paymentMode: beach.paymentMode, depositPercent: beach.depositPercent }).from(beach).where(eq(beach.id, beachId));
+    const amountCents = provider !== 'desk' && club?.paymentMode === 'deposit' ? depositCents(totalCents, club.depositPercent) : totalCents;
     const reference = `${provider === 'desk' ? 'desk' : 'sbx'}_${randomBytes(12).toString('hex')}`;
     await tx
       .insert(payment)
-      .values({ beachId, bookingId: created[0]!.id, groupId: group.id, provider, providerRef: reference, status: 'in_progress', amountCents: totalCents, purpose: provider === 'desk' ? 'desk' : 'checkout' });
+      .values({ beachId, bookingId: created[0]!.id, groupId: group.id, provider, providerRef: reference, status: 'in_progress', amountCents, purpose: provider === 'desk' ? 'desk' : 'checkout' });
     return {
       bookingId: created[0]!.id,
       code: group.code,
       accessToken: bookingAccessToken(secret, created[0]!.id),
       status: created[0]!.status,
-      payment: { provider, reference, amountCents: totalCents },
+      payment: { provider, reference, amountCents },
       replayed: false,
     };
   });
@@ -548,6 +496,14 @@ export interface BookingView {
   paidCents: number;
   remainingCents: number;
   paymentState: PaymentState;
+  /**
+   * What the confirmation asked for (D52): the opened payment — the deposit with
+   * `payment_mode = 'deposit'`, the whole total otherwise — or the order quota for
+   * a group born from an order; zero for a desk booking taken «da incassare».
+   */
+  dueNowCents: number;
+  /** total − dueNow: the balance to settle at the beach club. */
+  balanceCents: number;
   presence: (typeof booking.$inferSelect)['presence'];
   guestName: string;
   /** First day of the period; `from`–`to` and `days` carry the whole of it. */
@@ -595,6 +551,7 @@ export function getBooking(db: Database, beachId: string, bookingId: string, acc
     const discount = counted.reduce((sum, member) => sum + member.booking.discountCents, 0);
     const extrasCents = counted.reduce((sum, member) => sum + member.booking.extrasCents, 0);
     const usable = status === 'confirmed' && issued && !issued.revoked;
+    const dueNowCents = opened ? opened.amountCents : quota;
     return {
       bookingId: row.booking.id,
       code: row.booking.code,
@@ -605,6 +562,8 @@ export function getBooking(db: Database, beachId: string, bookingId: string, acc
       paidCents,
       remainingCents: Math.max(0, totalCents - paidCents),
       paymentState: paymentStateOf(totalCents, paidCents),
+      dueNowCents,
+      balanceCents: Math.max(0, totalCents - dueNowCents),
       presence: row.booking.presence,
       guestName: row.booking.guestName,
       day: members[0]?.day ?? '',
@@ -1046,7 +1005,26 @@ export function moveBooking(db: Database, actor: Actor, input: { code: string; s
 export function cancelByBeachClub(db: Database, actor: Actor, input: { code: string; reason: string }): Promise<void> {
   return withActor(db, actor.beachId, actor.userId, async (tx) => {
     const group = await groupByCode(tx, input.code);
-    await lockGroup(tx, group.id);
+    const cancelled = await cancelGroupWithin(tx, actor.beachId, group, input.reason);
+    await tx.insert(auditEvent).values({
+      beachId: actor.beachId,
+      actorUserId: actor.userId,
+      action: 'booking.cancel',
+      target: group.code,
+      detail: { reason: input.reason, days: cancelled.days },
+    });
+  });
+}
+
+/**
+ * The heart of a group cancellation, shared by the beach club's path above and
+ * the owner's path below (D53): days back on sale, pass revoked, shares
+ * reversed, the refund of what was really paid recorded, the queue fed. The
+ * caller writes its own audit row.
+ */
+async function cancelGroupWithin(tx: Transaction, beachId: string, group: typeof bookingGroup.$inferSelect, reason: string): Promise<{ days: number }> {
+  await lockGroup(tx, group.id);
+  {
     const read = await bookingsOfGroup(tx, group.id);
     const lockedDays = await tx
       .select()
@@ -1094,7 +1072,7 @@ export function cancelByBeachClub(db: Database, actor: Actor, input: { code: str
     for (const row of paidRows) {
       if (leftToRefund <= 0) break;
       const amountCents = Math.min(leftToRefund, row.amountCents);
-      await tx.insert(refund).values({ beachId: actor.beachId, paymentId: row.id, amountCents, reason: input.reason });
+      await tx.insert(refund).values({ beachId, paymentId: row.id, amountCents, reason });
       leftToRefund -= amountCents;
     }
     // A pending payment request can no longer be paid: its late outcome, if any,
@@ -1112,20 +1090,64 @@ export function cancelByBeachClub(db: Database, actor: Actor, input: { code: str
     // refundable); the extras movement is reversed like the shares are.
     const lead = targets[0]!;
     const entries = [
-      ...reversed.map((row) => ({ beachId: actor.beachId, bookingId: row.bookingId, kind: 'adjustment', party: row.party, amountCents: -row.amountCents })),
+      ...reversed.map((row) => ({ beachId, bookingId: row.bookingId, kind: 'adjustment', party: row.party, amountCents: -row.amountCents })),
       ...(!matured && cancelledExtrasCents > 0
-        ? [{ beachId: actor.beachId, bookingId: lead.booking.id, kind: 'adjustment', party: 'beach_club' as const, amountCents: -cancelledExtrasCents }]
+        ? [{ beachId, bookingId: lead.booking.id, kind: 'adjustment', party: 'beach_club' as const, amountCents: -cancelledExtrasCents }]
         : []),
-      ...(refundTotal > 0 ? [{ beachId: actor.beachId, bookingId: lead.booking.id, kind: 'refund_due', amountCents: -refundTotal }] : []),
+      ...(refundTotal > 0 ? [{ beachId, bookingId: lead.booking.id, kind: 'refund_due', amountCents: -refundTotal }] : []),
     ];
     if (entries.length > 0) await tx.insert(ledgerEntry).values(entries);
-    await enqueue(tx, actor.beachId, 'booking.cancelled', { bookingId: lead.booking.id });
+    await enqueue(tx, beachId, 'booking.cancelled', { bookingId: lead.booking.id });
+    return { days: targets.length };
+  }
+}
+
+/**
+ * The owner cancels their own stay from the account (D53): only a confirmed
+ * group with no matured day, and only while now is within the deadline —
+ * midnight of the arrival day minus the club's hours, in the club's zone. The
+ * refund is full (deposit included) through the very mechanics of the beach
+ * club's path above; audit and `booking.cancelled` queue as there.
+ */
+export async function cancelByOwner(db: Database, input: { userId: string; groupId: string }): Promise<void> {
+  // Ownership through the owner RLS path (D47): someone else's group is simply absent.
+  const owned = await withUser(db, input.userId, async (tx) => {
+    const [row] = await tx
+      .select({ beachId: bookingGroup.beachId })
+      .from(bookingGroup)
+      .where(and(eq(bookingGroup.id, input.groupId), eq(bookingGroup.userId, input.userId)));
+    return row ?? null;
+  });
+  if (!owned) throw new DomainError('not_found', 'Booking not found');
+
+  return withActor(db, owned.beachId, input.userId, async (tx) => {
+    const [group] = await tx.select().from(bookingGroup).where(eq(bookingGroup.id, input.groupId));
+    if (!group) throw new DomainError('not_found', 'Booking not found');
+    const members = await bookingsOfGroup(tx, group.id);
+    const live = members.filter((member) => member.booking.status !== 'cancelled');
+    // Not confirmed, or a day already matured: the page says to turn to the beach club.
+    if (live.length === 0 || live.some((member) => member.booking.status !== 'confirmed')) {
+      throw new DomainError('cancel_not_allowed', 'This booking cannot be cancelled from the account');
+    }
+    const arrival = live[0]!.day;
+    const clock = await tx.execute<{ within: boolean; today: string }>(sql`
+      select now() <= ((${arrival}::date::timestamp at time zone b.timezone) - make_interval(hours => b.cancel_deadline_hours)) as within,
+        (now() at time zone b.timezone)::date::text as today
+      from beach b where b.id = ${group.beachId}
+    `);
+    const now = clock.rows[0];
+    if (!now || live.some((member) => member.day < now.today)) {
+      throw new DomainError('cancel_not_allowed', 'This booking cannot be cancelled from the account');
+    }
+    if (!now.within) throw new DomainError('cancel_deadline_passed', 'The free-cancellation deadline has passed: turn to the beach club');
+
+    const cancelled = await cancelGroupWithin(tx, group.beachId, group, 'owner_cancelled');
     await tx.insert(auditEvent).values({
-      beachId: actor.beachId,
-      actorUserId: actor.userId,
+      beachId: group.beachId,
+      actorUserId: input.userId,
       action: 'booking.cancel',
       target: group.code,
-      detail: { reason: input.reason, days: targets.length },
+      detail: { reason: 'owner_cancelled', by: 'owner', days: cancelled.days },
     });
   });
 }
@@ -1151,6 +1173,10 @@ export interface OrderResult {
   orderId: string;
   code: string;
   totalCents: number;
+  /** What the single payment asks for now (D52): the sum of the items' deposits, or the whole total. */
+  dueNowCents: number;
+  /** total − dueNow: what remains to settle at the beach club. */
+  balanceCents: number;
   payment: { provider: string; reference: string; amountCents: number };
   /** Lets the orderer read the order summary without an account. */
   accessToken: string;
@@ -1210,6 +1236,7 @@ export async function confirmOrder(db: Database, beachId: string, input: Confirm
 
       let totalCents = 0;
       const holds: { holdId: string; from: string; to: string }[] = [];
+      const perItemTotals: number[] = [];
       for (const [index, { item, spotCode }] of items.entries()) {
         try {
           const held = await acquireHoldWithin(tx, beachId, {
@@ -1223,6 +1250,7 @@ export async function confirmOrder(db: Database, beachId: string, input: Confirm
             ttlSeconds,
           });
           totalCents += held.quote.total;
+          perItemTotals.push(held.quote.total);
           holds.push({ holdId: held.holdId, from: held.from, to: held.to });
         } catch (error) {
           if (error instanceof DomainError && (error.code === 'inventory_conflict' || error.code === 'not_found' || error.code === 'hold_expired')) {
@@ -1269,6 +1297,13 @@ export async function confirmOrder(db: Database, beachId: string, input: Confirm
         created.push({ code: group.code, spotCode, zoneName, from: holds[index]!.from, to: holds[index]!.to });
       }
 
+      // «Caparra adesso, saldo al lido» (D52): the order payment is the SUM of the
+      // per-item deposits — computed per group, so the per-item accounts add up.
+      const [club] = await tx.select({ paymentMode: beach.paymentMode, depositPercent: beach.depositPercent }).from(beach).where(eq(beach.id, beachId));
+      const dueNowCents =
+        club?.paymentMode === 'deposit'
+          ? holds.reduce((sum, _held, index) => sum + depositCents(perItemTotals[index]!, club.depositPercent), 0)
+          : totalCents;
       const reference = `sbx_${randomBytes(12).toString('hex')}`;
       await tx.insert(payment).values({
         beachId,
@@ -1278,7 +1313,7 @@ export async function confirmOrder(db: Database, beachId: string, input: Confirm
         provider: 'sandbox',
         providerRef: reference,
         status: 'in_progress',
-        amountCents: totalCents,
+        amountCents: dueNowCents,
         purpose: 'checkout',
       });
       await tx.delete(cart).where(eq(cart.id, basket.id));
@@ -1286,7 +1321,9 @@ export async function confirmOrder(db: Database, beachId: string, input: Confirm
         orderId: order.id,
         code,
         totalCents,
-        payment: { provider: 'sandbox', reference, amountCents: totalCents },
+        dueNowCents,
+        balanceCents: totalCents - dueNowCents,
+        payment: { provider: 'sandbox', reference, amountCents: dueNowCents },
         accessToken: orderAccessToken(secret, order.id),
         items: created,
       };
@@ -1308,6 +1345,11 @@ export interface OrderItemView {
   guestName: string;
   status: (typeof booking.$inferSelect)['status'];
   totalCents: number;
+  /** This item's share of what the order payment asks for (D52): its deposit, or its whole total. */
+  dueNowCents: number;
+  balanceCents: number;
+  /** The cancellation terms applied to THIS item's arrival day (D53). */
+  cancellation: { deadlineHours: number; deadline: string | null; policyIt: string | null; policyEn: string | null };
   /** Text to show as a QR code; present only while the group is confirmed. */
   passCredential: string | null;
 }
@@ -1318,10 +1360,15 @@ export interface OrderView {
   guestName: string;
   locale: string;
   totalCents: number;
+  /** What the single order payment asks for (D52): sum of the items' deposits, or the total. */
+  dueNowCents: number;
+  balanceCents: number;
   paidCents: number;
   remainingCents: number;
   paymentState: PaymentState;
   payment: { provider: string; reference: string; status: (typeof payment.$inferSelect)['status'] } | null;
+  /** The club's terms with the earliest deadline among the items (D53). */
+  cancellation: { deadlineHours: number; deadline: string | null; policyIt: string | null; policyEn: string | null };
   items: OrderItemView[];
 }
 
@@ -1359,34 +1406,73 @@ export function getOrder(db: Database, beachId: string, orderId: string, accessT
     const opened = payments.find((entry) => entry.purpose !== 'request') ?? null;
     const paidCents = payments.filter((entry) => entry.status === 'succeeded').reduce((sum, entry) => sum + entry.amountCents, 0);
 
+    // Each item's share of what the payment asks for (D52): the opened amount
+    // apportioned over the totals frozen in the holds, like the paid quota is.
+    const dueNowCents = opened?.amountCents ?? order.totalCents;
+    const holdTotals = groupIds.length > 0
+      ? await tx
+          .select({ groupId: booking.groupId, totalCents: sql<number>`coalesce(sum(${hold.totalCents}), 0)::int` })
+          .from(booking)
+          .innerJoin(hold, eq(hold.id, booking.holdId))
+          .where(inArray(booking.groupId, groupIds))
+          .groupBy(booking.groupId)
+      : [];
+    const dueOf = apportionPaid(
+      dueNowCents,
+      holdTotals.map((row) => ({ key: row.groupId, totalCents: row.totalCents })).sort((left, right) => left.key.localeCompare(right.key)),
+    );
+
+    // The cancellation terms (D53), with the deadline computed per item's arrival day.
+    const [terms] = await tx
+      .select({ deadlineHours: beach.cancelDeadlineHours, policyIt: beach.cancelPolicyIt, policyEn: beach.cancelPolicyEn })
+      .from(beach)
+      .where(eq(beach.id, order.beachId));
+    const arrivals = groups.map((group) => totals.get(group.id)?.from ?? daysOf.get(group.id)?.[0]?.day).filter((day): day is string => Boolean(day));
+    const deadlines = terms ? await cancellationDeadlines(tx, order.beachId, arrivals) : new Map<string, string>();
+    const cancellationOf = (arrival: string | null) => ({
+      deadlineHours: terms?.deadlineHours ?? 48,
+      deadline: arrival ? (deadlines.get(arrival) ?? null) : null,
+      policyIt: terms?.policyIt ?? null,
+      policyEn: terms?.policyEn ?? null,
+    });
+
     const items = groups.map((group) => {
       const members = daysOf.get(group.id) ?? [];
       const status = groupStatusOf(members.map((member) => member.status));
       const issued = passOf.get(group.id);
       const total = totals.get(group.id);
+      const from = total?.from ?? members[0]?.day ?? '';
+      const itemDueNow = dueOf.get(group.id) ?? 0;
       return {
         code: group.code,
         spotCode: members[0]?.spotCode ?? '',
         zoneName: members[0]?.zoneName ?? null,
-        from: total?.from ?? members[0]?.day ?? '',
+        from,
         to: total?.to ?? members[members.length - 1]?.day ?? '',
         guestName: members[0]?.guestName ?? order.guestName,
         status,
         totalCents: total?.totalCents ?? 0,
+        dueNowCents: itemDueNow,
+        balanceCents: Math.max(0, (total?.totalCents ?? 0) - itemDueNow),
+        cancellation: cancellationOf(from || null),
         passCredential: status === 'confirmed' && issued && !issued.revoked ? passCredential(secret, issued.id) : null,
       };
     });
 
+    const earliestDeadline = items.map((item) => item.cancellation.deadline).filter((deadline): deadline is string => deadline !== null).sort()[0] ?? null;
     return {
       orderId: order.id,
       code: order.code,
       guestName: order.guestName,
       locale: order.locale,
       totalCents: order.totalCents,
+      dueNowCents,
+      balanceCents: Math.max(0, order.totalCents - dueNowCents),
       paidCents,
       remainingCents: Math.max(0, order.totalCents - paidCents),
       paymentState: paymentStateOf(order.totalCents, paidCents),
       payment: opened ? { provider: opened.provider, reference: opened.providerRef, status: opened.status } : null,
+      cancellation: { ...cancellationOf(null), deadline: earliestDeadline },
       items,
     };
   });
