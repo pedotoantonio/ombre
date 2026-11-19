@@ -103,8 +103,11 @@ describe('resolveTypeCard: field by field (D61)', () => {
   });
 
   it('uses the capacity note of the default only where the mark has one', () => {
-    expect(resolveTypeCard({ ...gazebo, mark: 'umbrella' }, null, 'it').capacityNote).toBe(defaultTypeCards.umbrella.tipIt);
-    expect(resolveTypeCard(gazebo, null, 'it').capacityNote).toBeNull();
+    // The reviewed texts (docs/testi-schede-tipi.md) give the gazebo a tip and none to the umbrella, sunbed or canopy.
+    expect(resolveTypeCard(gazebo, null, 'it').capacityNote).toBe(defaultTypeCards.gazebo.tipIt);
+    expect(resolveTypeCard({ ...gazebo, mark: 'umbrella' }, null, 'it').capacityNote).toBeNull();
+    expect(resolveTypeCard({ ...gazebo, mark: 'sunbed' }, null, 'it').capacityNote).toBeNull();
+    expect(resolveTypeCard({ ...gazebo, mark: 'canopy' }, null, 'it').capacityNote).toBeNull();
     expect(resolveTypeCard(gazebo, { capacityNote: { it: 'In quattro, comodi.' } }, 'it').capacityNote).toBe('In quattro, comodi.');
   });
 });
