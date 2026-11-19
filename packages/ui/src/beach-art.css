@@ -1,0 +1,140 @@
+/* Stili del linguaggio grafico «beach-art» (D55/D56): la spiaggia illustrata.
+   Tinte: solo i gettoni Solar & Fresh di tokens.css più le derivate dichiarate qui. */
+
+:root {
+  /* Terreni e materiali, derivati dalla palette */
+  --arte-sabbia: #f7eedc; /* la sabbia asciutta, un avorio caldo */
+  --arte-sabbia-grana: #e7d9bc; /* i granelli del pattern */
+  --arte-sabbia-riva: #fdf8ee; /* la sabbia bagnata lungo la riva */
+  --arte-mare: var(--mare-foto); /* il mare aperto, #0d89b2 */
+  --arte-mare-basso: #7fcde0; /* l'acqua bassa vicino alla riva */
+  --arte-legno: #dca968; /* passerelle, tavolini e pali */
+  --arte-legno-scuro: #a97a3f; /* contorno del legno */
+  --arte-verde: #5ea873; /* fogliame: palme e vegetazione */
+  --arte-verde-scuro: #3e7e54; /* contorno del fogliame */
+  --arte-contorno: color-mix(in srgb, var(--abisso) 55%, transparent); /* contorno morbido dei simboli */
+  --arte-neve: #ffffff; /* il bianco pieno della tela e della schiuma */
+
+  /* Stati (D56): tinta piena per distintivo e contorno, velo pastello per la tela.
+     I glifi sono grafica: contrasto AA (3:1) sempre, 4,5:1 quasi ovunque. */
+  --stato-disponibile: #2e7d5b; /* verde salvia scuro: bianco sopra 4,9:1 */
+  --stato-disponibile-velo: #d3e8db;
+  --stato-prenotato: var(--condiviso-testo); /* azzurro: bianco sopra 4,5:1 */
+  --stato-prenotato-velo: #d9e6fa;
+  --stato-occupato: var(--occupato-testo); /* corallo: bianco sopra 4,5:1 */
+  --stato-occupato-velo: #f8ddd4;
+  --stato-stagionale: #4f46b8; /* indaco: bianco sopra 6:1 */
+  --stato-stagionale-velo: #e1dff6;
+  --stato-manutenzione: var(--ambra); /* ambra: mai bianco sopra, glifo abisso */
+  --stato-manutenzione-velo: #fbe7c2;
+  --stato-non-disponibile: #5d6b7a; /* grigio ardesia: bianco sopra 4,8:1 */
+  --stato-non-disponibile-velo: #e4e8ec;
+  --stato-condivisa: var(--condiviso); /* giornata condivisa: glifo bianco, 3,6:1 (grafica) */
+  --stato-condivisa-velo: #dbe9ff;
+  --stato-scelta: var(--oceano); /* scelta da te: bianco sopra 6,7:1 */
+  --stato-scelta-velo: #cfe6ea;
+  --stato-proposta: var(--ambra); /* proposta: glifo abisso come la manutenzione */
+  --stato-proposta-velo: #fbe7c2;
+}
+
+/* ---- Radici comuni dei simboli ---- */
+
+.beach-art {
+  display: block;
+  flex: none;
+}
+
+/* Ogni stato imposta tre variabili: tinta piena, velo della tela, colore del glifo. */
+.beach-art--st-available { --arte-stato: var(--stato-disponibile); --arte-velo: var(--stato-disponibile-velo); --arte-glifo: var(--arte-neve); }
+.beach-art--st-booked { --arte-stato: var(--stato-prenotato); --arte-velo: var(--stato-prenotato-velo); --arte-glifo: var(--arte-neve); }
+.beach-art--st-occupied { --arte-stato: var(--stato-occupato); --arte-velo: var(--stato-occupato-velo); --arte-glifo: var(--arte-neve); }
+.beach-art--st-seasonal { --arte-stato: var(--stato-stagionale); --arte-velo: var(--stato-stagionale-velo); --arte-glifo: var(--arte-neve); }
+.beach-art--st-maintenance { --arte-stato: var(--stato-manutenzione); --arte-velo: var(--stato-manutenzione-velo); --arte-glifo: var(--abisso); }
+.beach-art--st-unavailable { --arte-stato: var(--stato-non-disponibile); --arte-velo: var(--stato-non-disponibile-velo); --arte-glifo: var(--arte-neve); }
+.beach-art--st-shared { --arte-stato: var(--stato-condivisa); --arte-velo: var(--stato-condivisa-velo); --arte-glifo: var(--arte-neve); }
+.beach-art--st-selected { --arte-stato: var(--stato-scelta); --arte-velo: var(--stato-scelta-velo); --arte-glifo: var(--arte-neve); }
+.beach-art--st-suggested { --arte-stato: var(--stato-proposta); --arte-velo: var(--stato-proposta-velo); --arte-glifo: var(--abisso); }
+
+/* La postazione: la tela prende il velo dello stato, i contorni la tinta piena. */
+.beach-spot__tela { fill: var(--arte-velo); stroke: var(--arte-stato); }
+.beach-spot__spicchio { fill: var(--arte-stato); }
+.beach-spot__bianco { fill: var(--arte-neve); stroke: var(--arte-stato); }
+.beach-spot__tratto { stroke: var(--arte-stato); fill: none; }
+
+/* L'anello di selezione del pianificatore, sopra tutto. */
+.beach-spot__anello { fill: none; stroke: var(--fuoco); }
+
+/* Etichetta della postazione (numero e zona): testo abisso su gettone bianco. */
+.beach-spot__gettone { fill: var(--carta); stroke: var(--bordo); }
+.beach-spot__etichetta {
+  fill: var(--abisso);
+  font-family: var(--carattere);
+  font-weight: var(--peso-medio);
+  letter-spacing: var(--lettere-piccolo);
+}
+
+/* Il numeretto della dotazione oltre i pezzi disegnati. */
+.beach-spot__conto { fill: var(--abisso); }
+.beach-spot__conto-testo {
+  fill: var(--arte-neve);
+  font-family: var(--carattere);
+  font-weight: var(--peso-forte);
+}
+
+/* ---- Il distintivo circolare colore+glifo (D56) ---- */
+.beach-badge__fondo { fill: var(--arte-stato); stroke: var(--carta); }
+.beach-badge__glifo { stroke: var(--arte-glifo); fill: none; }
+.beach-badge__glifo-pieno { fill: var(--arte-glifo); }
+
+/* ---- Scenografia ---- */
+.beach-element text {
+  font-family: var(--carattere);
+  font-weight: var(--peso-medio);
+  fill: var(--abisso);
+}
+
+/* ---- La grana leggera della sabbia: due trame di granelli sfalsate, sobrie. ---- */
+.beach-art--sand {
+  background-color: var(--arte-sabbia);
+  background-image:
+    radial-gradient(var(--arte-sabbia-grana) 1px, transparent 1.5px),
+    radial-gradient(color-mix(in srgb, var(--arte-sabbia-grana) 55%, var(--arte-sabbia)) 1px, transparent 1.5px);
+  background-size: 22px 22px, 34px 34px;
+  background-position: 0 0, 11px 17px;
+}
+
+/* ---- La legenda compatta (D56): righe distintivo+etichetta, pronta per un <details>. ---- */
+.beach-legend {
+  margin: 0;
+  padding: 0;
+}
+
+.beach-legend__title {
+  margin: 0 0 var(--spazio-2);
+  font-size: var(--testo-piccolo);
+  font-weight: var(--peso-medio);
+  color: var(--testo);
+}
+
+.beach-legend__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spazio-2) var(--spazio-4);
+}
+
+.beach-legend__row {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spazio-2);
+  font-size: var(--testo-piccolo);
+  color: var(--testo);
+}
+
+.beach-legend--compact .beach-legend__list { gap: var(--spazio-1) var(--spazio-3); }
+.beach-legend--compact .beach-legend__row { font-size: var(--testo-minimo); }
+
+/* Dentro un <details> al telefono la legenda va a capo riga per riga. */
+details > .beach-legend { padding-top: var(--spazio-2); }

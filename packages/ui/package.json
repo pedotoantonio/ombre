@@ -8,6 +8,7 @@
     "./tokens.css": "./src/tokens.css",
     "./base.css": "./src/base.css",
     "./portal.css": "./src/portal.css",
+    "./beach-art.css": "./src/beach-art.css",
     "./media.css": "./src/media.css"
   },
   "scripts": {

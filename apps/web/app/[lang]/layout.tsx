@@ -7,6 +7,7 @@ import { rememberLocale } from '@/lib/locale';
 import '@ombre/ui/tokens.css';
 import '@ombre/ui/base.css';
 import '@ombre/ui/portal.css';
+import '@ombre/ui/beach-art.css';
 
 const jakarta = Plus_Jakarta_Sans({ subsets: ['latin'], display: 'swap', variable: '--font-jakarta' });
 
