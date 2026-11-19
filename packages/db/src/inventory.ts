@@ -36,7 +36,14 @@ export type DomainErrorCode =
   // The spot does not belong to the cart's beach club (a cart is of ONE club).
   | 'cart_mixed_beach'
   // «Conferma e paga» is all or nothing: the message names the offending item.
-  | 'order_item_unavailable';
+  | 'order_item_unavailable'
+  // ---- Reviews (D51) ----
+  // Only a concluded, not cancelled stay can be reviewed; one review per stay.
+  | 'review_not_allowed'
+  | 'review_exists'
+  // ---- Cancellation from the account (D53) ----
+  | 'cancel_not_allowed'
+  | 'cancel_deadline_passed';
 
 /** A refusal the caller can explain to the user. Anything else is an internal fault. */
 export class DomainError extends Error {
@@ -61,6 +68,11 @@ export interface PublicBeach {
   longitude: number | null;
   /** The amenities chosen from the fixed catalogue (D49), in catalogue order. */
   amenities: string[];
+  /** Average (one decimal) and number of the verified reviews (D51); null without any. */
+  rating: { average: number; count: number } | null;
+  /** «Caparra adesso, saldo al lido» (D52): how the online payment at confirmation is sized. */
+  paymentMode: 'full' | 'deposit';
+  depositPercent: number;
 }
 
 const publicBeachColumns = {
@@ -72,10 +84,17 @@ const publicBeachColumns = {
   demo: beach.demo,
   latitude: beach.latitude,
   longitude: beach.longitude,
-  // The public policy of migration 021 lets this read cross the beach boundary for active
-  // clubs. Qualified by hand: an interpolated column would render unqualified in the subquery.
+  paymentMode: beach.paymentMode,
+  depositPercent: beach.depositPercent,
+  // The public policies of migrations 021 and 022 let these reads cross the beach
+  // boundary for active clubs. Qualified by hand: an interpolated column would
+  // render unqualified in the subquery.
   amenities: sql<string[]>`coalesce((select array_agg(a.amenity order by a.amenity) from beach_amenity a where a.beach_id = beach.id), '{}'::text[])`,
+  ratingCount: sql<number>`(select count(*) from review r where r.beach_id = beach.id)::int`,
+  ratingAverage: sql<string | null>`(select round(avg(r.rating)::numeric, 1)::text from review r where r.beach_id = beach.id)`,
 };
+
+type PublicBeachRow = Omit<PublicBeach, 'rating'> & { ratingCount: number; ratingAverage: string | null };
 
 /** The chosen amenities in the catalogue's own order, whatever the storage order. */
 function amenitiesInCatalogueOrder(chosen: readonly string[]): string[] {
@@ -83,7 +102,13 @@ function amenitiesInCatalogueOrder(chosen: readonly string[]): string[] {
   return beachAmenities.filter((amenity) => set.has(amenity));
 }
 
-const withOrderedAmenities = <T extends { amenities: string[] }>(club: T): T => ({ ...club, amenities: amenitiesInCatalogueOrder(club.amenities) });
+function toPublicBeach({ ratingCount, ratingAverage, ...club }: PublicBeachRow): PublicBeach {
+  return {
+    ...club,
+    amenities: amenitiesInCatalogueOrder(club.amenities),
+    rating: ratingCount > 0 && ratingAverage !== null ? { average: Number(ratingAverage), count: ratingCount } : null,
+  };
+}
 
 /** True for the clubs that offer EVERY requested amenity (D49); everything else drops out. */
 const hasAllAmenities = (required: readonly string[]) =>
@@ -131,12 +156,12 @@ export async function listActiveBeaches(db: Database, place?: string, amenities?
       ),
     )
     .orderBy(asc(beach.name));
-  return rows.map(withOrderedAmenities);
+  return rows.map(toPublicBeach);
 }
 
 export async function findActiveBeach(db: Database, slug: string): Promise<PublicBeach | null> {
   const rows = await db.select(publicBeachColumns).from(beach).where(and(eq(beach.slug, slug), eq(beach.status, 'active')));
-  return rows[0] ? withOrderedAmenities(rows[0]) : null;
+  return rows[0] ? toPublicBeach(rows[0]) : null;
 }
 
 export interface AvailableSpot {

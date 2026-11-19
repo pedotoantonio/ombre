@@ -22,6 +22,9 @@ export const actions = [
   'layout.edit',
   'layout.gaps',
   'cabins.manage',
+  // Moderation of the verified reviews (D51): flag with a written reason, reply.
+  // Manager only: the actions list below gives it to no other role.
+  'reviews.moderate',
 ] as const;
 export type Action = (typeof actions)[number];
 
