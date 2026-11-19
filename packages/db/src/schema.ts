@@ -40,6 +40,22 @@ export const spot = pgTable('spot', {
   col: smallint('col').notNull(),
   // Filled by a trigger when left out: the builtin type of the zone.
   typeId: uuid('type_id').notNull(),
+  // The named zone of the manager (D50); NULL when the spot belongs to none.
+  namedZoneId: uuid('named_zone_id'),
+});
+
+/** One row per amenity chosen from the fixed catalogue (D49). */
+export const beachAmenity = pgTable('beach_amenity', {
+  beachId: uuid('beach_id').notNull(),
+  amenity: text('amenity').notNull(),
+});
+
+/** A named zone of the layout (D50): a proper noun, identical in both languages. */
+export const beachZone = pgTable('beach_zone', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  beachId: uuid('beach_id').notNull(),
+  name: text('name').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const spotType = pgTable('spot_type', {
