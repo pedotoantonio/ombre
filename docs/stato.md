@@ -150,6 +150,26 @@ indicizzato.
   nel piè di pagina e voce in Assistenza, senza banner. L'email di conferma
   ora distingue totale, pagato adesso e da saldare all'arrivo (prima diceva
   «Totale pagato» anche al banco «da incassare»).
+- Iterazione «La spiaggia illustrata e il pianificatore» (19/11/2026), dalla
+  perizia visiva del pannello concorrente, specifica in
+  [specifica-spiaggia-illustrata.md](specifica-spiaggia-illustrata.md)
+  ([prompt](prompt-spiaggia-illustrata.md)), decisioni D55–D60: linguaggio
+  grafico «beach-art» di SVG originali disegnati in codice (ombrellone con
+  tela a spicchi e dotazione visibile, 11 segni di postazione, 28 soggetti
+  di scenografia: mare con onde, sabbia, passerelle, palme, dune, chiosco,
+  docce, torretta, bandiera, cestini, campi, giochi, natanti) usato su
+  planimetria pubblica, editor, console, planner, reception e pass; stati
+  con colore + glifo (disponibile, prenotato, occupato, Stagionale,
+  manutenzione — proprietà nuova della postazione, esclusa dalla vendita)
+  e legenda unica nelle due lingue, al telefono dietro un tasto; la pagina
+  «Spiaggia» è il pianificatore a bozza con salvataggio esplicito: creare
+  postazioni singole e file/griglie con numerazione automatica, spostare
+  col modulo e col trascinamento progressivo (la postazione resta la
+  stessa: codice, prenotazioni e pass), modificare tipo/dotazione/codice/
+  zona/manutenzione, eliminare solo senza prenotazioni, scenografia e
+  pennello di zona, riepilogo in parole prima della conferma, applicazione
+  in una transazione con rollback totale e voce `layout.saved` nel
+  registro delle azioni; il pubblico vede solo la spiaggia salvata.
 - Prenotazione dell'ospite: scelta della postazione, riepilogo con codice promozionale,
   riserva, dati, pagamento di prova, pass con codice QR e codice breve.
 - Reception: verifica del pass con ingresso, uscita e rientro, prenotazione al banco,
@@ -194,6 +214,10 @@ indicizzato.
   stabilimento, altri fornitori OIDC; le chiavi vere di Google sono del
   committente (dipendenza aperta).
 - Console centrale della piattaforma, gruppi e cooperative, piani in `plan_feature`.
+- Dalla spiaggia illustrata, rimandati e scritti (§6 della specifica):
+  coordinate libere e rotazioni, trascinamento multiplo, bozze per utente,
+  storico delle bozze salvate, animazioni del mare, stampa illustrata;
+  Konva e le librerie canvas restano escluse.
 - Dall'iterazione «Al passo con il mercato», rimandati e scritti (§8 della
   specifica): tariffe adulto/bambino e mezze giornate (aspettano i listini
   veri del committente), recensioni importate da Google, modifica ed
@@ -213,6 +237,18 @@ indicizzato.
 ## Collaudo
 
 Esito completo in [collaudo.md](collaudo.md).
+
+Il 19/11/2026 (sera), iterazione «La spiaggia illustrata e il
+pianificatore»: 267 test con database (contratto a 131 rotte), 1044
+controlli fumo con la suite nuova `smoke:spiaggia` (121 controlli:
+grafica nuova sulle tre planimetrie e nel gestionale, legenda it/en,
+manutenzione esclusa dalla vendita, bozza con creazione singola e a
+griglia, spostamento che conserva codice/prenotazione/pass verificato col
+biglietto, eliminazione rifiutata con l'indice dell'operazione, scenografia
+senza movimenti economici, riepilogo e `layout.saved` nella scia, 390 px);
+gli otto criteri del committente tutti superati, nessun difetto del
+prodotto; il trascinamento provato con Playwright. Ambiente di collaudo
+ricostruito (migrazioni fino alla 024) e lasciato acceso.
 
 Il 19/11/2026, iterazione «Al passo con il mercato»: 258 test con database
 (contratto a 126 rotte), 923 controlli fumo con la suite nuova
