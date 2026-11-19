@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { holderStatement, listAvailability, seedDemo, seedShowcase, showcaseBeach, showcaseGuest } from '../src/index';
+import { demoBeach, holderStatement, listAvailability, listTypeCardsPublic, seedDemo, seedShowcase, showcaseBeach, showcaseGuest } from '../src/index';
 import { createTestDatabase, testAdminUrl, type TestDatabase } from '../src/testing';
 
 const signingSecret = 'segreto-di-prova-lungo-almeno-32-caratteri';
@@ -173,6 +173,38 @@ describe.skipIf(!testAdminUrl)('showcase beach club', () => {
     expect(touches.rows).toEqual([{ sign: 'bandiera' }, { sign: 'doccia' }, { sign: 'palma' }]);
     expect(await count("spot WHERE beach_id = $1 AND named_zone_id IS NOT NULL AND row_number = 1", [club.id])).toBe(5);
     expect(await count("site_revision WHERE beach_id = $1 AND status = 'published'", [club.id])).toBe(1);
+  });
+
+  it('customizes three type cards at the Aurora, while the other clubs keep the defaults (criterion 4)', async () => {
+    // The Aurora curates umbrella, shore sunbed and the custom tent: its own
+    // title, both descriptions, at least two photos each and some details.
+    const cards = await database.admin.query<{ mark: string; content: { title?: string; descriptionIt?: string; descriptionEn?: string; photos?: { id: string }[]; details?: unknown[] } }>(
+      'SELECT t.mark, c.content FROM spot_type_card c JOIN spot_type t ON t.id = c.type_id WHERE c.beach_id = $1 ORDER BY t.mark',
+      [beachId],
+    );
+    expect(cards.rows.map((row) => row.mark)).toEqual(['sunbed', 'tent', 'umbrella']);
+    for (const row of cards.rows) {
+      expect(row.content.title).toBeTruthy();
+      expect(row.content.descriptionIt).toBeTruthy();
+      expect(row.content.descriptionEn).toBeTruthy();
+      expect(row.content.photos!.length).toBeGreaterThanOrEqual(2);
+      expect(row.content.details!.length).toBeGreaterThanOrEqual(1);
+    }
+    const umbrella = cards.rows.find((row) => row.mark === 'umbrella')!.content;
+    expect(umbrella.title).toBe('Gli ombrelloni dell\'Aurora');
+    expect(umbrella.photos!.map((photo) => photo.id)).toEqual(['tipo-umbrella', 'ombrelloni', 'riva']);
+    // Saved as the manager through the product: three audited saves.
+    expect(await count("audit_event WHERE beach_id = $1 AND action = 'type_card.saved'", [beachId])).toBe(3);
+
+    // The difference shows: the public list marks the Aurora cards customized,
+    // the demo club carries no custom card at all (nor does Cala del Moro).
+    const aurora = await listTypeCardsPublic(database.app.db, showcaseBeach.slug);
+    expect(aurora.filter((type) => type.customized).map((type) => type.mark).sort()).toEqual(['sunbed', 'tent', 'umbrella']);
+    expect(aurora.find((type) => type.mark === 'gazebo')).toMatchObject({ customized: false, content: null });
+    const dune = await listTypeCardsPublic(database.app.db, demoBeach.slug);
+    expect(dune.length).toBeGreaterThan(0);
+    expect(dune.every((type) => !type.customized && type.content === null)).toBe(true);
+    expect(await count('spot_type_card c JOIN beach b ON b.id = c.beach_id WHERE b.slug <> $1', [showcaseBeach.slug])).toBe(0);
   });
 
   it('publishes a website with texts in two languages and sample pictures', async () => {

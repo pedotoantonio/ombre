@@ -14,6 +14,7 @@ import { demoAccounts, demoHolderEmail } from './seed';
 import { setCancellationPolicy, setPaymentSettings } from './settings';
 import { decideProposal, listProposals, proposeDays } from './sharing';
 import { createSpotType, listSpotTypes, updateSpotType } from './spot-types';
+import { setTypeCard } from './type-cards';
 import { assignZoneToRow, createZone } from './zones';
 
 /**
@@ -401,6 +402,66 @@ export async function seedShowcase(adminUrl: string, signingSecret: string): Pro
     for (let offset = 0; offset < publishedDays; offset += 1) {
       await publishDay(db, manager, { day: day(offset), priceCents: 3000, spotIds: gazeboRow });
     }
+
+    // Custom type cards (D61, criterion 4): Lido Aurora curates three of its
+    // cards — several photos from the sample library, its own texts, a couple
+    // of details — while Bagno delle Dune and Cala del Moro keep the platform
+    // defaults, so the seed itself shows the difference between the two levels.
+    const umbrellaType = types.find((type) => type.builtin && type.mark === 'umbrella');
+    const sunbedType = types.find((type) => type.builtin && type.mark === 'sunbed');
+    if (!umbrellaType || !sunbedType) throw new Error('builtin umbrella or sunbed type missing');
+    await setTypeCard(db, manager, {
+      typeId: umbrellaType.typeId,
+      content: {
+        title: 'Gli ombrelloni dell\'Aurora',
+        descriptionIt:
+          'Quaranta ombrelloni in cinque file tra la pineta e la riva. Ogni postazione ha il suo ombrellone fisso con i lettini indicati nella dotazione; la passerella sulla sabbia arriva fino alla prima fila.',
+        descriptionEn:
+          'Forty umbrellas in five rows between the pine wood and the shore. Each spot has its own fixed umbrella with the sunbeds listed in its equipment; the walkway over the sand reaches the first row.',
+        photos: [
+          { id: 'tipo-umbrella', captionIt: 'Un ombrellone della prima fila', captionEn: 'An umbrella in the first row' },
+          { id: 'ombrelloni', captionIt: 'Le cinque file viste dall\'alto', captionEn: 'The five rows seen from above' },
+          { id: 'riva', captionIt: 'La riva davanti alla fila A', captionEn: 'The shore in front of row A' },
+        ],
+        details: [
+          { labelIt: 'Distanza tra le file', labelEn: 'Distance between rows', valueIt: '2,5 metri', valueEn: '2.5 metres' },
+          { labelIt: 'Cambio telo', labelEn: 'Towel change', valueIt: 'Ogni mattina, su richiesta al chiosco', valueEn: 'Every morning, on request at the kiosk' },
+        ],
+      },
+    });
+    await setTypeCard(db, manager, {
+      typeId: sunbedType.typeId,
+      content: {
+        title: 'I lettini in riva',
+        descriptionIt:
+          'Sei lettini singoli sul bagnasciuga, davanti alla prima fila, e quattro sul lato della pineta vicino al chiosco. Senza ombrellone: l\'ombra non è compresa.',
+        descriptionEn:
+          'Six single sunbeds at the water\'s edge, in front of the first row, and four on the pine-wood side near the kiosk. No umbrella: shade is not included.',
+        photos: [
+          { id: 'tipo-sunbed', captionIt: 'Un lettino singolo davanti al mare', captionEn: 'A single sunbed facing the sea' },
+          { id: 'riva', captionIt: 'Il bagnasciuga dei lettini in riva', captionEn: 'The water\'s edge by the shore sunbeds' },
+        ],
+        details: [
+          { labelIt: 'Dove si trovano', labelEn: 'Where they are', valueIt: 'Sei in riva, quattro accanto al chiosco', valueEn: 'Six by the shore, four next to the kiosk' },
+          { labelIt: 'Telo mare', labelEn: 'Beach towel', valueIt: 'Non compreso, a noleggio al chiosco', valueEn: 'Not included, for hire at the kiosk' },
+        ],
+      },
+    });
+    await setTypeCard(db, manager, {
+      typeId: tent.typeId,
+      content: {
+        title: 'La tenda araba dell\'Aurora',
+        descriptionIt:
+          'Una sola tenda in fondo alla fila dei gazebo, con pareti di stoffa aperte verso il mare: due lettini all\'ombra e un angolo più riservato nelle ore centrali.',
+        descriptionEn:
+          'A single tent at the end of the gazebo row, with fabric walls open towards the sea: two sunbeds in the shade and a more private corner in the middle hours of the day.',
+        photos: [
+          { id: 'tipo-tent', captionIt: 'Le tende di stoffa davanti al mare', captionEn: 'The fabric tents facing the sea' },
+          { id: 'dune', captionIt: 'Le dune dietro la fila dei gazebo', captionEn: 'The dunes behind the gazebo row' },
+        ],
+        details: [{ labelIt: 'Pareti laterali', labelEn: 'Side walls', valueIt: 'Si chiudono in caso di vento', valueEn: 'Closed when the wind picks up' }],
+      },
+    });
 
     // Sea cabins: CAB1 assigned to the holder with an account (an approved sublet
     // under way and a pending proposal), CAB2 to a holder without an account.
