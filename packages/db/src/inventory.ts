@@ -1,9 +1,9 @@
 import { createHash } from 'node:crypto';
 import { and, asc, eq, gte, ilike, inArray, or, sql } from 'drizzle-orm';
-import { quoteConventionDay, quoteDay, type DayQuote, type SeaSide, type SpotMark } from '@ombre/shared';
+import { beachAmenities, quoteConventionDay, quoteDay, type DayQuote, type SeaSide, type SpotMark } from '@ombre/shared';
 import { withBeach, type Database, type Transaction } from './client';
 import { listElements, type LayoutElementView } from './layout';
-import { beach, extraService, hold, holdExtra, hotelConvention, inventoryDay, promotion, spot, spotType } from './schema';
+import { beach, beachZone, extraService, hold, holdExtra, hotelConvention, inventoryDay, promotion, spot, spotType } from './schema';
 
 export type DomainErrorCode =
   | 'not_found'
@@ -59,6 +59,8 @@ export interface PublicBeach {
   /** Null until the manager sets the position: the club then stays off the map. */
   latitude: number | null;
   longitude: number | null;
+  /** The amenities chosen from the fixed catalogue (D49), in catalogue order. */
+  amenities: string[];
 }
 
 const publicBeachColumns = {
@@ -70,7 +72,21 @@ const publicBeachColumns = {
   demo: beach.demo,
   latitude: beach.latitude,
   longitude: beach.longitude,
+  // The public policy of migration 021 lets this read cross the beach boundary for active clubs.
+  amenities: sql<string[]>`coalesce((select array_agg(a.amenity order by a.amenity) from beach_amenity a where a.beach_id = ${beach.id}), '{}'::text[])`,
 };
+
+/** The chosen amenities in the catalogue's own order, whatever the storage order. */
+function amenitiesInCatalogueOrder(chosen: readonly string[]): string[] {
+  const set = new Set(chosen);
+  return beachAmenities.filter((amenity) => set.has(amenity));
+}
+
+const withOrderedAmenities = <T extends { amenities: string[] }>(club: T): T => ({ ...club, amenities: amenitiesInCatalogueOrder(club.amenities) });
+
+/** True for the clubs that offer EVERY requested amenity (D49); everything else drops out. */
+const hasAllAmenities = (required: readonly string[]) =>
+  sql`(select count(*) from beach_amenity a where a.beach_id = ${beach.id} and a.amenity = any(${sql.param(required.slice())}::text[])) = ${required.length}`;
 
 export type SpotZone = (typeof spot.$inferSelect)['zone'];
 
@@ -95,21 +111,31 @@ export function periodDays(from: string, to: string): string[] {
 /** Zones in drawing and listing order: shore first, then umbrellas, then the land side. */
 export const zoneOrder = sql`case ${spot.zone} when 'riva' then 0 when 'ombrelloni' then 1 else 2 end`;
 
-/** Active beach clubs. `place` keeps those whose locality or name contains the text. */
-export function listActiveBeaches(db: Database, place?: string): Promise<PublicBeach[]> {
+/**
+ * Active beach clubs. `place` keeps those whose locality or name contains the
+ * text; `amenities` keeps only the clubs that offer ALL the requested ones (D49).
+ */
+export async function listActiveBeaches(db: Database, place?: string, amenities?: readonly string[]): Promise<PublicBeach[]> {
   const text = place?.trim();
   // The text is matched literally: the wildcards of LIKE lose their meaning.
   const pattern = text ? `%${text.replace(/[\\%_]/g, '\\$&')}%` : null;
-  return db
+  const rows = await db
     .select(publicBeachColumns)
     .from(beach)
-    .where(and(eq(beach.status, 'active'), pattern ? or(ilike(beach.locality, pattern), ilike(beach.name, pattern)) : undefined))
+    .where(
+      and(
+        eq(beach.status, 'active'),
+        pattern ? or(ilike(beach.locality, pattern), ilike(beach.name, pattern)) : undefined,
+        amenities && amenities.length > 0 ? hasAllAmenities(amenities) : undefined,
+      ),
+    )
     .orderBy(asc(beach.name));
+  return rows.map(withOrderedAmenities);
 }
 
 export async function findActiveBeach(db: Database, slug: string): Promise<PublicBeach | null> {
   const rows = await db.select(publicBeachColumns).from(beach).where(and(eq(beach.slug, slug), eq(beach.status, 'active')));
-  return rows[0] ?? null;
+  return rows[0] ? withOrderedAmenities(rows[0]) : null;
 }
 
 export interface AvailableSpot {
@@ -256,6 +282,8 @@ export interface BeachSearch {
   guests?: number;
   sharedOnly?: boolean;
   place?: string;
+  /** Catalogue identifiers (D49): only the clubs that offer them ALL are kept. */
+  amenities?: readonly string[];
 }
 
 export interface BeachOffer extends PublicBeach {
@@ -268,7 +296,7 @@ export interface BeachOffer extends PublicBeach {
 /** Active beach clubs with what each one can sell over a dal–al period. Each club is read inside its own boundary. */
 export async function searchBeaches(db: Database, search: BeachSearch): Promise<BeachOffer[]> {
   const days = periodDays(search.day, search.to ?? search.day);
-  const beaches = await listActiveBeaches(db, search.place);
+  const beaches = await listActiveBeaches(db, search.place, search.amenities);
   const offers: BeachOffer[] = [];
   for (const target of beaches) {
     // One row per spot free on every day, with the total of the period; with

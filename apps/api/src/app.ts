@@ -102,6 +102,7 @@ import {
   restoreRevision,
   saveDraft,
   searchBeaches,
+  setAmenities,
   setBeachPosition,
   setBlocked,
   setBlockedBulk,
@@ -140,6 +141,7 @@ import { buildOpenApi, type Operation } from './openapi';
 import { createRateLimiter, type RateLimiter } from './rate-limit';
 import {
   base32Encode,
+  beachAmenities,
   cabinCodeMaxLength,
   cabinNotesMaxLength,
   decorationSigns,
@@ -500,6 +502,22 @@ const updateSpotSchema = z
   .refine((change) => Object.values(change).some((value) => value !== undefined));
 const rowRentalSchema = z.object({ zone: zoneSchema, rowNumber: z.number().int().min(1).max(200), rentalType: rentalTypeSchema.nullable(), rentalNotes: rentalNotesSchema.nullable() });
 const retiredSchema = z.object({ retired: z.boolean() });
+// ---- Amenities of the beach club (D49): catalogue identifiers only ----
+// The whole set at once: the checkbox form sends everything that is ticked.
+const amenitiesSchema = z.object({
+  amenities: z
+    .array(z.enum(beachAmenities))
+    .max(beachAmenities.length)
+    .refine((amenities) => new Set(amenities).size === amenities.length),
+});
+// The search filter: a comma-separated list, each value from the catalogue.
+const amenitiesQuerySchema = z
+  .string()
+  .min(1)
+  .max(400)
+  .transform((raw) => raw.split(','))
+  .pipe(z.array(z.enum(beachAmenities)).min(1).max(beachAmenities.length))
+  .optional();
 // Guests, shared days and a period only mean something on a given day.
 const beachSearchSchema = z
   .object({
@@ -508,6 +526,7 @@ const beachSearchSchema = z
     guests: z.string().regex(/^\d{1,2}$/).transform(Number).pipe(z.number().int().min(1).max(20)).optional(),
     locality: z.string().trim().min(1).max(80).optional(),
     sharedOnly: z.enum(['true', 'false']).optional(),
+    amenities: amenitiesQuerySchema,
   })
   .refine((search) => search.day !== undefined || (search.guests === undefined && search.sharedOnly === undefined && search.to === undefined));
 
@@ -538,7 +557,7 @@ function purchaseMoney(quote: PurchaseQuote) {
 
 function publicBeach(beach: PublicBeach) {
   // Coordinates are null until the manager sets them: the club then stays off the map.
-  return { slug: beach.slug, name: beach.name, locality: beach.locality, timezone: beach.timezone, demo: beach.demo, latitude: beach.latitude, longitude: beach.longitude };
+  return { slug: beach.slug, name: beach.name, locality: beach.locality, timezone: beach.timezone, demo: beach.demo, latitude: beach.latitude, longitude: beach.longitude, amenities: beach.amenities };
 }
 
 // Requests per minute and per client on the routes most exposed to abuse.
@@ -1403,6 +1422,15 @@ export function createApp(options: AppOptions): Hono {
     },
   );
 
+  // ---- Amenities of the beach club (D49) ----
+  // The amenities live in the settings panel of the manager and describe what the
+  // public sees about the club, like the website: same permission as the site texts.
+  route({ method: 'put', path: '/v1/manage/beaches/:slug/amenities', summary: 'Replace the whole amenity set of the beach club, chosen from the fixed catalogue', tag: 'Beach club', auth: 'session', request: amenitiesSchema, success: 200, errors: [400, 401, 403, 409] }, async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'site.edit');
+    const { amenities } = parse(amenitiesSchema, await body(c.req.raw), 'amenities');
+    return c.json(await setAmenities(db, actor, { amenities }));
+  });
+
   // ---- Beach club website: draft, publish, restore ----
   route({ method: 'get', path: '/v1/manage/beaches/:slug/site', summary: 'Draft, published revision and history of the website', tag: 'Beach club', auth: 'session', success: 200, errors: [401, 403] }, async (c) => {
     const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'site.read');
@@ -1618,17 +1646,18 @@ export function createApp(options: AppOptions): Hono {
         guests: 'People who must fit under one spot, 1 to 20. Needs day; 1 when left out',
         locality: 'Text contained in the locality or in the name',
         sharedOnly: 'true to count only shared days. Needs day',
+        amenities: 'Comma-separated catalogue identifiers (e.g. bar,wifi): only the clubs that offer them ALL are kept',
       },
       success: 200,
       errors: [400, 409],
     },
     async (c) => {
       const search = parse(beachSearchSchema, c.req.query(), 'search');
-      if (!search.day) return c.json({ beaches: await Promise.all((await listActiveBeaches(db, search.locality)).map(listedBeach)) });
+      if (!search.day) return c.json({ beaches: await Promise.all((await listActiveBeaches(db, search.locality, search.amenities)).map(listedBeach)) });
       const guests = search.guests ?? 1;
       const sharedOnly = search.sharedOnly === 'true';
       const to = search.to ?? search.day;
-      const offers = await searchBeaches(db, { day: search.day, to, guests, sharedOnly, place: search.locality });
+      const offers = await searchBeaches(db, { day: search.day, to, guests, sharedOnly, place: search.locality, amenities: search.amenities });
       return c.json({
         day: search.day,
         to,
