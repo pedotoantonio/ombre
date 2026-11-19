@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import QRCode from 'qrcode';
 import { beachPath, bookingPath, bookingSegment, config, getDictionary } from '@ombre/shared';
 import { apiCall, formatDay, formatPeriod, periodDays, uuidPattern, type ApiBeach, type ApiQuote } from '@/lib/api';
+import { SpotSymbol } from './beach-art';
 import { crumbsFor, DemoBadge, loadBeach, otherLocale, PriceSummary } from './beach';
 import { PageHead, PageShell } from './PageShell';
 
@@ -67,6 +68,11 @@ export async function BookingView({ lang, section, slug, step, bookingId, token 
                 <p className="pass__code">
                   <span className="visually-hidden">{c.shortCode}: </span>
                   {booked.code}
+                </p>
+                {/* La postazione del pass col suo piccolo simbolo illustrato (D55), decorativo. */}
+                <p className="pass__spot">
+                  <SpotSymbol state="booked" umbrellas={booked.spot.umbrellas} sunbeds={booked.spot.sunbeds} size={30} />
+                  <span>{t.booking.spot(booked.spot.code)}</span>
                 </p>
               </div>
               <p className="prose">{c.keepPrivate}</p>

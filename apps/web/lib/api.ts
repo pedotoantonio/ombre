@@ -1,4 +1,4 @@
-import { config, getDictionary, type DayParts, type DecorationSign, type LayoutElementKind, type SeaSide, type SiteContent, type SiteTemplate, type SpotZone, type WalkwayOrientation } from '@ombre/shared';
+import { config, getDictionary, type AnyDecorationSign, type DayParts, type LayoutElementKind, type SeaSide, type SiteContent, type SiteTemplate, type SpotMark, type SpotZone, type WalkwayOrientation } from '@ombre/shared';
 
 // Server-side client of the Ombrè API. The address is read at request time.
 
@@ -77,7 +77,7 @@ export interface ApiMapSpot {
   /** Name of the spot type, part of the public label. */
   typeName: string;
   /** Mark of the type, so the drawing uses the exact sign even for custom types. */
-  typeMark: 'umbrella' | 'sunbed' | 'gazebo' | 'tent' | 'daybed';
+  typeMark: SpotMark;
   umbrellas: number;
   sunbeds: number;
   maxGuests: number;
@@ -94,7 +94,7 @@ export interface ApiSpot {
   rowNumber: number;
   col: number;
   typeName: string;
-  typeMark: 'umbrella' | 'sunbed' | 'gazebo' | 'tent' | 'daybed';
+  typeMark: SpotMark;
   umbrellas: number;
   sunbeds: number;
   maxGuests: number;
@@ -119,8 +119,8 @@ export interface ApiLayoutElement {
   rowNumber: number | null;
   colStart: number | null;
   colEnd: number | null;
-  /** Only a decoration has a sign; null elsewhere. */
-  sign: DecorationSign | null;
+  /** Only a decoration has a sign; null elsewhere. The repertoire covers D35 plus the new scenery (D58). */
+  sign: AnyDecorationSign | null;
 }
 
 /** A name written in Italian, with the optional English version (spec §4.2). */

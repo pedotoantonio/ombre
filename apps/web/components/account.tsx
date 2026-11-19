@@ -39,6 +39,7 @@ import {
   type SpotZone,
 } from '@ombre/shared';
 import { api, apiCall, dayPattern, formatDate, formatDay, formatPeriod, localName, periodDays, slugPattern, uuidPattern, type ApiExtraService, type ApiLocalName } from '@/lib/api';
+import { StateBadge, type SpotArtState } from './beach-art';
 import { ExtraQuantityFields } from './beach';
 import { BeachLayoutView } from './beach-layout';
 import { CabinHolderView, CabinsManageView, CabinsTodayPanel } from './cabins';
@@ -72,6 +73,33 @@ interface Contract {
   status: 'active' | 'suspended' | 'ended';
   sharingMode: 'per_day' | 'automatic';
 }
+
+/* Gli stati del gestionale (D56) detti dagli stati di banco e reception: il distintivo
+   colore+glifo accompagna le parole dello stato, mai il colore da solo. Dove uno stato
+   non ha un distintivo suo (bozza, mai pubblicata, presenza terminata) resta il solo testo. */
+
+/** Lo stato di una postazione del giorno nella tabella dell'inventario. */
+const inventoryArtStates: Partial<Record<string, SpotArtState>> = {
+  available: 'available',
+  held: 'booked',
+  occupied: 'occupied',
+  blocked: 'unavailable',
+  unpublishable: 'unavailable',
+};
+
+/** Lo stato di una prenotazione nella tabella del banco. */
+const bookingArtStates: Partial<Record<string, SpotArtState>> = {
+  confirmed: 'booked',
+  completed: 'occupied',
+  cancelled: 'unavailable',
+};
+
+/** La presenza dell'ospite: attesa come prenotata, dentro o fuori con rientro come occupata. */
+const presenceArtStates: Partial<Record<string, SpotArtState>> = {
+  expected: 'booked',
+  inside: 'occupied',
+  outside_reentry_allowed: 'occupied',
+};
 
 export function isAccountSection(lang: string, slug: string): lang is Locale {
   return isLocale(lang) && slug === accountSection[lang];
@@ -803,13 +831,18 @@ async function ManageView({ locale, beachSlug, query }: { locale: Locale; beachS
                       <Cell label={t.colExtras}>
                         {row.extras.length === 0 ? null : row.extras.map((line) => extraLine(localName(line.name, locale), line.quantity)).join(', ')}
                       </Cell>
-                      <Cell label={t.booking}>{t.bookingStates[row.status]}</Cell>
+                      <Cell label={t.booking}>
+                        {/* Il distintivo di stato accanto alle parole (D56), dove uno stato c'è. */}
+                        {bookingArtStates[row.status] ? <StateBadge state={bookingArtStates[row.status]!} size={16} /> : null} {t.bookingStates[row.status]}
+                      </Cell>
                       {/* The payment state in words, never colour alone, with the open balance (spec §4.3). */}
                       <Cell label={t.colPayment}>
                         {t.paymentStates[row.paymentState]}
                         {row.remainingCents > 0 ? ` · ${t.residual(formatMoney(row.remainingCents, locale))}` : ''}
                       </Cell>
-                      <Cell label={t.presence}>{t.presences[row.presence]}</Cell>
+                      <Cell label={t.presence}>
+                        {presenceArtStates[row.presence] ? <StateBadge state={presenceArtStates[row.presence]!} size={16} /> : null} {t.presences[row.presence]}
+                      </Cell>
                       <Cell label={t.actions}>
                         {row.status === 'confirmed' && can(role, 'bookings.move') && freeSpots.length > 0 ? (
                           <form method="post" action="/azioni/banco-sposta" className="inline-form">
@@ -858,7 +891,10 @@ async function ManageView({ locale, beachSlug, query }: { locale: Locale; beachS
                 {inventory.data.spots.map((row) => (
                   <Row key={row.spotId}>
                     <Cell label={t.spot}>{row.code}{row.shared ? <> <span className="badge">{t.sharedMark}</span></> : null}</Cell>
-                    <Cell label={t.state}>{t.states[row.state]}</Cell>
+                    <Cell label={t.state}>
+                      {/* Il distintivo di stato accanto alle parole (D56), dove uno stato c'è. */}
+                      {inventoryArtStates[row.state] ? <StateBadge state={inventoryArtStates[row.state]!} size={16} /> : null} {t.states[row.state]}
+                    </Cell>
                     <Cell label={t.price} numeric>{row.priceCents === null ? null : formatMoney(row.priceCents, locale)}</Cell>
                     <Cell label={t.actions}>
                       {can(role, 'inventory.block') && (row.state === 'available' || row.state === 'blocked' || row.state === 'unpublishable') ? (

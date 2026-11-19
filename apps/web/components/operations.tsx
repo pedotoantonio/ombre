@@ -21,7 +21,8 @@ import {
 } from '@ombre/shared';
 import { api, apiCall, dayPattern, formatDay, formatPeriod, slugPattern, today, type ApiLayoutElement, type ApiResult, type ApiZoneGaps } from '@/lib/api';
 import { Hidden, Notice, requireMe } from './account';
-import { PlanCanvas, planGapRem, planLaneRem, planSize, SpotMark } from './beach';
+import { Legend, SpotSymbol, StateBadge, type LegendItem, type SpotArtState } from './beach-art';
+import { PlanCanvas, planGapRem, planLaneRem, planSize } from './beach';
 import { ManageShell } from './manage-shell';
 import { PageHead } from './PageShell';
 import { Cell, DataTable, Row, RowHead } from './table';
@@ -35,8 +36,8 @@ import { Cell, DataTable, Row, RowHead } from './table';
 type Query = Record<string, string | string[] | undefined>;
 const first = (value: string | string[] | undefined): string | undefined => (Array.isArray(value) ? value[0] : value);
 
-type OperationalState = 'free' | 'reserved' | 'expected' | 'present' | 'departed' | 'blocked' | 'not_for_sale';
-const operationalStates: readonly OperationalState[] = ['free', 'reserved', 'expected', 'present', 'departed', 'blocked', 'not_for_sale'];
+type OperationalState = 'free' | 'reserved' | 'expected' | 'present' | 'departed' | 'blocked' | 'not_for_sale' | 'maintenance';
+const operationalStates: readonly OperationalState[] = ['free', 'reserved', 'expected', 'present', 'departed', 'blocked', 'not_for_sale', 'maintenance'];
 
 interface OpsSpot {
   spotId: string;
@@ -163,10 +164,21 @@ function shiftDay(day: string, delta: number): string {
   return date.toISOString().slice(0, 10);
 }
 
-/** The blocked and withdrawn days keep the crossed mark: the state is never colour alone. */
-function markStatus(state: OperationalState): 'free' | 'unavailable' {
-  return state === 'blocked' || state === 'not_for_sale' ? 'unavailable' : 'free';
-}
+/**
+ * Gli stati del gestionale (D56) detti dagli stati operativi della console: disponibile,
+ * prenotata (riservata o attesa), occupata (presente o uscita), in manutenzione, e il
+ * «non in vendita o bloccata» per i giorni invendibili. Sempre colore + glifo, mai solo colore.
+ */
+const artStates: Record<OperationalState, SpotArtState> = {
+  free: 'available',
+  reserved: 'booked',
+  expected: 'booked',
+  present: 'occupied',
+  departed: 'occupied',
+  blocked: 'unavailable',
+  not_for_sale: 'unavailable',
+  maintenance: 'maintenance',
+};
 
 /** The letter badges of a card, with the full term for the screen reader. */
 function TileBadges({ locale, spot }: { locale: Locale; spot: OpsSpot }) {
@@ -196,7 +208,7 @@ function OpsTile({ locale, spot, selecting, hit, cardHref }: { locale: Locale; s
   const content = (
     <>
       <span className="ops-tile__head">
-        <SpotMark mark={spot.typeMark} status={markStatus(spot.state)} />
+        <SpotSymbol sign={spot.typeMark} state={artStates[spot.state]} umbrellas={spot.umbrellas} sunbeds={spot.sunbeds} size={26} />
         <span className="ops-tile__code" aria-hidden="true">
           {spot.code}
         </span>
@@ -237,34 +249,37 @@ function OpsTile({ locale, spot, selecting, hit, cardHref }: { locale: Locale; s
   );
 }
 
-/** The always visible legend: every state with its coloured mark, and the letter badges. */
+/**
+ * The always visible legend of the console: the management states of D56 with their
+ * colour + glyph badge, drawn by the shared beach-art legend, and the letter badges.
+ */
 function OpsLegend({ locale }: { locale: Locale }) {
   const t = getDictionary(locale, config.brandName);
   const o = t.ops;
+  // La legenda unica del gestionale (D56): «Stagionale», mai «abbonamento».
+  const items: LegendItem[] = (['available', 'booked', 'occupied', 'seasonal', 'maintenance', 'unavailable'] as const).map((state) => ({
+    state,
+    label: t.beachArt.states[state],
+  }));
   const letters = [
     { letter: o.badgeReserved, full: o.badgeReservedFull },
     { letter: o.badgeShared, full: o.badgeSharedFull },
     { letter: o.badgeBlocked, full: o.badgeBlockedFull },
   ];
   return (
-    <ul className="plan-legend ops-legend" aria-label={t.booking.legendTitle}>
-      {operationalStates.map((state) => (
-        <li key={state}>
-          <span className={`ops-swatch ops-tile--${state}`}>
-            <SpotMark mark="umbrella" status={markStatus(state)} />
-          </span>
-          {o.states[state]}
-        </li>
-      ))}
-      {letters.map((badge) => (
-        <li key={badge.letter}>
-          <span className="ops-tile__badge">
-            <span aria-hidden="true">{badge.letter}</span>
-          </span>
-          {badge.full}
-        </li>
-      ))}
-    </ul>
+    <div className="ops-legend" role="group" aria-label={t.booking.legendTitle}>
+      <Legend items={items} title={t.booking.legendTitle} />
+      <ul className="plan-legend plan-legend--marks">
+        {letters.map((badge) => (
+          <li key={badge.letter}>
+            <span className="ops-tile__badge">
+              <span aria-hidden="true">{badge.letter}</span>
+            </span>
+            {badge.full}
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
@@ -350,7 +365,7 @@ function SpotCardPanel({
           <dt>{o.colType}</dt>
           <dd>
             <span className={`ops-swatch ops-tile--${card.state}`}>
-              <SpotMark mark={card.typeMark} status={markStatus(card.state)} />
+              <SpotSymbol sign={card.typeMark} state={artStates[card.state]} umbrellas={card.umbrellas} sunbeds={card.sunbeds} size={26} />
             </span>
             {card.typeName}
           </dd>
@@ -370,7 +385,10 @@ function SpotCardPanel({
         </div>
         <div>
           <dt>{t.account.state}</dt>
-          <dd>{`${o.states[card.state]}${card.notForSale ? ` (${o.notForSale[card.notForSale]})` : ''}`}</dd>
+          <dd>
+            {/* Il distintivo colore+glifo accanto allo stato in parole (D56). */}
+            <StateBadge state={artStates[card.state]} size={18} /> {`${o.states[card.state]}${card.notForSale ? ` (${o.notForSale[card.notForSale]})` : ''}`}
+          </dd>
         </div>
         {card.state === 'blocked' ? (
           <div>
@@ -963,7 +981,8 @@ export async function OperationsView({ locale, beachSlug, query }: { locale: Loc
                       <Cell label={o.colType}>{spot.typeName}</Cell>
                       <Cell label={o.colEquipment}>{t.booking.equipment(spot.umbrellas, spot.sunbeds)}</Cell>
                       <Cell label={t.account.state}>
-                        {o.states[spot.state]}
+                        {/* Il distintivo colore+glifo accanto allo stato in parole (D56). */}
+                        <StateBadge state={artStates[spot.state]} size={16} /> {o.states[spot.state]}
                         {spot.notForSale ? ` (${o.notForSale[spot.notForSale]})` : ''}
                       </Cell>
                       <Cell label={t.account.price} numeric>

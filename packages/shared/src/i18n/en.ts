@@ -187,6 +187,15 @@ export function makeEn(brand: string): Dictionary {
         armadietti: 'Lockers',
         campo: 'Playing field',
         pingpong: 'Ping pong table',
+        // The new scenery subjects of the «beach-art» language (D55/D58), beside the D35 keys.
+        torretta: 'Lifeguard tower',
+        duna: 'Dune',
+        vegetazione: 'Vegetation',
+        beachvolley: 'Beach volleyball court',
+        bocce: 'Bocce court',
+        pedalo: 'Pedal boat',
+        canoa: 'Canoe',
+        sup: 'SUP board',
       },
       freeCount: (free: number, total: number) => (free === 1 ? `1 free spot out of ${total}` : `${free} free spots out of ${total}`),
       legendTitle: 'Legend',
@@ -873,7 +882,7 @@ export function makeEn(brand: string): Dictionary {
       stripOccupied: 'Occupied',
       stripArrivals: 'Expected arrivals',
       stripDepartures: 'Expected departures',
-      states: { free: 'Free', reserved: 'Held', expected: 'Expected', present: 'Present', departed: 'Departed', blocked: 'Blocked', not_for_sale: 'Not on sale' },
+      states: { free: 'Free', reserved: 'Held', expected: 'Expected', present: 'Present', departed: 'Departed', blocked: 'Blocked', not_for_sale: 'Not on sale', maintenance: 'Under maintenance' },
       notForSale: { never_published: 'Never published', withdrawn: 'Withdrawn from sale' },
       badgeReserved: 'R',
       badgeReservedFull: 'held',
@@ -971,6 +980,18 @@ export function makeEn(brand: string): Dictionary {
       unavailableTitle: 'Planner not loaded',
       unavailableText: 'We cannot read the planner right now. Please try again shortly.',
       printNote: 'Printing shows the whole grid, with the chosen window.',
+    },
+    // ---- The illustrated beach (D55/D56): the management states of the single legend,
+    //      always colour + glyph, never colour alone. «Seasonal», never «subscription». ----
+    beachArt: {
+      states: {
+        available: 'Available',
+        booked: 'Booked',
+        occupied: 'Occupied',
+        seasonal: 'Seasonal',
+        maintenance: 'Under maintenance',
+        unavailable: 'Not on sale or blocked',
+      },
     },
     // ---- Statistics (§3.2) ----
     stats: {

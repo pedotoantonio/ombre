@@ -5,6 +5,7 @@ import { accountPath, beachPath, cartPath, config, formatMoney, getDictionary, l
 import { api, apiCall, formatDate, formatInstant, formatPeriod, localName, type ApiExtraService, type ApiLocalName } from '@/lib/api';
 import { signedIn, type Me } from '@/lib/session';
 import { Hidden, Notice, requireMe } from './account';
+import { SpotSymbol } from './beach-art';
 import { ExtraQuantityFields } from './beach';
 import { PageHead, PageShell } from './PageShell';
 
@@ -102,6 +103,11 @@ async function MyBookingPanel({
           <p className="pass__code">
             <span className="visually-hidden">{t.checkout.shortCode}: </span>
             {group.code}
+          </p>
+          {/* La postazione del pass col suo piccolo simbolo illustrato (D55), decorativo. */}
+          <p className="pass__spot">
+            <SpotSymbol state="booked" size={30} />
+            <span>{t.booking.spot(group.spotCode)}</span>
           </p>
         </div>
       ) : null}

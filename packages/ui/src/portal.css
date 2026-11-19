@@ -365,9 +365,53 @@
   gap: var(--spazio-2);
 }
 
-.plan-legend .plan-mark {
+.plan-legend .beach-spot {
   width: 1.75rem;
   height: 1.75rem;
+}
+
+/* ---- La legenda unica (D56): aperta da tablet in su, dietro un <details> al telefono. ---- */
+.plan-legend-wide {
+  display: none;
+}
+
+.plan-legend-narrow {
+  padding-block: var(--spazio-2);
+  border-block: 1px solid var(--bordo);
+}
+
+.plan-legend-narrow summary {
+  display: flex;
+  align-items: center;
+  min-height: var(--tocco);
+  color: var(--abisso);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.plan-legend-narrow summary:focus-visible {
+  outline: 3px solid var(--fuoco);
+  outline-offset: 2px;
+  border-radius: var(--raggio-piccolo);
+}
+
+@media (min-width: 40rem) {
+  .plan-legend-wide {
+    display: grid;
+    gap: var(--spazio-2);
+    padding-block: var(--spazio-3);
+    border-block: 1px solid var(--bordo);
+  }
+
+  .plan-legend-narrow {
+    display: none;
+  }
+}
+
+/* L'elenco dei segni accanto alla legenda degli stati: niente secondo bordo. */
+.plan-legend--marks {
+  padding-block: 0;
+  border-block: none;
 }
 
 /* Shown only while the longest row is clearly wider than the panel: the difference between the
@@ -425,22 +469,51 @@
   flex-direction: column-reverse;
 }
 
-/* The sea is on the side of the first row. The label stays in view while the map scrolls. */
+/* Il fondo di sabbia (D55): la grana viene da beach-art, qui il respiro intorno alle file. */
+.plan__rows.beach-art--sand {
+  padding: var(--spazio-3);
+  border-radius: var(--raggio);
+}
+
+/* The sea is on the side of the first row: the illustrated band (D55), with the label
+   chip floating on the water at the start of the band. */
 .plan__sea {
-  padding: var(--spazio-1) var(--spazio-3);
+  position: relative;
+  padding: 0;
   border-radius: var(--raggio-piccolo);
-  background: var(--spuma);
+  overflow: hidden;
+  background: transparent;
   color: var(--oceano);
   font-size: 0.9375rem;
   font-weight: 700;
 }
 
+.plan__sea .beach-sea {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
 .plan__sea-label {
-  position: sticky;
+  position: absolute;
+  top: 0.625rem;
   inset-inline-start: var(--spazio-3);
   display: inline-flex;
   align-items: center;
   gap: var(--spazio-2);
+  padding: 0.125rem var(--spazio-3);
+  border-radius: var(--raggio-pillola);
+  background: color-mix(in srgb, var(--carta) 88%, transparent);
+}
+
+/* Col mare in basso la fascia si specchia: la riva resta verso le file. */
+.plan__rows--flip .plan__sea .beach-sea {
+  transform: scaleY(-1);
+}
+
+.plan__rows--flip .plan__sea-label {
+  top: auto;
+  bottom: 0.625rem;
 }
 
 .plan-row {
@@ -505,9 +578,9 @@
 }
 
 a.plan-spot {
-  background: var(--carta);
-  border-color: var(--bordo);
-  box-shadow: 0 0.125rem 0.25rem color-mix(in srgb, var(--abisso) 10%, transparent);
+  background: color-mix(in srgb, var(--carta) 58%, transparent);
+  border-color: color-mix(in srgb, var(--bordo) 70%, transparent);
+  box-shadow: 0 0.125rem 0.25rem color-mix(in srgb, var(--abisso) 8%, transparent);
   transition: transform 100ms ease-out, border-color 200ms ease;
 }
 
@@ -531,7 +604,7 @@ a.plan-spot--selected:hover {
   box-shadow: 0 0 0 2px var(--abisso);
 }
 
-.plan-spot--selected .plan-mark {
+.plan-spot--selected .beach-spot {
   animation: plan-scelta 180ms ease-out both;
 }
 
@@ -540,73 +613,9 @@ a.plan-spot--selected:hover {
   font-weight: 800;
 }
 
-/* Ombrellone visto dall'alto. I colori di stato riempiono il segno; lo stato si legge anche dalla forma. */
-.plan-mark {
-  flex: none;
-  width: 2.5rem;
-  height: 2.5rem;
-}
-
-.plan-mark__canopy,
-.plan-mark__outline {
-  stroke-width: 2;
-  stroke-linejoin: round;
-}
-
-.plan-mark__outline {
-  fill: none;
-}
-
-.plan-mark--free .plan-mark__canopy {
-  fill: var(--libero);
-  stroke: var(--libero);
-}
-
-.plan-mark--shared .plan-mark__canopy,
-.plan-mark--shared .plan-mark__outline {
-  fill: var(--condiviso);
-  stroke: var(--condiviso);
-}
-
-.plan-mark--shared .plan-mark__outline {
-  fill: none;
-}
-
-.plan-mark--unavailable .plan-mark__canopy {
-  fill: var(--occupato);
-  stroke: var(--occupato);
-}
-
-.plan-mark__stripes,
-.plan-mark__top {
-  fill: var(--carta);
-}
-
-.plan-mark__ribs {
-  fill: none;
-  stroke: var(--carta);
-  stroke-width: 1.25;
-}
-
-.plan-mark__cross {
-  fill: none;
-  stroke: var(--carta);
-  stroke-width: 4.5;
-  stroke-linecap: round;
-}
-
-.plan-mark__badge {
-  fill: var(--abisso);
-  stroke: var(--carta);
-  stroke-width: 2;
-}
-
-.plan-mark__check {
-  fill: none;
-  stroke: var(--carta);
-  stroke-width: 2.5;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+.plan-spot .beach-spot {
+  width: 2.75rem;
+  height: 2.75rem;
 }
 
 /* ---- Elenco equivalente alla planimetria ---- */
@@ -737,7 +746,7 @@ html:has(.plan-bar) {
 
 @media (prefers-reduced-motion: reduce) {
   .plan-bar,
-  .plan-spot--selected .plan-mark {
+  .plan-spot--selected .beach-spot {
     animation: none;
   }
 
@@ -1062,21 +1071,6 @@ html:has(.plan-bar) {
   background: color-mix(in srgb, var(--ambra) 8%, transparent);
 }
 
-/* Lettino singolo: la forma distingue, le classi di stato colorano come per gli ombrelloni. */
-.plan-mark__bands {
-  fill: none;
-  stroke: var(--carta);
-  stroke-width: 3;
-  stroke-linecap: round;
-}
-
-.plan-mark__pillow {
-  fill: none;
-  stroke: var(--carta);
-  stroke-width: 2.5;
-  stroke-linecap: round;
-}
-
 /* ---- Area gestione: collegamenti, errori accanto ai campi, pagina «Spiaggia» ---- */
 .manage-links {
   display: flex;
@@ -1169,10 +1163,8 @@ html:has(.plan-bar) {
   width: var(--plan-cell, 4.25rem);
   min-height: 5rem;
   border-radius: var(--raggio);
-  background:
-    radial-gradient(circle at 30% 35%, color-mix(in srgb, var(--ambra) 30%, transparent) 0 2px, transparent 2.5px),
-    radial-gradient(circle at 70% 65%, color-mix(in srgb, var(--ambra) 30%, transparent) 0 2px, transparent 2.5px),
-    color-mix(in srgb, var(--ambra) 10%, var(--carta));
+  /* La sabbia condivisa del disegno (D55) resta a vista: il buco è spiaggia. */
+  background: transparent;
 }
 
 /* Passerella verticale: corsia stretta a righe, con l'etichetta scritta in verticale. */
@@ -1183,8 +1175,9 @@ html:has(.plan-bar) {
   min-height: 5rem;
   overflow: hidden;
   border-radius: var(--raggio-piccolo);
-  background: repeating-linear-gradient(0deg, color-mix(in srgb, var(--abisso) 14%, var(--carta)) 0 0.375rem, var(--carta) 0.375rem 0.75rem);
-  border: 1px solid var(--bordo);
+  /* Assi di legno (D55): le tinte della passerella di beach-art. */
+  background: repeating-linear-gradient(0deg, var(--arte-legno) 0 0.5rem, color-mix(in srgb, var(--arte-legno-scuro) 45%, var(--arte-legno)) 0.5rem 0.625rem);
+  border: 1px solid var(--arte-legno-scuro);
 }
 
 .plan-vlane--spacer {
@@ -1195,7 +1188,7 @@ html:has(.plan-bar) {
   writing-mode: vertical-rl;
   max-height: 100%;
   overflow: hidden;
-  color: var(--testo-secondario);
+  color: var(--abisso);
   font-size: 0.6875rem;
   font-weight: 700;
   letter-spacing: 0.06em;
@@ -1212,9 +1205,10 @@ html:has(.plan-bar) {
   align-items: center;
   min-height: 2rem;
   padding-inline: var(--spazio-2);
-  border: 1px solid var(--bordo);
+  border: 1px solid var(--arte-legno-scuro);
   border-radius: var(--raggio-piccolo);
-  background: repeating-linear-gradient(90deg, color-mix(in srgb, var(--abisso) 14%, var(--carta)) 0 0.375rem, var(--carta) 0.375rem 0.75rem);
+  /* Assi di legno (D55): le tinte della passerella di beach-art. */
+  background: repeating-linear-gradient(90deg, var(--arte-legno) 0 0.5rem, color-mix(in srgb, var(--arte-legno-scuro) 45%, var(--arte-legno)) 0.5rem 0.625rem);
 }
 
 .plan-lane__label {
@@ -1233,35 +1227,39 @@ html:has(.plan-bar) {
 
 /* Struttura o blocco cabine: riquadro etichettato su un rettangolo di celle. */
 .plan-box {
+  position: relative;
   display: grid;
   place-content: center;
   min-height: 5rem;
-  padding: var(--spazio-2);
-  border: 1.5px solid var(--bordo-campo);
+  padding: var(--spazio-1);
   border-radius: var(--raggio);
-  background: color-mix(in srgb, var(--abisso) 6%, var(--carta));
+  /* Il disegno di scena (D55) al posto del riquadro grigio. */
+  background: transparent;
   color: var(--abisso);
   text-align: center;
 }
 
+.plan-box .beach-element {
+  width: 100%;
+  max-height: 4.5rem;
+}
+
 .plan-box__label {
-  font-size: 0.875rem;
+  position: absolute;
+  inset-block-end: 0.375rem;
+  inset-inline: 50%;
+  translate: -50% 0;
+  width: max-content;
+  max-width: calc(100% - 0.75rem);
+  padding: 0 var(--spazio-2);
+  border-radius: var(--raggio-pillola);
+  background: color-mix(in srgb, var(--carta) 88%, transparent);
+  font-size: 0.8125rem;
   font-weight: 800;
   overflow-wrap: anywhere;
 }
 
-/* Il blocco cabine si distingue per la trama a scomparti, non per il solo colore. */
-.plan-box--cabins {
-  background:
-    repeating-linear-gradient(90deg, transparent 0 1.25rem, color-mix(in srgb, var(--abisso) 18%, transparent) 1.25rem calc(1.25rem + 1px)),
-    color-mix(in srgb, var(--oceano) 10%, var(--carta));
-}
-
-.plan-box--cabins .plan-box__label {
-  padding-inline: var(--spazio-1);
-  background: var(--carta);
-  border-radius: var(--raggio-piccolo);
-}
+/* Il blocco cabine si distingue per il disegno a scomparti di beach-art, non per il colore. */
 
 /* Decorazione (D35): una cella con segno dal repertorio ed etichetta facoltativa.
    Mai confondibile con una postazione: niente stato, niente codice, nessun bersaglio.
@@ -1273,14 +1271,23 @@ html:has(.plan-bar) {
   width: var(--plan-cell, 4.25rem);
   min-height: 5rem;
   border-radius: var(--raggio);
-  background: color-mix(in srgb, var(--ambra) 8%, var(--carta));
+  /* La scena vive sulla sabbia condivisa (D55): nessun riquadro proprio. */
+  background: transparent;
   text-align: center;
 }
 
-.deco-mark {
-  width: 2rem;
-  height: 2rem;
+.plan-deco .beach-element {
+  width: 2.75rem;
+  height: 2.75rem;
   margin-inline: auto;
+}
+
+/* Un soggetto largo (campo, natante) riempie la cella senza uscirne. */
+.plan-deco .beach-element--beachvolley,
+.plan-deco .beach-element--bocce,
+.plan-deco .beach-element--campo {
+  width: calc(var(--plan-cell, 4.25rem) - 0.5rem);
+  height: auto;
 }
 
 .plan-deco__label {
@@ -1450,7 +1457,7 @@ button.draw-cell--free:hover {
   background: var(--carta);
 }
 
-.draw-cell--spot .plan-mark {
+.draw-cell--spot .beach-spot {
   width: 2rem;
   height: 2rem;
 }
@@ -1529,11 +1536,6 @@ button.draw-cell--vertical:hover {
   background: color-mix(in srgb, var(--ambra) 8%, var(--carta));
 }
 
-.draw-deco .deco-mark {
-  width: 1.75rem;
-  height: 1.75rem;
-}
-
 .draw-deco__label {
   max-width: 3.75rem;
   overflow: hidden;
@@ -1601,7 +1603,7 @@ button.draw-erase:hover {
   padding-left: 1rem;
 }
 
-.layout-spot__head .plan-mark {
+.layout-spot__head .beach-spot {
   width: 2rem;
   height: 2rem;
 }
@@ -1612,16 +1614,6 @@ button.draw-erase:hover {
 }
 
 /* ---- Postazione consigliata (§3.3): badge a scintilla, mai solo colore ---- */
-.plan-mark__suggest {
-  fill: var(--oceano);
-  stroke: var(--carta);
-  stroke-width: 2;
-}
-
-.plan-mark__spark {
-  fill: var(--carta);
-}
-
 a.plan-spot--suggested,
 a.plan-spot--suggested:hover {
   border-color: var(--oceano);
@@ -1646,19 +1638,7 @@ a.plan-spot--suggested:hover {
   overscroll-behavior: contain;
 }
 
-/* Fascia del mare più presente e fondo sabbia, coi soli token della palette. */
-.ops .plan__sea {
-  padding-block: var(--spazio-4);
-  background: var(--oceano);
-  color: var(--su-scuro);
-}
-
-.ops .plan__rows {
-  padding: var(--spazio-3);
-  border-radius: var(--raggio);
-  background: color-mix(in srgb, var(--ambra) 8%, var(--carta));
-}
-
+/* Il mare e la sabbia della scena vengono dal disegno condiviso (D55): qui solo l'etichetta. */
 .ops .plan-row__label {
   background: transparent;
 }
@@ -1700,10 +1680,10 @@ a.ops-tile:active {
   min-width: 0;
 }
 
-.ops-tile__head .plan-mark {
+.ops-tile__head .beach-spot {
   flex: none;
-  width: 1.5rem;
-  height: 1.5rem;
+  width: 1.625rem;
+  height: 1.625rem;
 }
 
 .ops-tile__code {
@@ -1746,26 +1726,23 @@ a.ops-tile:active {
   font-weight: 600;
 }
 
-/* Colore dello stato: riempie il segno del tipo e la riga alta del bordo.
-   Bloccata e non in vendita tengono anche la croce del segno: forma, non solo colore. */
-.ops-tile--free { border-top-color: var(--libero); }
-.ops-tile--reserved { border-top-color: var(--ambra); }
+/* Colore dello stato sulla riga alta del bordo, allineato alla palette D56: il segno
+   beach-art porta già colore + glifo; bordo e distintivi testuali restano in più. */
+.ops-tile--free { border-top-color: var(--stato-disponibile); }
+.ops-tile--reserved { border-top-color: var(--stato-prenotato); }
 .ops-tile--expected { border-top-color: var(--condiviso); }
-.ops-tile--present { border-top-color: var(--oceano); }
+.ops-tile--present { border-top-color: var(--stato-occupato); }
 .ops-tile--departed { border-top-color: var(--abisso); }
-.ops-tile--blocked { border-top-color: var(--occupato); }
+.ops-tile--blocked { border-top-color: var(--stato-non-disponibile); }
 .ops-tile--not_for_sale { border-top-color: var(--bordo-campo); }
-
-.ops-tile--free .plan-mark__canopy { fill: var(--libero); stroke: var(--libero); }
-.ops-tile--reserved .plan-mark__canopy { fill: var(--ambra); stroke: var(--ambra); }
-.ops-tile--expected .plan-mark__canopy { fill: var(--condiviso); stroke: var(--condiviso); }
-.ops-tile--present .plan-mark__canopy { fill: var(--oceano); stroke: var(--oceano); }
-.ops-tile--departed .plan-mark__canopy { fill: var(--abisso); stroke: var(--abisso); }
-.ops-tile--blocked .plan-mark__canopy { fill: var(--occupato); stroke: var(--occupato); }
-.ops-tile--not_for_sale .plan-mark__canopy { fill: var(--bordo-campo); stroke: var(--bordo-campo); }
+.ops-tile--maintenance { border-top-color: var(--stato-manutenzione); }
 
 .ops-tile--not_for_sale {
   background: color-mix(in srgb, var(--bordo) 35%, var(--carta));
+}
+
+.ops-tile--maintenance {
+  background: color-mix(in srgb, var(--stato-manutenzione-velo) 55%, var(--carta));
 }
 
 /* Risultato della ricerca: anello ambra sulla tessera e riga marcata in tabella. */
@@ -1939,7 +1916,7 @@ a.ops-tile:active {
   background: var(--carta);
 }
 
-.ops-card__grid .ops-swatch .plan-mark {
+.ops-card__grid .ops-swatch .beach-spot {
   width: 1.25rem;
   height: 1.25rem;
 }
@@ -2064,10 +2041,10 @@ a.ops-tile:active {
   font-weight: 700;
 }
 
-.planner__spot .plan-mark {
+.planner__spot .beach-spot {
   flex: none;
-  width: 1.25rem;
-  height: 1.25rem;
+  width: 1.375rem;
+  height: 1.375rem;
 }
 
 .planner-cell {
@@ -2708,4 +2685,39 @@ body:has(.manage-app) .site-header {
 /* La riga «Niente profilazione» nel piè di pagina (D54). */
 .site-footer__privacy {
   margin-top: var(--spazio-2);
+}
+
+/* ---- La spiaggia illustrata (D55/D56): l'innesto dei simboli beach-art nel portale ---- */
+
+/* Il distintivo colore+glifo accanto alle parole di uno stato, in tabelle e schede. */
+td .beach-badge,
+dd .beach-badge,
+.planner-cell .beach-badge,
+.planner-legend .beach-badge {
+  display: inline-block;
+  vertical-align: -0.1875rem;
+  margin-inline-end: 0.125rem;
+}
+
+/* La cella del planner resta compatta: distintivo e sigla sulla stessa riga. */
+.planner-cell a .beach-badge {
+  vertical-align: -0.125rem;
+}
+
+/* Il segno di una decorazione nell'editor del disegno, al posto del vecchio deco-mark. */
+.draw-deco .beach-element {
+  width: 2rem;
+  height: 2rem;
+  margin-inline: auto;
+}
+
+/* Il piccolo simbolo della postazione sul pass (D55): sobrio e decorativo. */
+.pass__spot {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spazio-2);
+  margin: var(--spazio-2) 0 0;
+  color: var(--testo-secondario);
+  font-size: 0.9375rem;
+  font-weight: 700;
 }

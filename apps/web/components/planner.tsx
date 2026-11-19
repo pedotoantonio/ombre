@@ -14,6 +14,7 @@ import {
 } from '@ombre/shared';
 import { api, apiCall, dayPattern, formatDay, formatPeriod, isDay, slugPattern, today } from '@/lib/api';
 import { Notice, requireMe } from './account';
+import { StateBadge, type SpotArtState } from './beach-art';
 import { SpotMark } from './beach';
 import { ManageShell } from './manage-shell';
 import { PageHead } from './PageShell';
@@ -32,6 +33,15 @@ const windows = [7, 14, 31] as const;
 type WindowDays = (typeof windows)[number];
 
 type PlannerCellState = 'not_published' | 'free' | 'blocked' | 'not_for_sale' | 'booked';
+
+/** Gli stati del gestionale (D56) sulle celle della griglia: colore + glifo accanto alla
+ * sigla, mai il colore da solo. Una cella mai pubblicata non ha stato, quindi nessun distintivo. */
+const cellArtStates: Record<Exclude<PlannerCellState, 'not_published'>, SpotArtState> = {
+  free: 'available',
+  booked: 'booked',
+  blocked: 'unavailable',
+  not_for_sale: 'unavailable',
+};
 
 interface PlannerCell {
   day: string;
@@ -209,6 +219,8 @@ export async function PlannerView({ locale, beachSlug, query }: { locale: Locale
           <ul className="plan-legend planner-legend" aria-label={p.legendTitle}>
             {(['free', 'booked', 'blocked', 'not_for_sale', 'not_published'] as const).map((cellState) => (
               <li key={cellState}>
+                {/* Il distintivo colore+glifo del gestionale (D56) accanto alla sigla della cella. */}
+                {cellState === 'not_published' ? null : <StateBadge state={cellArtStates[cellState]} size={16} />}
                 <span className={`planner-swatch planner-cell--${cellState}`} aria-hidden="true">
                   {p.abbrev[cellState]}
                 </span>
@@ -250,7 +262,7 @@ export async function PlannerView({ locale, beachSlug, query }: { locale: Locale
                     <tr key={spot.spotId}>
                       <th scope="row">
                         <span className="planner__spot">
-                          <SpotMark mark={spot.typeMark} status="free" />
+                          <SpotMark mark={spot.typeMark} status="free" size={22} />
                           {spot.code}
                           <span className="visually-hidden">{`, ${spot.typeName}, ${t.booking.zones[spot.zone]}, ${t.booking.row(spot.rowNumber)}`}</span>
                         </span>
@@ -293,6 +305,7 @@ function PlannerCellView({
     return (
       <td className={classes}>
         <a href={consoleHref(cell.day, spot.code)} title={full}>
+          <StateBadge state={cellArtStates.booked} size={14} />
           <span aria-hidden="true">{label}</span>
           <span className="visually-hidden">{p.cellBooked(period ? `${who}, ${period}` : who)}</span>
         </a>
@@ -303,6 +316,7 @@ function PlannerCellView({
     return (
       <td className={classes}>
         <a href={consoleHref(cell.day)} title={p.states.free}>
+          <StateBadge state={cellArtStates.free} size={14} />
           <span aria-hidden="true">{p.abbrev.free}</span>
           <span className="visually-hidden">{p.cellFree}</span>
         </a>
@@ -311,6 +325,7 @@ function PlannerCellView({
   }
   return (
     <td className={classes} title={p.states[cell.state]}>
+      {cell.state === 'not_published' ? null : <StateBadge state={cellArtStates[cell.state]} size={14} />}
       <span aria-hidden="true">{p.abbrev[cell.state]}</span>
       <span className="visually-hidden">{p.states[cell.state]}</span>
     </td>

@@ -199,6 +199,15 @@ export function makeIt(brand: string) {
         armadietti: 'Armadietti',
         campo: 'Campo da gioco',
         pingpong: 'Tavolo da ping pong',
+        // I soggetti nuovi della scenografia «beach-art» (D55/D58), accanto alle chiavi D35.
+        torretta: 'Torretta del bagnino',
+        duna: 'Duna',
+        vegetazione: 'Vegetazione',
+        beachvolley: 'Campo da beach volley',
+        bocce: 'Campo da bocce',
+        pedalo: 'Pedalò',
+        canoa: 'Canoa',
+        sup: 'Tavola SUP',
       },
       freeCount: (free: number, total: number) => (free === 1 ? `1 postazione libera su ${total}` : `${free} postazioni libere su ${total}`),
       legendTitle: 'Legenda',
@@ -885,7 +894,7 @@ export function makeIt(brand: string) {
       stripOccupied: 'Occupate',
       stripArrivals: 'Arrivi previsti',
       stripDepartures: 'Partenze previste',
-      states: { free: 'Libera', reserved: 'Riservata', expected: 'Attesa', present: 'Presente', departed: 'Uscita', blocked: 'Bloccata', not_for_sale: 'Non in vendita' },
+      states: { free: 'Libera', reserved: 'Riservata', expected: 'Attesa', present: 'Presente', departed: 'Uscita', blocked: 'Bloccata', not_for_sale: 'Non in vendita', maintenance: 'In manutenzione' },
       notForSale: { never_published: 'Mai pubblicata', withdrawn: 'Ritirata dalla vendita' },
       badgeReserved: 'R',
       badgeReservedFull: 'riservata',
@@ -983,6 +992,18 @@ export function makeIt(brand: string) {
       unavailableTitle: 'Planner non caricato',
       unavailableText: 'Non riusciamo a leggere il planner in questo momento. Riprova tra poco.',
       printNote: 'In stampa la griglia esce per intero, con la finestra scelta.',
+    },
+    // ---- La spiaggia illustrata (D55/D56): gli stati del gestionale nella legenda unica,
+    //      sempre colore + glifo, mai il colore da solo. «Stagionale», mai «abbonamento». ----
+    beachArt: {
+      states: {
+        available: 'Disponibile',
+        booked: 'Prenotata',
+        occupied: 'Occupata',
+        seasonal: 'Stagionale',
+        maintenance: 'In manutenzione',
+        unavailable: 'Non in vendita o bloccata',
+      },
     },
     // ---- Statistiche (§3.2) ----
     stats: {

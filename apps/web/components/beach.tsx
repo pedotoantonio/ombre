@@ -54,7 +54,7 @@ import {
   type ApiZoneGaps,
 } from '@/lib/api';
 import { JsonLd, privateMetadata } from '@/lib/seo';
-import { DecorationMark } from './decorations';
+import { ElementSymbol, Legend, SeaBand, SpotSymbol, type LegendItem, type SpotArtState } from './beach-art';
 import { RatingLine } from './pages';
 import { PageHead, PageShell, type Crumb } from './PageShell';
 import { BeachSite, localBusinessData } from './site-view';
@@ -412,288 +412,47 @@ function SpotCard({ locale, beach, spot, day, to, selected, suggested }: { local
   );
 }
 
-// Corners of an umbrella seen from above: eight sides, flat at the top.
-const canopy = [
-  [41.55, 31.27],
-  [31.27, 41.55],
-  [16.73, 41.55],
-  [6.45, 31.27],
-  [6.45, 16.73],
-  [16.73, 6.45],
-  [31.27, 6.45],
-  [41.55, 16.73],
-] as const;
-const canopyPath = `M${canopy.map((corner) => corner.join(' ')).join('L')}Z`;
-const ribsPath = canopy.slice(0, 4).map((corner, index) => `M${corner.join(' ')}L${canopy[index + 4]!.join(' ')}`).join('');
-const stripesPath = [0, 2, 4, 6].map((index) => `M24 24L${canopy[index]!.join(' ')}L${canopy[index + 1]!.join(' ')}Z`).join('');
-
-/**
- * The mark of a spot on the map. The state is in the drawing, not only in the colour:
- * a full canopy is free, a canopy in alternate wedges is a shared day, a crossed one is not available.
- */
-function UmbrellaMark({ status, selected = false, suggested = false }: { status: ApiMapSpot['status']; selected?: boolean; suggested?: boolean }) {
-  return (
-    <svg className={`plan-mark plan-mark--${status}`} viewBox="0 0 48 48" aria-hidden="true" focusable="false">
-      <path className="plan-mark__canopy" d={canopyPath} />
-      {status === 'shared' ? (
-        <>
-          <path className="plan-mark__stripes" d={stripesPath} />
-          <path className="plan-mark__outline" d={canopyPath} />
-        </>
-      ) : null}
-      {status === 'unavailable' ? (
-        <path className="plan-mark__cross" d="M16 16l16 16M32 16L16 32" />
-      ) : (
-        <>
-          <path className="plan-mark__ribs" d={ribsPath} />
-          <circle className="plan-mark__top" cx="24" cy="24" r="3" />
-        </>
-      )}
-      {selected ? <SelectedBadge /> : null}
-      {suggested ? <SuggestedBadge /> : null}
-    </svg>
-  );
-}
-
-/** Check badge of the chosen spot, on top of its mark. */
-function SelectedBadge() {
-  return (
-    <>
-      <circle className="plan-mark__badge" cx="38" cy="10" r="8.5" />
-      <path className="plan-mark__check" d="M33.8 10.2l3 3 5.4-6" />
-    </>
-  );
-}
-
-/** Sparkle badge of the recommended spot: its own shape and corner, never colour alone. */
-function SuggestedBadge() {
-  return (
-    <>
-      <circle className="plan-mark__suggest" cx="10" cy="10" r="8.5" />
-      <path className="plan-mark__spark" d="M10 4.5l1.6 3.9 3.9 1.6-3.9 1.6-1.6 3.9-1.6-3.9L4.5 10l3.9-1.6Z" />
-    </>
-  );
+/** The public states of the map, said in the beach-art language (D55/D56): the whole
+ * canvas takes the colour and the corner badge carries the glyph, never colour alone. */
+function publicArtState(status: ApiMapSpot['status'], selected: boolean, suggested: boolean): SpotArtState {
+  if (status === 'unavailable') return 'unavailable';
+  if (selected) return 'selected';
+  if (suggested) return 'suggested';
+  return status === 'shared' ? 'shared' : 'available';
 }
 
 /**
- * A single sunbed seen from above: a bed with its pillow, a different shape from the umbrella.
- * The state stays in the drawing too: bands for a shared day, a cross when not available.
+ * The mark of a spot, from the fixed repertoire, drawn by the shared beach-art symbol
+ * (D55). Without a mark, the equipment decides. The equipment shows in the drawing
+ * (sunbeds beside the umbrella); the chosen spot also gets the selection ring.
  */
-function SunbedMark({ status, selected = false, suggested = false }: { status: ApiMapSpot['status']; selected?: boolean; suggested?: boolean }) {
-  return (
-    <svg className={`plan-mark plan-mark--${status}`} viewBox="0 0 48 48" aria-hidden="true" focusable="false">
-      <rect className="plan-mark__canopy" x="15" y="6" width="18" height="36" rx="5" />
-      {status === 'shared' ? <path className="plan-mark__bands" d="M16 22h16M16 31h16" /> : null}
-      {status === 'unavailable' ? <path className="plan-mark__cross" d="M18 18l12 12M30 18L18 30" /> : <path className="plan-mark__pillow" d="M20 13h8" />}
-      {selected ? <SelectedBadge /> : null}
-      {suggested ? <SuggestedBadge /> : null}
-    </svg>
-  );
-}
-
-/** A gazebo seen from above: a square roof with its ridges, a shape of its own next to the round umbrella. */
-function GazeboMark({ status, selected = false, suggested = false }: { status: ApiMapSpot['status']; selected?: boolean; suggested?: boolean }) {
-  return (
-    <svg className={`plan-mark plan-mark--${status}`} viewBox="0 0 48 48" aria-hidden="true" focusable="false">
-      <rect className="plan-mark__canopy" x="8" y="8" width="32" height="32" rx="4" />
-      {status === 'shared' ? (
-        <>
-          <path className="plan-mark__stripes" d="M24 24L8 8h32ZM24 24L8 40h32Z" />
-          <rect className="plan-mark__outline" x="8" y="8" width="32" height="32" rx="4" />
-        </>
-      ) : null}
-      {status === 'unavailable' ? (
-        <path className="plan-mark__cross" d="M16 16l16 16M32 16L16 32" />
-      ) : (
-        <>
-          <path className="plan-mark__ribs" d="M9.5 9.5l29 29M38.5 9.5l-29 29" />
-          <circle className="plan-mark__top" cx="24" cy="24" r="3" />
-        </>
-      )}
-      {selected ? <SelectedBadge /> : null}
-      {suggested ? <SuggestedBadge /> : null}
-    </svg>
-  );
-}
-
-/** A tent seen from the front: a triangle with its door, nothing like the other marks. */
-function TentMark({ status, selected = false, suggested = false }: { status: ApiMapSpot['status']; selected?: boolean; suggested?: boolean }) {
-  return (
-    <svg className={`plan-mark plan-mark--${status}`} viewBox="0 0 48 48" aria-hidden="true" focusable="false">
-      <path className="plan-mark__canopy" d="M24 6L44 41H4Z" />
-      {status === 'shared' ? (
-        <>
-          <path className="plan-mark__bands" d="M17 30h14M13 36h22" />
-          <path className="plan-mark__outline" d="M24 6L44 41H4Z" />
-        </>
-      ) : null}
-      {status === 'unavailable' ? <path className="plan-mark__cross" d="M18 23l12 12M30 23L18 35" /> : <path className="plan-mark__stripes" d="M20 41l4-11 4 11Z" />}
-      {selected ? <SelectedBadge /> : null}
-      {suggested ? <SuggestedBadge /> : null}
-    </svg>
-  );
-}
-
-/** A daybed seen from above: a wide bed, clearly broader than the single sunbed. */
-function DaybedMark({ status, selected = false, suggested = false }: { status: ApiMapSpot['status']; selected?: boolean; suggested?: boolean }) {
-  return (
-    <svg className={`plan-mark plan-mark--${status}`} viewBox="0 0 48 48" aria-hidden="true" focusable="false">
-      <rect className="plan-mark__canopy" x="6" y="14" width="36" height="20" rx="5" />
-      {status === 'shared' ? <path className="plan-mark__bands" d="M20 16v16M28 16v16" /> : null}
-      {status === 'unavailable' ? <path className="plan-mark__cross" d="M18 18l12 12M30 18L18 30" /> : <path className="plan-mark__pillow" d="M12 20v8" />}
-      {selected ? <SelectedBadge /> : null}
-      {suggested ? <SuggestedBadge /> : null}
-    </svg>
-  );
-}
-
-/** A deck chair seen from above: side rails and the head bar, wider than the single sunbed. */
-function DeckchairMark({ status, selected = false, suggested = false }: { status: ApiMapSpot['status']; selected?: boolean; suggested?: boolean }) {
-  return (
-    <svg className={`plan-mark plan-mark--${status}`} viewBox="0 0 48 48" aria-hidden="true" focusable="false">
-      <rect className="plan-mark__canopy" x="12" y="7" width="24" height="34" rx="3" />
-      {status === 'shared' ? <path className="plan-mark__bands" d="M14 22h20M14 30h20" /> : null}
-      {status === 'unavailable' ? (
-        <path className="plan-mark__cross" d="M18 18l12 12M30 18L18 30" />
-      ) : (
-        <>
-          <path className="plan-mark__ribs" d="M16 10v28M32 10v28" />
-          <path className="plan-mark__pillow" d="M19 14h10" />
-        </>
-      )}
-      {selected ? <SelectedBadge /> : null}
-      {suggested ? <SuggestedBadge /> : null}
-    </svg>
-  );
-}
-
-/** A canvas gazebo seen from above: a billowing sail, its seams in a cross, nothing like the rigid square. */
-function CanopyMark({ status, selected = false, suggested = false }: { status: ApiMapSpot['status']; selected?: boolean; suggested?: boolean }) {
-  const sail = 'M10 10C19 5.5 29 5.5 38 10C42.5 19 42.5 29 38 38C29 42.5 19 42.5 10 38C5.5 29 5.5 19 10 10Z';
-  return (
-    <svg className={`plan-mark plan-mark--${status}`} viewBox="0 0 48 48" aria-hidden="true" focusable="false">
-      <path className="plan-mark__canopy" d={sail} />
-      {status === 'shared' ? (
-        <>
-          <path className="plan-mark__stripes" d="M24 24L10 10C19 5.5 29 5.5 38 10ZM24 24L10 38C19 42.5 29 42.5 38 38Z" />
-          <path className="plan-mark__outline" d={sail} />
-        </>
-      ) : null}
-      {status === 'unavailable' ? (
-        <path className="plan-mark__cross" d="M16 16l16 16M32 16L16 32" />
-      ) : (
-        <>
-          <path className="plan-mark__ribs" d="M24 8v32M8 24h32" />
-          <circle className="plan-mark__top" cx="24" cy="24" r="3" />
-        </>
-      )}
-      {selected ? <SelectedBadge /> : null}
-      {suggested ? <SuggestedBadge /> : null}
-    </svg>
-  );
-}
-
-/** A canoe seen from above: a pointed hull with its two thwarts. */
-function CanoeMark({ status, selected = false, suggested = false }: { status: ApiMapSpot['status']; selected?: boolean; suggested?: boolean }) {
-  return (
-    <svg className={`plan-mark plan-mark--${status}`} viewBox="0 0 48 48" aria-hidden="true" focusable="false">
-      <path className="plan-mark__canopy" d="M24 3C29.5 10 29.5 38 24 45C18.5 38 18.5 10 24 3Z" />
-      {status === 'shared' ? <path className="plan-mark__bands" d="M20 20h8M20 28h8" /> : null}
-      {status === 'unavailable' ? (
-        <path className="plan-mark__cross" d="M19 19l10 10M29 19L19 29" />
-      ) : (
-        <path className="plan-mark__pillow" d="M21 15h6M21 33h6" />
-      )}
-      {selected ? <SelectedBadge /> : null}
-      {suggested ? <SuggestedBadge /> : null}
-    </svg>
-  );
-}
-
-/** A SUP board seen from above: narrow, rounded at both ends, with its long centre line. */
-function SupMark({ status, selected = false, suggested = false }: { status: ApiMapSpot['status']; selected?: boolean; suggested?: boolean }) {
-  return (
-    <svg className={`plan-mark plan-mark--${status}`} viewBox="0 0 48 48" aria-hidden="true" focusable="false">
-      <rect className="plan-mark__canopy" x="17" y="4" width="14" height="40" rx="7" />
-      {status === 'shared' ? <path className="plan-mark__bands" d="M19 20h10M19 28h10" /> : null}
-      {status === 'unavailable' ? <path className="plan-mark__cross" d="M19 19l10 10M29 19L19 29" /> : <path className="plan-mark__pillow" d="M24 12v24" />}
-      {selected ? <SelectedBadge /> : null}
-      {suggested ? <SuggestedBadge /> : null}
-    </svg>
-  );
-}
-
-/** A pedal boat seen from above: a wide deck with its two seats and the paddle wheel bar. */
-function PedaloMark({ status, selected = false, suggested = false }: { status: ApiMapSpot['status']; selected?: boolean; suggested?: boolean }) {
-  return (
-    <svg className={`plan-mark plan-mark--${status}`} viewBox="0 0 48 48" aria-hidden="true" focusable="false">
-      <path className="plan-mark__canopy" d="M9 16C9 9 15 6 24 6C33 6 39 9 39 16V34C39 40 33 43 24 43C15 43 9 40 9 34Z" />
-      {status === 'shared' ? <path className="plan-mark__bands" d="M14 20h20M14 29h20" /> : null}
-      {status === 'unavailable' ? (
-        <path className="plan-mark__cross" d="M17 18l14 14M31 18L17 32" />
-      ) : (
-        <>
-          <path className="plan-mark__ribs" d="M12 15h24" />
-          <path className="plan-mark__stripes" d="M14 24h8v9h-8ZM26 24h8v9h-8Z" />
-        </>
-      )}
-      {selected ? <SelectedBadge /> : null}
-      {suggested ? <SuggestedBadge /> : null}
-    </svg>
-  );
-}
-
-/** A jet ski seen from above: a teardrop hull with handlebar and saddle. */
-function JetskiMark({ status, selected = false, suggested = false }: { status: ApiMapSpot['status']; selected?: boolean; suggested?: boolean }) {
-  return (
-    <svg className={`plan-mark plan-mark--${status}`} viewBox="0 0 48 48" aria-hidden="true" focusable="false">
-      <path className="plan-mark__canopy" d="M24 4C33 10 36 19 36 29C36 38.5 31 44 24 44C17 44 12 38.5 12 29C12 19 15 10 24 4Z" />
-      {status === 'shared' ? <path className="plan-mark__bands" d="M17 24h14M17 32h14" /> : null}
-      {status === 'unavailable' ? (
-        <path className="plan-mark__cross" d="M18 19l12 12M30 19L18 31" />
-      ) : (
-        <>
-          <path className="plan-mark__ribs" d="M15 16C21 13 27 13 33 16" />
-          <path className="plan-mark__pillow" d="M24 23v15" />
-        </>
-      )}
-      {selected ? <SelectedBadge /> : null}
-      {suggested ? <SuggestedBadge /> : null}
-    </svg>
-  );
-}
-
-const markComponents: Record<SpotMarkKind, (props: { status: ApiMapSpot['status']; selected?: boolean; suggested?: boolean }) => ReactNode> = {
-  umbrella: UmbrellaMark,
-  sunbed: SunbedMark,
-  gazebo: GazeboMark,
-  tent: TentMark,
-  daybed: DaybedMark,
-  deckchair: DeckchairMark,
-  canopy: CanopyMark,
-  canoe: CanoeMark,
-  sup: SupMark,
-  pedalo: PedaloMark,
-  jetski: JetskiMark,
-};
-
-
-/** The mark of a spot, from the fixed repertoire. Without a mark, the equipment decides. */
 export function SpotMark({
   mark,
   umbrellas = 1,
+  sunbeds = 0,
   status,
   selected = false,
   suggested = false,
+  size = 44,
 }: {
   mark?: SpotMarkKind;
   umbrellas?: number;
+  sunbeds?: number;
   status: ApiMapSpot['status'];
   selected?: boolean;
   suggested?: boolean;
+  size?: number;
 }) {
-  const Mark = markComponents[mark ?? (umbrellas === 0 ? 'sunbed' : 'umbrella')];
-  return <Mark status={status} selected={selected} suggested={suggested} />;
+  return (
+    <SpotSymbol
+      sign={mark ?? (umbrellas === 0 && sunbeds > 0 ? 'sunbed' : 'umbrella')}
+      state={publicArtState(status, selected, suggested)}
+      umbrellas={umbrellas}
+      sunbeds={sunbeds}
+      size={size}
+      selected={selected}
+    />
+  );
 }
 
 function MapSpot({
@@ -719,7 +478,7 @@ function MapSpot({
   const z = getDictionary(locale, config.brandName).zone;
   const content = (
     <>
-      <SpotMark mark={spot.typeMark} status={spot.status} selected={selected} suggested={suggested} />
+      <SpotMark mark={spot.typeMark} umbrellas={spot.umbrellas} sunbeds={spot.sunbeds} status={spot.status} selected={selected} suggested={suggested} />
       <span className="plan-spot__code" aria-hidden="true">
         {spot.code}
       </span>
@@ -836,7 +595,7 @@ export function PlanDecoration({ locale, element }: { locale: Locale; element: A
   const name = element.sign ? t.decorations[element.sign] : t.decorationKind;
   return (
     <li className="plan-deco">
-      {element.sign ? <DecorationMark sign={element.sign} /> : null}
+      {element.sign ? <ElementSymbol kind={element.sign} /> : null}
       <span className="visually-hidden">
         {t.decorationKind}: {name}
         {element.label ? `, ${element.label}` : ''}
@@ -854,9 +613,13 @@ export function PlanDecoration({ locale, element }: { locale: Locale; element: A
 function PlanBox({ locale, element, lanes, cellRem }: { locale: Locale; element: ApiLayoutElement; lanes: ApiLayoutElement[]; cellRem?: number }) {
   const t = getDictionary(locale, config.brandName).booking;
   const cabins = element.kind === 'cabin_block';
-  const width = spanWidthRem(element.colStart ?? 1, element.colEnd ?? element.colStart ?? 1, lanes, cellRem);
+  const from = element.colStart ?? 1;
+  const to = element.colEnd ?? from;
+  const width = spanWidthRem(from, to, lanes, cellRem);
   return (
     <li className={cabins ? 'plan-box plan-box--cabins' : 'plan-box'} style={{ width: `${width}rem` }}>
+      {/* Il disegno di scena (D55): il nome viaggia come testo, il simbolo è decorativo. */}
+      <ElementSymbol kind={cabins ? 'cabin_block' : 'structure'} w={to - from + 1} />
       <span className="visually-hidden">{cabins ? t.cabinBlockKind : t.structureKind}: </span>
       <span className="plan-box__label">{element.label ?? (cabins ? t.cabinsBox : t.structureKind)}</span>
     </li>
@@ -951,6 +714,12 @@ export function PlanCanvas<T extends PlanPlace>({
   const t = getDictionary(locale, config.brandName).booking;
   const lanes = verticalLanes(elements);
   const flip = seaSide === 'bottom' ? ' plan__rows--flip' : '';
+  // La fascia del mare (D55) copre la fila più lunga; il numero di celle regola l'altezza
+  // resa: più celle, onde più fitte e fascia più bassa, qui circa tre rem e mezzo.
+  const drawn = planSize(spots, elements);
+  const cell = cellRem ?? planCellRem;
+  const widthRem = drawn.cols * (cell + planGapRem) + drawn.lanes * (planLaneRem + planGapRem);
+  const seaCells = Math.max(4, Math.round(widthRem * 0.4));
   // Zones in drawing order: the ones with spots and the ones that only hold drawn elements.
   const zones = spotZones.filter((zone) => spots.some((spot) => spot.zone === zone) || elements.some((element) => element.zone === zone && element.orientation !== 'vertical'));
   const hasUmbrellas = zones.includes('ombrelloni');
@@ -964,7 +733,7 @@ export function PlanCanvas<T extends PlanPlace>({
       </p>
       {/* Every row stays on one line: the map scrolls sideways inside this region, the page never does. */}
       <div className="plan__scroll" role="region" aria-label={t.planRegion} tabIndex={0}>
-        <div className={`plan__rows${flip}`}>
+        <div className={`plan__rows beach-art--sand${flip}`}>
           <p className="plan__sea">
             <span className="plan__sea-label">
               <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -973,6 +742,8 @@ export function PlanCanvas<T extends PlanPlace>({
               {t.planSea}
               <span className="visually-hidden">, {t.planSeaNote}</span>
             </span>
+            {/* La fascia illustrata del mare (D55): onde, acqua bassa e riva; capovolta col mare in basso. */}
+            <SeaBand width={seaCells} />
           </p>
           {zones.map((zone, index) => {
             const inZone = spots.filter((spot) => spot.zone === zone);
@@ -1063,6 +834,48 @@ export function MarkLegendItems({ locale, marks }: { locale: Locale; marks: Spot
   );
 }
 
+/**
+ * The single legend of the beach drawing (D56): the shared beach-art rows, shown open
+ * from tablet up and behind a `<details>`/`<summary>` button on the phone, CSS only,
+ * no JavaScript. Both copies live in the page; the style sheet shows one at a time.
+ */
+export function LegendDisclosure({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <>
+      <div className="plan-legend-wide" role="group" aria-label={title}>
+        {children}
+      </div>
+      <details className="plan-legend-narrow">
+        <summary>{title}</summary>
+        {children}
+      </details>
+    </>
+  );
+}
+
+/** The public legend (D56): the public states with colour + glyph, then the marks in play. */
+function PublicLegend({ locale, marks, suggested }: { locale: Locale; marks: SpotMarkKind[]; suggested: boolean }) {
+  const t = getDictionary(locale, config.brandName).booking;
+  const items: LegendItem[] = [
+    { state: 'available', label: t.status.free },
+    { state: 'shared', label: t.status.shared },
+    { state: 'unavailable', label: t.status.unavailable },
+    { state: 'selected', label: t.status.selected },
+    ...(suggested ? [{ state: 'suggested', label: t.suggestedLegend } as const] : []),
+  ];
+  const extra = [...new Set(marks)].filter((mark) => mark !== 'umbrella');
+  return (
+    <LegendDisclosure title={t.legendTitle}>
+      <Legend items={items} />
+      {extra.length > 0 ? (
+        <ul className="plan-legend plan-legend--marks">
+          <MarkLegendItems locale={locale} marks={marks} />
+        </ul>
+      ) : null}
+    </LegendDisclosure>
+  );
+}
+
 function BeachMap({
   locale,
   beach,
@@ -1113,31 +926,7 @@ function BeachMap({
           <strong>{t.selectedNotice(selected.code)}</strong> <a href="#scelta">{t.toBar}</a>
         </p>
       ) : null}
-      <ul className="plan-legend" aria-label={t.legendTitle}>
-        <li>
-          <UmbrellaMark status="free" />
-          {t.status.free}
-        </li>
-        <li>
-          <UmbrellaMark status="shared" />
-          {t.status.shared}
-        </li>
-        <li>
-          <UmbrellaMark status="unavailable" />
-          {t.status.unavailable}
-        </li>
-        <li>
-          <UmbrellaMark status="free" selected />
-          {t.status.selected}
-        </li>
-        {suggested ? (
-          <li>
-            <UmbrellaMark status="free" suggested />
-            {t.suggestedLegend}
-          </li>
-        ) : null}
-        <MarkLegendItems locale={locale} marks={layout.map((spot) => spot.typeMark)} />
-      </ul>
+      <PublicLegend locale={locale} marks={layout.map((spot) => spot.typeMark)} suggested={Boolean(suggested)} />
       <PlanCanvas
         locale={locale}
         gaps={gaps}
