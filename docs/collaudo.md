@@ -1,5 +1,155 @@
 # Collaudo
 
+## Collaudo del 19/11/2026 — La spiaggia illustrata e il pianificatore
+
+Collaudo della commessa «la spiaggia illustrata e il pianificatore»
+([specifica](specifica-spiaggia-illustrata.md), D55–D60): il linguaggio grafico
+beach-art, gli stati colore+glifo con la manutenzione, il pianificatore a bozza
+con salvataggio esplicito, lo spostamento che conserva l'identità, la
+scenografia e la tenuta a 390 px. Eseguito sullo stack **fisso** `ombre-collaudo`
+(web `127.0.0.1:3232`, API `127.0.0.1:3231`) **ricostruito dal codice corrente
+con volume nuovo** (`build` → `down -v` → `up`): migrazioni 001–**024**
+(`023_planner_draft`, `024_scenografia`), seed demo e vetrina a tre stabilimenti
+(l'Aurora con torretta, dune, campi da gioco, natanti alla riva e **M02 in
+manutenzione**), stesse variabili dei collaudi precedenti. Gate statici
+(`pnpm lint`, `pnpm -s typecheck`, `pnpm -r build`), la suite dei test completa
+su un PostgreSQL usa-e-getta (`OMBRE_TEST_DB_PORT=54335`), poi le **dieci**
+suite fumo nell'ordine di `collaudo.sh` — la nuova `smoke:spiaggia` tra
+`smoke:mercato` e `smoke:booking`, `smoke:2fa` per ultima — col verde letto
+suite per suite. **L'ambiente resta acceso** alla fine, con i dati che il
+collaudo vi ha lasciato (le postazioni del pianificatore, una prenotazione di
+oggi col suo ingresso scandito): il collaudo vive nel collaudo.
+
+### La suite nuova: `smoke:spiaggia`
+
+`scripts/smoke-spiaggia.ts` (**121 controlli numerati, stampati uno a uno**;
+cablata in `package.json` e in `scripts/collaudo.sh` dopo `smoke:mercato` e
+prima di `smoke:booking`) percorre da navigatore senza script, it e en: la
+**grafica beach-art** sulle planimetrie pubbliche delle tre spiagge (fascia del
+mare, sabbia, simboli delle postazioni), la scenografia del seme sull'Aurora
+(torretta, dune, beach volley, bocce, pedalò, canoa, SUP), console «Oggi»,
+planner del gestionale e il pass del conto; la **legenda** colore+glifo
+identica nelle due lingue (stessi stati nello stesso ordine, `<details>` al
+telefono), i sei stati del gestionale con «In manutenzione» e «Stagionale»;
+**M02** disegnata ma senza link di prenotazione, fuori dalla disponibilità e
+rifiutata dal banco (`inventory_conflict`); il **pianificatore a bozza** dal
+Gestore via moduli: postazione singola e griglia 2×2 a numerazione automatica
+(prefisso nuovo a ogni giro), anteprima con la bozza e «Solo in bozza», il
+pubblico che NON le vede prima del salvataggio; lo **spostamento** di una
+postazione con prenotazione di oggi (pubblicata e pagata col fornitore di
+prova) col modulo fascia/fila/colonna: stesso id, stesso codice, stessa
+prenotazione, **stesso pass verificato col biglietto al banco** (ingresso
+registrato), vecchia cella libera; **modifiche** in bozza (tipo, dotazione,
+codice, zona con nome, manutenzione) e pennello di zona con «Annulla l'ultima
+operazione»; l'**eliminazione** rifiutata sulla postazione prenotata (riepilogo
+con «operazione n. 1 ha impedito il salvataggio», motivo «prenotazioni future»,
+niente applicato) e applicata su una mai usata; la **scenografia** (palma
+aggiunta, spostata, tolta) col registro economico immobile, lordo e
+ripartizioni identici; ogni salvataggio col **riepilogo in parole prima della
+conferma**, l'esito coi conteggi e la voce **`layout.saved`** nella scia, letta
+dal database via `docker compose … psql` come la leggono i test col database
+(7 voci per 7 salvataggi, conteggi per genere); i **390 px** su markup e CSS
+serviti (viewport, mappa che scorre solo dentro `.plan__scroll`, SVG a
+`viewBox`, nessuna regola `beach-*` oltre i 390 px). In coda la bozza resta
+vuota e il giorno del seme della Dune è ancora in vendita: il residuo non
+guasta `smoke:booking`, `smoke:api` e `smoke:2fa`, che girano dopo e restano
+verdi.
+
+### Test e collaudi fumo
+
+| Parte | Controlli | Esito |
+|---|---|---|
+| Lint, tipi e build (`pnpm lint`, `pnpm -s typecheck`, `pnpm -r build`) | tutto il codice | Superati |
+| Test con PostgreSQL vero (`OMBRE_TEST_DB_PORT=54335 pnpm test:db`) | **267** (38 shared, 11 comms, 55 db, 156 api, 7 worker), contratto OpenAPI a **131 rotte** | Superati |
+| Pagine pubbliche (`smoke`) | 453 | Superati |
+| Ricerca, planimetria e riserva (`smoke:flow`) | 72 | Superati |
+| Aree riservate (`smoke:areas`) | 85 | Superati |
+| Sito dello stabilimento (`smoke:site`) | 25 | Superati |
+| Conto, Google e carrello (`smoke:conto`) | 139 | Superati |
+| Al passo col mercato (`smoke:mercato`) | 110 | Superati |
+| **La spiaggia illustrata (`smoke:spiaggia`, nuova)** | **121** | Superati |
+| Prenotazione end-to-end (`smoke:booking`) | 15 | Superati |
+| Presa simultanea (`smoke:api`) | 13 | Superati |
+| Due passaggi (`smoke:2fa`, per ultima) | 11 | Superati |
+
+In totale **1044 controlli fumo**, tutti superati, verde letto suite per suite.
+
+### Criteri di accettazione (specifica §7)
+
+1. **Grafica nuova dappertutto — superato.** Le planimetrie pubbliche di
+   Aurora, Cala e Dune servono SVG originali `beach-art`: fascia del mare con
+   onde e riva (`beach-art beach-sea`), sabbia (`beach-art--sand`), postazioni
+   come simboli in cella 64×64. La scenografia del seme sta sull'Aurora
+   (torretta, due dune con vegetazione, beach volley, bocce, pedalò, canoa,
+   SUP, classi `beach-element--*`); la console «Oggi» e il planner del
+   gestionale, raggiunti dal Gestore via moduli, usano simboli e distintivi; il
+   conto dell'Ospite mostra il simbolo della postazione accanto al pass.
+2. **Colore + glifo e legenda identica — superato.** La legenda pubblica
+   elenca gli stessi stati nello stesso ordine in it e in en (available,
+   shared, unavailable, selected) e al telefono si apre da `<details>`; quella
+   del gestionale porta i sei stati D56 (`available, booked, occupied,
+   seasonal, maintenance, unavailable`) con «In manutenzione»/«Under
+   maintenance» e «Stagionale»/«Seasonal», identica nelle due lingue. M02 è
+   disegnata con ambra + chiave inglese, resta sulla planimetria pubblica
+   **senza** link di prenotazione, non compare nella disponibilità e il banco
+   la rifiuta (`inventory_conflict`).
+3. **Creare: singola e griglia — superato.** Dal Gestore dell'Aurora, il
+   modulo delle coordinate accoda una postazione singola (codice automatico) e
+   il modulo delle file una griglia 2×2 con numerazione automatica
+   (`QHCQ01–QHCQ04` nell'ultimo giro); il pannello della bozza le dice in
+   parole, l'anteprima le mostra col distintivo «Solo in bozza» e la pagina
+   pubblica NON le ha prima del salvataggio; dopo, compaiono subito.
+4. **Spostare senza perdere nulla — superato.** Una postazione della griglia,
+   pubblicata e prenotata per oggi (pagamento di prova confermato, pass
+   emesso), è spostata col **modulo** fascia/fila/colonna: dopo «Salva la
+   spiaggia» stesso `spot.id`, stesso codice, la prenotazione risponde
+   identica dall'API, il **pass è lo stesso byte per byte e il biglietto
+   scandito al banco apre l'ingresso di oggi sulla stessa postazione**; la
+   vecchia cella è libera. Il trascinamento con JavaScript è la scorciatoia
+   progressiva: `/pianificatore.js` è servito e compila lo stesso modulo
+   (`modulo-sposta`), e **la prova del trascinamento vero è stata fatta con
+   Playwright dal frontend** — prova esterna alla suite, qui citata.
+5. **Modificare ed eliminare con giudizio — superato.** In bozza cambiano
+   tipo (Gazebo), codice, dotazione, zona con nome e manutenzione, applicati
+   in un salvataggio solo; il pennello di zona accoda l'assegnazione e
+   «Annulla l'ultima operazione» la toglie. L'eliminazione della postazione
+   prenotata è accodata ma il salvataggio rifiuta TUTTO: il riepilogo segna
+   «operazione n. 1 ha impedito il salvataggio», il motivo «La postazione ha
+   prenotazioni future…» e «Niente è stato applicato»; la postazione mai usata
+   invece si elimina e sparisce dal disegno.
+6. **Scenografia innocua — superato.** Una palma si aggiunge dalla griglia
+   del disegno, si sposta dal modulo della carta e si toglie con la gomma, in
+   tre salvataggi; la planimetria pubblica la mostra e poi torna al conto di
+   prima; il riepilogo economico dell'Aurora (lordo e ripartizioni) è identico
+   prima e dopo, e la prenotazione del collaudo resta intonsa.
+7. **Salvataggio con riepilogo, audit e pubblico — superato.** Ogni «Salva la
+   spiaggia» passa dal riepilogo in parole (`?salva=1`, una riga per
+   operazione) e l'esito conta le operazioni per genere («postazioni create,
+   file generate», «eliminazioni», «scenografia tolta»…); nella scia stanno
+   **7 voci `layout.saved` per 7 salvataggi**, l'ultima con
+   `{"total": 1, "remove_element": 1}`, lette dal database come fanno i test
+   col database; la planimetria pubblica è aggiornata alla richiesta
+   successiva al salvataggio.
+8. **390 px e le due lingue — superato.** Sulla pagina pubblica il viewport è
+   `width=device-width`, la mappa scorre solo dentro `.plan__scroll`
+   (`overflow-x:auto` nel CSS servito), ogni SVG beach-art scala col `viewBox`
+   senza larghezze fisse oltre la cella da 64 e nessuna regola `beach-*` fissa
+   larghezze oltre i 390 px; la prova visiva a 390 px è delle schermate del
+   frontend. Tutto il giro è ripetuto in inglese dove ha senso (planimetria,
+   legende, pianificatore) e i collaudi precedenti restano verdi.
+
+### Difetti e ritocchi
+
+Nessun difetto del prodotto. Tre ritocchi **alla suite** durante la messa a
+punto: il controllo del pass sul conto ora usa una prenotazione viva del
+collaudo (l'ospite demo ha solo soggiorni conclusi, senza pass in corso); i
+conteggi delle classi sono relativi, perché il flusso RSC in coda alla pagina
+ripete ogni classe; il prefisso della griglia è nuovo a ogni giro, così la
+numerazione automatica non si scontra coi codici di un collaudo precedente.
+Un primo giro di `test:db` è caduto per un timeout del contenitore di prova
+mentre le immagini Docker compilavano in parallelo: rilanciato da solo, tutto
+verde (267 test).
+
 ## Collaudo del 19/11/2026 — Al passo con il mercato
 
 Collaudo della commessa «al passo con il mercato»
