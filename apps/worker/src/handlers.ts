@@ -58,6 +58,8 @@ export function createHandler({ db, brand, siteUrl, signingSecret, mail }: Handl
       spotCode: data.spotCode,
       code: data.code,
       totalCents: data.totalCents,
+      // What really came in with the confirmation (D52): deposit, total, or nothing.
+      paidCents: data.paidCents,
       bookingUrl,
     });
     if (mail) await mail.send(message);

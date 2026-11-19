@@ -35,6 +35,8 @@ export interface BookingMail {
   spotCode: string;
   code: string;
   totalCents: number;
+  /** What really came in with the confirmation (D52): the deposit, the whole total, or nothing («da incassare»). */
+  paidCents: number;
   bookingUrl: string;
 }
 
@@ -217,6 +219,24 @@ export function bookingConfirmedMail(to: string, data: BookingMail): Mail {
   // Beyond one day the mail names the whole dal–al period (D38), with the count of days,
   // and says that the one pass is valid on every day of the stay.
   const period = data.days > 1;
+  // The money block (D52): the mail never says «Totale pagato» when it is not
+  // true. Total, what was paid now, and what remains — «da saldare» after a
+  // deposit, «da incassare» for the desk's deferred collection, or nothing at
+  // all. Texts exactly as written (testi-al-passo §3), it/en alike.
+  const paid = Math.min(data.paidCents, data.totalCents);
+  const residual = data.totalCents - paid;
+  const moneyLines =
+    data.locale === 'en'
+      ? [
+          `Total: ${total}`,
+          ...(paid > 0 ? [`Paid now: ${formatMoney(paid, 'en')}`] : []),
+          residual === 0 ? 'Nothing left to pay.' : paid > 0 ? `To pay on arrival: ${formatMoney(residual, 'en')}` : `To be collected on arrival: ${formatMoney(residual, 'en')}`,
+        ]
+      : [
+          `Totale: ${total}`,
+          ...(paid > 0 ? [`Pagato adesso: ${formatMoney(paid, 'it')}`] : []),
+          residual === 0 ? 'Nulla da saldare.' : paid > 0 ? `Da saldare all'arrivo: ${formatMoney(residual, 'it')}` : `Da incassare all'arrivo: ${formatMoney(residual, 'it')}`,
+        ];
   if (data.locale === 'en') {
     return {
       to,
@@ -229,7 +249,7 @@ export function bookingConfirmedMail(to: string, data: BookingMail): Mail {
         period ? `Period: ${data.period} (${data.days} days)` : `Day: ${data.period}`,
         `Spot: ${data.spotCode}`,
         `Booking code: ${data.code}`,
-        `Total paid: ${total}`,
+        ...moneyLines,
         '',
         period
           ? 'Your pass, one for the whole stay and valid on every day, with the QR code to show at the front desk, is on this page:'
@@ -251,7 +271,7 @@ export function bookingConfirmedMail(to: string, data: BookingMail): Mail {
       period ? `Periodo: ${data.period} (${data.days} giornate)` : `Giorno: ${data.period}`,
       `Postazione: ${data.spotCode}`,
       `Codice prenotazione: ${data.code}`,
-      `Totale pagato: ${total}`,
+      ...moneyLines,
       '',
       period
         ? 'Il tuo pass, unico per tutto il soggiorno e valido ogni giornata, con il codice QR da mostrare alla reception, è in questa pagina:'
