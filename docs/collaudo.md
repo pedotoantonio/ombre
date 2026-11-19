@@ -1,5 +1,139 @@
 # Collaudo
 
+## Collaudo del 19/11/2026 — Al passo con il mercato
+
+Collaudo della commessa «al passo con il mercato»
+([specifica](specifica-al-passo-col-mercato.md), D49–D54, testi in
+[testi-al-passo.md](testi-al-passo.md)): servizi e filtri, zone con nome,
+recensioni verificate, caparra, condizioni di annullamento e «niente
+profilazione». Eseguito sullo stack **fisso** `ombre-collaudo` (web
+`127.0.0.1:3232`, API `127.0.0.1:3231`) **ricostruito dal codice corrente con
+volume nuovo** (`build` → `down -v` → `up`): migrazioni 001–**022**, seed demo
+**e vetrina a tre stabilimenti** (Bagno delle Dune; Lido Aurora con zone e tre
+recensioni; **Cala del Moro** con caparra 30% e termine 72 ore),
+`OMBRE_SITE_URL=http://localhost:3210`, fornitore OIDC di prova e pagamenti
+sandbox come nei collaudi precedenti. Gate statici (`pnpm lint`,
+`pnpm -r typecheck`, `pnpm -r build`), la suite dei test completa su un
+PostgreSQL usa-e-getta, poi le **nove** suite fumo nell'ordine di
+`collaudo.sh` — la nuova `smoke:mercato` tra `smoke:conto` e `smoke:booking`,
+`smoke:2fa` per ultima — col verde letto suite per suite. **L'ambiente resta
+acceso** alla fine, con i dati che il collaudo vi ha lasciato (una recensione
+segnalata, un saldo incassato): il collaudo vive nel collaudo.
+
+### La suite nuova: `smoke:mercato`
+
+`scripts/smoke-mercato.ts` (**110 controlli numerati, stampati uno a uno**;
+cablata in `package.json` e in `scripts/collaudo.sh`, che ora semina anche la
+vetrina) percorre da navigatore senza script, it e en: la **ricerca** con
+`?srv=wifi&srv=bar` (caselle che restano spuntate, tre risultati, distintivi
+col «+4», voto sulle carte; con `srv=restaurant` restano solo l'Aurora, con
+`srv=accessible` solo la Dune); la **scheda dell'Aurora** (otto servizi con
+icone, «4,3 su 5 · 3 recensioni» in testa, recensioni verificate con replica,
+nome del conto e mai l'email, «Zona Prima fila» su planimetria, barra di
+selezione e riepilogo); le **recensioni** (il soggiorno già recensito risponde
+`review_exists` / «Hai già recensito questo soggiorno.», quello futuro
+`review_not_allowed`; dal gestionale la replica e la **segnalazione con
+motivo**, con la recensione segnalata che resta visibile sulla scheda con la
+nota «Segnalata alla piattaforma.»); la **caparra della Cala** («Caparra adesso
+21,00 · Saldo allo stabilimento 49,00» e condizioni di 72 ore PRIMA del
+pagamento, 30% incassato dal fornitore di prova, «Parziale» con residuo nel
+conto); il **carrello** con caparra e condizioni prima di «Conferma e paga»;
+l'**annullamento dal conto** entro il termine (rimborso pieno, giornate di
+nuovo in vendita) e oltre (nessun bottone, rimando allo stabilimento);
+l'**incasso del saldo al banco** e la **quadratura del registro**; piè di
+pagina e FAQ «niente profilazione»; la **Dune invariata**. I dati che il seme
+non ha nascono dalle vie vere della suite: la Cala non ha credenziali demo
+(scelta del seme), quindi banco e registro sono esercitati all'**Aurora**,
+portata alla caparra **dal pannello del Gestore** e riportata subito al
+pagamento intero. Le suite esistenti non hanno avuto bisogno di ritocchi: i
+tre stabilimenti del seme non rompono nessun conteggio.
+
+### Test e collaudi fumo
+
+| Parte | Controlli | Esito |
+|---|---|---|
+| Lint, tipi e build (`pnpm lint`, `pnpm -r typecheck`, `pnpm -r build`) | tutto il codice | Superati |
+| Test con PostgreSQL vero (`OMBRE_TEST_DB_PORT=54335 pnpm test:db`) | **258** (38 shared, 11 comms, 49 db, 153 api, 7 worker), contratto OpenAPI a **126 rotte** | Superati |
+| Pagine pubbliche (`smoke`) | 453 | Superati |
+| Ricerca, planimetria e riserva (`smoke:flow`) | 72 | Superati |
+| Aree riservate (`smoke:areas`) | 85 | Superati |
+| Sito dello stabilimento (`smoke:site`) | 25 | Superati |
+| Conto, Google e carrello (`smoke:conto`) | 139 | Superati |
+| **Al passo col mercato (`smoke:mercato`, nuova)** | **110** | Superati |
+| Prenotazione end-to-end (`smoke:booking`) | 15 | Superati |
+| Presa simultanea (`smoke:api`) | 13 | Superati |
+| Due passaggi (`smoke:2fa`, per ultima) | 11 | Superati |
+
+In totale **923 controlli fumo**, tutti superati, verde letto suite per suite.
+
+### Criteri di accettazione (specifica §9)
+
+1. **Filtri per servizi e distintivi — superato.** `?srv=wifi&srv=bar` tiene i
+   tre stabilimenti (li hanno tutti e due), `srv=restaurant` lascia la sola
+   Aurora e `srv=accessible` la sola Dune: chi non ha **tutti** i servizi
+   sparisce. Le caselle restano spuntate dopo l'invio (modulo GET, zero
+   script); le carte mostrano quattro distintivi e «+4» (otto servizi) col
+   voto; la scheda li elenca per esteso con otto icone in linea, in italiano e
+   in inglese («Bar e chiosco» / «Bar and kiosk»).
+2. **Zone con nome, le stesse parole ovunque — superato.** «Prima fila»
+   compare come «Zona Prima fila» nella carta della planimetria dell'Aurora,
+   come «zona Prima fila» nella barra di selezione, come riga «Zona · Prima
+   fila» nel riepilogo di prenotazione, sulla voce del carrello della Cala e
+   accanto al codice nel conto dell'Ospite (dove sta il pass), identica in
+   inglese («Zone Prima fila»). Reception e verifica all'ingresso portano lo
+   stesso `zoneName`, coperte dai test con database (153 dell'API).
+3. **Recensioni verificate con moderazione — superato.** L'ospite dimostrativo
+   (tre soggiorni conclusi all'Aurora, tutti recensiti) non riceve più il
+   modulo e vede «La tua recensione»; ripetere la recensione risponde
+   `review_exists` («Hai già recensito questo soggiorno.»); un gruppo futuro
+   risponde `review_not_allowed` («Puoi recensire solo un soggiorno
+   concluso.») — a runtime non si può creare un soggiorno concluso non
+   recensito, quindi la via d'errore è la prova. Media e numero («4,3 su 5 ·
+   3 recensioni») stanno su carte e scheda. Dal gestionale dell'Aurora il
+   Gestore demo pubblica una replica (riletta su gestionale e scheda pubblica)
+   e **segnala con motivo**: la segnalata **resta visibile** — le recensioni
+   sulla scheda restano tre — con la nota «Segnalata alla piattaforma.», e il
+   collaudo la lascia così.
+4. **Caparra: acconto e saldo, registro in quadratura — superato.** Sulla Cala
+   del Moro (periodo di due giornate, 70,00): riepilogo con «Caparra adesso
+   21,00» e «Saldo allo stabilimento 49,00» prima del pagamento, pagamento
+   sandbox che incassa **il 30% esatto**, pagina del pass «Parziale», conto
+   con «Pagato adesso: 21,00 · residuo 49,00». La Cala non ha credenziali demo
+   (scelta scritta del seme): l'incasso al banco è esercitato all'Aurora —
+   caparra accesa dal pannello del Gestore, prenotazione `OM-261125-001`
+   pagata al 30% (residuo 10,50 su 15,00), poi pagamento intero ripristinato —
+   con la scheda incassi «Parziale» → `banco-incassa` → «Saldata», residuo
+   0,00. Registro economico dall'API dei rapporti: **somma delle ripartizioni
+   61.790 = lordo delle vendite 61.790**, caparra compresa (le quote restano
+   sul totale della prenotazione).
+5. **Condizioni visibili e applicate — superato.** Il testo proprio della Cala
+   («Annullamento gratuito fino a 72 ore prima del giorno di arrivo…») e il
+   termine calcolato compaiono nel riepilogo e **nel carrello prima del
+   modulo «Conferma e paga»** (posizione verificata nell'HTML); sulla Dune
+   vale il predefinito di piattaforma (48 ore). Dal conto, la prenotazione
+   futura entro il termine offre «Annulla la prenotazione» con l'importo del
+   rimborso, e l'annullamento risponde «Prenotazione annullata. Ti rimborsiamo
+   21,00…», gruppo «Annullata» e giornate di nuovo in vendita; la prenotazione
+   con arrivo domani (oltre le 72 ore) **non ha il bottone** e dice «Il
+   termine per annullare gratis è passato. Rivolgiti allo stabilimento».
+6. **Niente profilazione — superato.** La riga «Niente cookie di profilazione
+   né pubblicità: solo cookie tecnici, per sessione, carrello e lingua.» sta
+   nel piè di pagina it e en; Assistenza ha la FAQ «Ombrè mi traccia o mi
+   mostra pubblicità?» con la risposta che spiega anche l'assenza del banner,
+   nelle due lingue. Nessun banner, come scritto.
+7. **Tutto il resto come prima — superato.** Il riepilogo della Dune NON
+   mostra caparra e offre il percorso rapido «Riserva la postazione» intatto;
+   `smoke:flow`, `smoke:conto` (Google di prova, carrello e ordine pagato),
+   `smoke:booking` e `smoke:api` sono verdi sugli stessi numeri di sempre.
+8. **Collaudato, bilingue, senza JavaScript — superato.** Tutte le pagine
+   toccate sono state lette anche in inglese (ricerca, scheda, riepilogo,
+   carrello, conto, assistenza, moderazione), ogni passo è `fetch` puro senza
+   script, e i collaudi precedenti restano verdi (923 controlli in tutto).
+
+Nessun difetto trovato nel prodotto. Unico ritocco, di solo collaudo:
+`scripts/collaudo.sh` ora esporta `OMBRE_SEED_SHOWCASE=true`, perché la suite
+nuova vive sui dati della vetrina; le altre suite non sono state toccate.
+
 ## Collaudo del 18/11/2026 — carrello, conto dell'Ospite, accesso Google e perizia d'usabilità
 
 Collaudo delle due commesse del 18/11: l'ampliamento della
