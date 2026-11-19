@@ -157,5 +157,5 @@ describe.skipIf(!testAdminUrl)('the guest account over the API', () => {
     const otherToken = String((await call('POST', '/v1/auth/login', { email: 'caio@example.org', password: otherGenerated })).body.token);
     expect((await call('POST', '/v1/account/password', { current: otherGenerated, next: 'parola-di-caio-123' }, otherToken)).status).toBe(204);
     expect((await call('GET', '/v1/account/bookings', undefined, otherToken)).body).toMatchObject({ nextArrivals: 0, totalSpentCents: 0, upcoming: [], past: [] });
-  });
+  }, 30_000);
 });

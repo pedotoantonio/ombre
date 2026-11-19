@@ -48,9 +48,12 @@ export function listZones(db: Database, actor: Actor): Promise<ZoneView[]> {
       .select({
         zoneId: beachZone.id,
         name: beachZone.name,
-        spots: sql<number>`(select count(*) from spot s where s.named_zone_id = ${beachZone.id})::int`,
+        // Qualified by hand: an interpolated column would render unqualified and bind to s.id.
+        spots: sql<number>`(select count(*) from spot s where s.named_zone_id = beach_zone.id)::int`,
       })
       .from(beachZone)
+      // The public policy (021) exposes every active club's zones: the list stays ours.
+      .where(eq(beachZone.beachId, actor.beachId))
       .orderBy(asc(beachZone.createdAt), asc(beachZone.id)),
   );
 }
@@ -62,7 +65,7 @@ export async function createZone(db: Database, actor: Actor, input: { name: stri
     return await withActor(db, actor.beachId, actor.userId, async (tx) => {
       // Two simultaneous creations must both see each other: the lock serializes them.
       await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`${actor.beachId}/zones`}, 0))`);
-      const [counted] = await tx.select({ zones: sql<number>`count(*)::int` }).from(beachZone);
+      const [counted] = await tx.select({ zones: sql<number>`count(*)::int` }).from(beachZone).where(eq(beachZone.beachId, actor.beachId));
       if ((counted?.zones ?? 0) >= maxNamedZones) throw new DomainError('cap_reached', `A beach club may have at most ${maxNamedZones} zones`);
       const [created] = await tx.insert(beachZone).values({ beachId: actor.beachId, name }).returning({ zoneId: beachZone.id, name: beachZone.name });
       if (!created) throw new Error('zone was not created');
@@ -79,7 +82,7 @@ export async function renameZone(db: Database, actor: Actor, input: { zoneId: st
   const name = assertZoneName(input.name);
   try {
     return await withActor(db, actor.beachId, actor.userId, async (tx) => {
-      const [current] = await tx.select({ name: beachZone.name }).from(beachZone).where(eq(beachZone.id, input.zoneId));
+      const [current] = await tx.select({ name: beachZone.name }).from(beachZone).where(and(eq(beachZone.id, input.zoneId), eq(beachZone.beachId, actor.beachId)));
       if (!current) throw new DomainError('not_found', 'Zone not found');
       if (current.name === name) return;
       await tx.update(beachZone).set({ name }).where(eq(beachZone.id, input.zoneId));
@@ -93,7 +96,7 @@ export async function renameZone(db: Database, actor: Actor, input: { zoneId: st
 /** Deletes a zone. Its spots stay where they are, detached by the foreign key (named_zone_id NULL). */
 export function deleteZone(db: Database, actor: Actor, input: { zoneId: string }): Promise<{ detachedSpots: number }> {
   return withActor(db, actor.beachId, actor.userId, async (tx) => {
-    const [current] = await tx.select({ name: beachZone.name }).from(beachZone).where(eq(beachZone.id, input.zoneId));
+    const [current] = await tx.select({ name: beachZone.name }).from(beachZone).where(and(eq(beachZone.id, input.zoneId), eq(beachZone.beachId, actor.beachId)));
     if (!current) throw new DomainError('not_found', 'Zone not found');
     const attached = await tx.select({ id: spot.id }).from(spot).where(eq(spot.namedZoneId, input.zoneId));
     await tx.delete(beachZone).where(eq(beachZone.id, input.zoneId));
@@ -102,10 +105,10 @@ export function deleteZone(db: Database, actor: Actor, input: { zoneId: string }
   });
 }
 
-/** The zone named by the input, or a clear refusal. Null means «no zone»: the spot is detached. */
-async function resolveZone(tx: Transaction, zoneId: string | null): Promise<{ id: string; name: string } | null> {
+/** The zone named by the input, of THIS club, or a clear refusal. Null means «no zone»: the spot is detached. */
+async function resolveZone(tx: Transaction, beachId: string, zoneId: string | null): Promise<{ id: string; name: string } | null> {
   if (zoneId === null) return null;
-  const [found] = await tx.select({ id: beachZone.id, name: beachZone.name }).from(beachZone).where(eq(beachZone.id, zoneId));
+  const [found] = await tx.select({ id: beachZone.id, name: beachZone.name }).from(beachZone).where(and(eq(beachZone.id, zoneId), eq(beachZone.beachId, beachId)));
   if (!found) throw new DomainError('not_found', 'Zone not found');
   return found;
 }
@@ -113,7 +116,7 @@ async function resolveZone(tx: Transaction, zoneId: string | null): Promise<{ id
 /** Assigns one spot to a zone, or detaches it with null. */
 export function assignZoneToSpot(db: Database, actor: Actor, input: { spotId: string; zoneId: string | null }): Promise<void> {
   return withActor(db, actor.beachId, actor.userId, async (tx) => {
-    const named = await resolveZone(tx, input.zoneId);
+    const named = await resolveZone(tx, actor.beachId, input.zoneId);
     const [current] = await tx.select({ code: spot.code, namedZoneId: spot.namedZoneId }).from(spot).where(eq(spot.id, input.spotId));
     if (!current) throw new DomainError('not_found', 'Spot not found');
     if (current.namedZoneId === input.zoneId) return;
@@ -133,7 +136,7 @@ export interface RowZone {
 /** The same named zone for every spot of a row, in one action — like the rental per row. */
 export function assignZoneToRow(db: Database, actor: Actor, input: RowZone): Promise<{ updated: number }> {
   return withActor(db, actor.beachId, actor.userId, async (tx) => {
-    const named = await resolveZone(tx, input.zoneId);
+    const named = await resolveZone(tx, actor.beachId, input.zoneId);
     const updated = await tx
       .update(spot)
       .set({ namedZoneId: input.zoneId })

@@ -31,7 +31,7 @@ describe.skipIf(!testAdminUrl)('API /v1 on the demo beach club', () => {
     expect((await app.request('/v1/health')).status).toBe(200);
     const response = await app.request('/v1/beaches');
     expect(await response.json()).toEqual({
-      beaches: [{ slug: 'bagno-delle-dune', name: 'Bagno delle Dune', locality: 'Lido di Pomposa', timezone: 'Europe/Rome', demo: true, latitude: demoBeach.latitude, longitude: demoBeach.longitude, cover: { src: '/demo/dune.jpg', alt: { it: 'Dune di sabbia con il mare sullo sfondo', en: 'Sand dunes with the sea behind' } } }],
+      beaches: [{ slug: 'bagno-delle-dune', name: 'Bagno delle Dune', locality: 'Lido di Pomposa', timezone: 'Europe/Rome', demo: true, latitude: demoBeach.latitude, longitude: demoBeach.longitude, amenities: [], cover: { src: '/demo/dune.jpg', alt: { it: 'Dune di sabbia con il mare sullo sfondo', en: 'Sand dunes with the sea behind' } } }],
     });
   });
 
@@ -81,7 +81,7 @@ describe.skipIf(!testAdminUrl)('API /v1 on the demo beach club', () => {
   });
 
   it('searches beach clubs by day, guests, place and shared days, with a price that can be paid', async () => {
-    const beach = { slug: 'bagno-delle-dune', name: 'Bagno delle Dune', locality: 'Lido di Pomposa', timezone: 'Europe/Rome', demo: true, latitude: demoBeach.latitude, longitude: demoBeach.longitude, cover: { src: '/demo/dune.jpg', alt: { it: 'Dune di sabbia con il mare sullo sfondo', en: 'Sand dunes with the sea behind' } } };
+    const beach = { slug: 'bagno-delle-dune', name: 'Bagno delle Dune', locality: 'Lido di Pomposa', timezone: 'Europe/Rome', demo: true, latitude: demoBeach.latitude, longitude: demoBeach.longitude, amenities: [], cover: { src: '/demo/dune.jpg', alt: { it: 'Dune di sabbia con il mare sullo sfondo', en: 'Sand dunes with the sea behind' } } };
     expect((await search(`?day=${demoBeach.day}`)).body).toEqual({
       day: demoBeach.day,
       // Il periodo minimo (D39): «al» predefinito uguale a «dal».

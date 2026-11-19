@@ -173,7 +173,7 @@ describe.skipIf(!testAdminUrl)('multiple payments, deferred collection and payme
     expect(shown.status).toBe(200);
     expect(shown.body).toMatchObject({ status: 'pending', day, from: day, to: day, amountCents: 1000, beach: { slug, name: `Bagno ${slug}` } });
     // `from` and `to` carry the dal–al period of the group (D38): still nothing personal.
-    expect(Object.keys(shown.body as object).sort()).toEqual(['amountCents', 'beach', 'currency', 'day', 'expiresAt', 'from', 'spotCode', 'status', 'to']);
+    expect(Object.keys(shown.body as object).sort()).toEqual(['amountCents', 'beach', 'currency', 'day', 'expiresAt', 'from', 'spotCode', 'status', 'to', 'zoneName']);
 
     // Paid with the test provider: the webhook collects, the residual falls.
     expect((await notify(await openPayment(token), 'succeeded')).result).toBe('collected');

@@ -72,8 +72,9 @@ const publicBeachColumns = {
   demo: beach.demo,
   latitude: beach.latitude,
   longitude: beach.longitude,
-  // The public policy of migration 021 lets this read cross the beach boundary for active clubs.
-  amenities: sql<string[]>`coalesce((select array_agg(a.amenity order by a.amenity) from beach_amenity a where a.beach_id = ${beach.id}), '{}'::text[])`,
+  // The public policy of migration 021 lets this read cross the beach boundary for active
+  // clubs. Qualified by hand: an interpolated column would render unqualified in the subquery.
+  amenities: sql<string[]>`coalesce((select array_agg(a.amenity order by a.amenity) from beach_amenity a where a.beach_id = beach.id), '{}'::text[])`,
 };
 
 /** The chosen amenities in the catalogue's own order, whatever the storage order. */
@@ -86,7 +87,7 @@ const withOrderedAmenities = <T extends { amenities: string[] }>(club: T): T => 
 
 /** True for the clubs that offer EVERY requested amenity (D49); everything else drops out. */
 const hasAllAmenities = (required: readonly string[]) =>
-  sql`(select count(*) from beach_amenity a where a.beach_id = ${beach.id} and a.amenity = any(${sql.param(required.slice())}::text[])) = ${required.length}`;
+  sql`(select count(*) from beach_amenity a where a.beach_id = beach.id and a.amenity = any(${sql.param(required.slice())}::text[])) = ${required.length}`;
 
 export type SpotZone = (typeof spot.$inferSelect)['zone'];
 
