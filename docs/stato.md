@@ -170,6 +170,24 @@ indicizzato.
   pennello di zona, riepilogo in parole prima della conferma, applicazione
   in una transazione con rollback totale e voce `layout.saved` nel
   registro delle azioni; il pubblico vede solo la spiaggia salvata.
+- Iterazione «La scheda della postazione» (19/11/2026, notte), specifica in
+  [specifica-scheda-postazione.md](specifica-scheda-postazione.md)
+  ([prompt](prompt-scheda-postazione.md)), decisioni D61–D63: ogni tipo di
+  postazione ha una scheda illustrativa con fotografie nel percorso
+  d'acquisto — pagina pubblica `/bagni/{slug}/postazioni/{tipo}` col
+  ritorno esatto al punto di partenza, ingressi da elenco, barra di
+  selezione, riepilogo, riserva, carrello, ordine e dal riquadro «I tipi
+  di postazione» della scheda del lido. Due livelli: la predefinita di
+  piattaforma per gli 11 segni del repertorio (testi del redattore
+  vagliati dall'esperto di usabilità con le cinque domande, in
+  [testi-schede-tipi.md](testi-schede-tipi.md); 11 fotografie vere Pexels
+  registrate in [immagini-reali.md](immagini-reali.md), ritagli 3:2) e la
+  personalizzata del lido (titolo, descrizioni it/en con ripiego, fino a
+  6 foto dalla libreria del sito con didascalie, dotazione, capienza,
+  fino a 6 dettagli), con risoluzione campo per campo. Sottopagina nuova
+  del gestionale «Postazioni» con anteprima identica al pubblico e
+  ripristino alla predefinita in un tocco (migrazione 025, contratto a
+  135 rotte).
 - Prenotazione dell'ospite: scelta della postazione, riepilogo con codice promozionale,
   riserva, dati, pagamento di prova, pass con codice QR e codice breve.
 - Reception: verifica del pass con ingresso, uscita e rientro, prenotazione al banco,
@@ -214,6 +232,9 @@ indicizzato.
   stabilimento, altri fornitori OIDC; le chiavi vere di Google sono del
   committente (dipendenza aperta).
 - Console centrale della piattaforma, gruppi e cooperative, piani in `plan_feature`.
+- Dalla scheda della postazione, rimandati e scritti (§5 della
+  specifica): caricamento di fotografie proprie (vale anche per il sito),
+  schede della singola postazione, video, schede per le cabine del mare.
 - Dalla spiaggia illustrata, rimandati e scritti (§6 della specifica):
   coordinate libere e rotazioni, trascinamento multiplo, bozze per utente,
   storico delle bozze salvate, animazioni del mare, stampa illustrata;
@@ -237,6 +258,17 @@ indicizzato.
 ## Collaudo
 
 Esito completo in [collaudo.md](collaudo.md).
+
+Il 19/11/2026 (notte), iterazione «La scheda della postazione»: 287 test
+con database (contratto a 135 rotte), 1186 controlli fumo con la suite
+nuova `smoke:schede` (141 controlli: ritorno esatto da ogni ingresso,
+testi predefiniti alla lettera, personalizzazione con anteprima identica
+e ripristino, differenza Aurora/Dune, 11 licenze registrate, nessuna
+rottura di prenotazione rapida, carrello e pianificatore); i sette
+criteri del committente tutti superati; un difetto vero trovato e
+corretto nella sola suite del sito (le miniature non prevedevano le foto
+dei tipi nella libreria). Ambiente di collaudo ricostruito (migrazioni
+fino alla 025) e lasciato acceso.
 
 Il 19/11/2026 (sera), iterazione «La spiaggia illustrata e il
 pianificatore»: 267 test con database (contratto a 131 rotte), 1044
@@ -336,8 +368,9 @@ Progetto compose `ombre-demo`, porte 3220 (sito) e 3221 (API), segreti in `.env.
 pubblicato e fotografie vere (D43); «Lido Aurora» ha anche abbonamenti,
 prenotazioni già fatte, zone con nome e tre recensioni con la replica del
 gestore; «Cala del Moro» lavora con la caparra al 30% e condizioni proprie
-di annullamento; l'Ospite dimostrativo è `ospite@ombre.example`: guida in
-[demo.md](demo.md). Si avvia e si ferma così, dalla cartella `ombre/`:
+di annullamento; l'Aurora cura anche tre schede dei tipi di postazione
+(le altre spiagge mostrano le predefinite di piattaforma); l'Ospite
+dimostrativo è `ospite@ombre.example`: guida in [demo.md](demo.md). Si avvia e si ferma così, dalla cartella `ombre/`:
 
 ```bash
 docker compose --env-file .env.demo -p ombre-demo --profile tunnel up -d
