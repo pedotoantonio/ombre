@@ -915,3 +915,65 @@ export function ElementSymbol({ kind, label, w }: ElementSymbolProps): ReactElem
     </svg>
   );
 }
+
+/* ------------------------------------------------------------------ */
+/* La fascia del mare: onde stilizzate, acqua bassa e linea di riva.   */
+/* ------------------------------------------------------------------ */
+
+/**
+ * La fascia del mare sopra (o sotto) la planimetria: mare aperto con le onde,
+ * acqua bassa, schiuma e il primo filo di sabbia bagnata. `width` è in celle da 64;
+ * l'altezza vale 88 unità. Decorativa: il nome «Mare» viaggia come testo fuori.
+ */
+export function SeaBand({ width = 8 }: { width?: number }): ReactElement {
+  const cells = Math.max(1, Math.round(width));
+  const wpx = cells * 64;
+  const crests: ReactElement[] = [];
+  for (let i = 0; i < cells; i += 1) {
+    const x = i * 64 + (i % 2 === 0 ? 10 : 26);
+    const y = i % 3 === 0 ? 16 : i % 3 === 1 ? 30 : 22;
+    crests.push(
+      <path key={i} d={`M${x} ${y}q5.5-5 11 0t11 0`} stroke="var(--arte-neve)" strokeWidth="2.6" strokeLinecap="round" fill="none" opacity=".75" />,
+    );
+  }
+  return (
+    <svg className="beach-art beach-sea" viewBox={`0 0 ${wpx} 88`} aria-hidden="true" focusable="false">
+      <rect width={wpx} height="88" fill="var(--arte-mare)" />
+      {crests}
+      <path d={`${wavePath(wpx, 52, 7)}V88H0Z`} fill="var(--arte-mare-basso)" />
+      <path d={wavePath(wpx, 52, 7)} stroke="var(--arte-neve)" strokeWidth="2.4" fill="none" opacity=".8" />
+      <path d={`${wavePath(wpx, 74, 5)}V88H0Z`} fill="var(--arte-sabbia-riva)" />
+      <path d={wavePath(wpx, 74, 5)} stroke="var(--arte-neve)" strokeWidth="4.5" fill="none" />
+    </svg>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* La legenda compatta (D56).                                          */
+/* ------------------------------------------------------------------ */
+
+export interface LegendItem {
+  state: SpotArtState;
+  /** Etichetta già tradotta: i testi arrivano da fuori. */
+  label: string;
+}
+
+/**
+ * Legenda compatta: righe distintivo+etichetta, identica nelle due lingue perché i
+ * testi arrivano dal chiamante. Sta in piedi da sola o dentro un `<details>` al telefono.
+ */
+export function Legend({ items, title, compact = false }: { items: readonly LegendItem[]; title?: string; compact?: boolean }): ReactNode {
+  return (
+    <div className={compact ? 'beach-legend beach-legend--compact' : 'beach-legend'}>
+      {title ? <p className="beach-legend__title">{title}</p> : null}
+      <ul className="beach-legend__list">
+        {items.map((item) => (
+          <li key={`${item.state}-${item.label}`} className="beach-legend__row">
+            <StateBadge state={item.state} size={compact ? 16 : 20} />
+            <span>{item.label}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
