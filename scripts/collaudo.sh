@@ -6,6 +6,9 @@ set -eu
 project="ombre-collaudo"
 backups="$(mktemp -d)"
 export OMBRE_SEED_DEMO=true
+# La vetrina (Lido Aurora e Cala del Moro) serve a smoke:mercato: filtri, zone,
+# recensioni e caparra vivono sui suoi dati. Il segreto di firma ha il default del compose.
+export OMBRE_SEED_SHOWCASE=true
 export OMBRE_DEMO_PASSWORD="collaudo-password-123"
 export OMBRE_SANDBOX_WEBHOOK_SECRET="collaudo-segreto-fornitore"
 export OMBRE_MAIL_PROVIDER=log
@@ -43,7 +46,7 @@ done
 echo "Servizi pronti"
 
 step "Percorsi sul sito e sull'API in esecuzione"
-for check in smoke smoke:flow smoke:areas smoke:site smoke:conto smoke:booking smoke:api smoke:2fa; do
+for check in smoke smoke:flow smoke:areas smoke:site smoke:conto smoke:mercato smoke:booking smoke:api smoke:2fa; do
   pnpm -s "$check" | tail -1
 done
 
