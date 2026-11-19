@@ -44,6 +44,8 @@ interface BookingDetail {
   from: string;
   to: string;
   spotCode: string;
+  /** Name of the manager's named zone (D50); null when the spot belongs to none. */
+  zoneName: string | null;
   totalCents: number;
   paidCents: number;
   remainingCents: number;
@@ -153,7 +155,8 @@ export async function CollectView({ locale, beachSlug, query }: { locale: Locale
                   </div>
                   <div>
                     <dt>{t.booking.spotRow}</dt>
-                    <dd>{booking.spotCode}</dd>
+                    {/* La zona con nome accanto al codice, quando c'è (D50). */}
+                    <dd>{booking.zoneName ? `${booking.spotCode} · ${t.zone.badge(booking.zoneName)}` : booking.spotCode}</dd>
                   </div>
                   <div>
                     <dt>{x.contactsRow}</dt>

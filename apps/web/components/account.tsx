@@ -388,6 +388,8 @@ interface BookingRow {
   presence: 'expected' | 'inside' | 'outside_reentry_allowed' | 'ended';
   guestName: string;
   spotCode: string;
+  /** Name of the manager's named zone (D50); null when the spot belongs to none. */
+  zoneName: string | null;
   /** The dal–al period of the booking group (D38); from = to for a single day. */
   from: string;
   to: string;
@@ -790,7 +792,8 @@ async function ManageView({ locale, beachSlug, query }: { locale: Locale; beachS
                   {bookings.data.bookings.map((row) => (
                     <Row key={row.code}>
                       <Cell label={t.code}>{row.code}</Cell>
-                      <Cell label={t.spot}>{row.spotCode}</Cell>
+                      {/* La zona con nome accanto al codice, quando c'è (D50). */}
+                      <Cell label={t.spot}>{row.zoneName ? `${row.spotCode} · ${all.zone.badge(row.zoneName)}` : row.spotCode}</Cell>
                       {/* Il periodo del gruppo (D38): per un giorno solo, la data della giornata. */}
                       <Cell label={t.colPeriod}>
                         {row.from === row.to ? formatDate(row.from, locale) : b.periodValue(formatPeriod(row.from, row.to, locale), periodDays(row.from, row.to))}

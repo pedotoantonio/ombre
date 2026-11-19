@@ -78,6 +78,8 @@ interface SpotCardData {
   spotId: string;
   code: string;
   zone: SpotZone;
+  /** Name of the manager's named zone (D50); null when the spot belongs to none. */
+  zoneName: string | null;
   rowNumber: number;
   col: number;
   typeName: string;
@@ -335,6 +337,8 @@ function SpotCardPanel({
           <dt>{t.account.spot}</dt>
           <dd>
             {card.code}
+            {/* La zona con nome accanto al codice, quando c'è (D50). */}
+            {card.zoneName ? ` · ${t.zone.badge(card.zoneName)}` : ''}
             {card.shared ? <span className="badge">{t.account.sharedMark}</span> : null}
           </dd>
         </div>

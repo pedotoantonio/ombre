@@ -1209,8 +1209,9 @@ const actions: Record<string, (request: Request, form: Form, lang: Locale) => Pr
     const { getDictionary, config } = await import('@ombre/shared');
     const t = getDictionary(lang, config.brandName);
     return manage(request, form, lang, '/access-events', 'POST', { credential: form('credential'), kind: form('kind') }, (data) => {
-      const entry = data as { code: string; spotCode: string; guestName: string; extras?: { name: { it: string; en: string | null }; quantity: number }[] };
-      const base = `${entry.code} · ${entry.spotCode} · ${entry.guestName}`;
+      const entry = data as { code: string; spotCode: string; zoneName: string | null; guestName: string; extras?: { name: { it: string; en: string | null }; quantity: number }[] };
+      // La zona con nome accanto al codice della postazione, quando c'è (D50).
+      const base = `${entry.code} · ${entry.spotCode}${entry.zoneName ? ` · ${t.zone.badge(entry.zoneName)}` : ''} · ${entry.guestName}`;
       // The extras to hand over, right in the outcome of the check (spec §4.2).
       const extras = entry.extras ?? [];
       if (extras.length === 0) return base;
