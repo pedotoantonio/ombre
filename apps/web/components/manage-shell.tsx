@@ -9,6 +9,7 @@ import {
   manageCollectPath,
   managePlannerPath,
   manageReviewsPath,
+  manageSpotTypesPath,
   manageStatsPath,
   manageTodayPath,
   type Locale,
@@ -24,7 +25,7 @@ import { PageShell, type Crumb } from './PageShell';
 // guest, the season holder and the cabin holder keep the ordinary shell.
 
 /** The voices of the side navigation, in the order of the spec. */
-export type ManageNavId = 'today' | 'planner' | 'bookings' | 'collect' | 'stats' | 'reviews' | 'beach' | 'layout' | 'site';
+export type ManageNavId = 'today' | 'planner' | 'bookings' | 'collect' | 'stats' | 'reviews' | 'beach' | 'layout' | 'types' | 'site';
 
 /** Inline icons in the stroke style of the project, one per voice; the label names them. */
 function NavIcon({ id }: { id: ManageNavId }) {
@@ -73,6 +74,14 @@ function NavIcon({ id }: { id: ManageNavId }) {
       <>
         <rect x="4" y="4" width="16" height="16" rx="2" />
         <path d="M12 4v16M4 12h16" />
+      </>
+    ),
+    // La scheda illustrata del tipo (D63): una carta con la fotografia e il sole.
+    types: (
+      <>
+        <rect x="4" y="4" width="16" height="16" rx="2" />
+        <path d="M4 15.5l4.5-4.5 4 4M11 13.5l3-3 6 6" />
+        <circle cx="9.5" cy="8.5" r="1.4" />
       </>
     ),
     site: (
@@ -128,6 +137,8 @@ export function ManageShell({
     { id: 'reviews', href: manageReviewsPath(locale, beachSlug), show: can(role, 'reviews.moderate') },
     { id: 'beach', href: beachLayoutPath(locale, beachSlug), show: can(role, 'layout.gaps') },
     { id: 'layout', href: `${beachLayoutPath(locale, beachSlug)}#disegno`, show: can(role, 'layout.edit') },
+    // Le schede dei tipi (D63): racconto pubblico del lido, col permesso del sito.
+    { id: 'types', href: manageSpotTypesPath(locale, beachSlug), show: can(role, 'site.edit') },
     { id: 'site', href: accountPath(locale, 'site', beachSlug), show: can(role, 'site.read') },
   ];
   return (

@@ -1,4 +1,4 @@
-import { accountPath, beachLayoutPath, beachPath, bookingPath, bookPath, allDecorationSigns, cartPath, holdPath, isLocale, manageCabinsPath, manageCollectPath, manageDealsPath, manageExtrasPath, manageReviewsPath, manageTodayPath, orderPath, parseEuro, payPath, type Locale } from '@ombre/shared';
+import { accountPath, beachLayoutPath, beachPath, bookingPath, bookPath, allDecorationSigns, cartPath, holdPath, isLocale, manageCabinsPath, manageCollectPath, manageDealsPath, manageExtrasPath, manageReviewsPath, manageSpotTypesPath, manageTodayPath, orderPath, parseEuro, payPath, type Locale } from '@ombre/shared';
 import { api, apiCall, dayPattern, formatPeriod, periodDays, sandboxNotify, slugPattern, uuidPattern } from '@/lib/api';
 import { cartCookie, cartCookieHeader, clearCartCookieHeader, clearSessionCookieHeader, parseCartTicket, sessionCookie, sessionCookieHeader, type CartTicket } from '@/lib/session';
 
@@ -1390,6 +1390,66 @@ const actions: Record<string, (request: Request, form: Form, lang: Locale) => Pr
   'sito-pubblica': (request, form, lang) => site(request, form, lang, '/site/publish', 'POST', { expectedVersion: Number(form('version')) }),
   'sito-ripristina': (request, form, lang) => site(request, form, lang, '/site/restore', 'POST', { revisionId: form('revision') }),
 
+  // La scheda del tipo di postazione (D63): salvataggio intero e ripristino alla
+  // predefinita. I campi vuoti restano fuori: la risoluzione è campo per campo.
+  async 'tipo-scheda-salva'(request, form, lang) {
+    const beach = form('beach');
+    const typeId = form('type');
+    if (!slugPattern.test(beach) || !uuidPattern.test(typeId)) return bad();
+    const { demoMedia } = await import('@ombre/shared');
+    const text = (name: string) => form(name).trim();
+    const field = (name: string, value: string): Record<string, string> => (value === '' ? {} : { [name]: value });
+    // Solo chiavi della libreria del sito (D62); le didascalie valgono per la foto scelta.
+    const photos = form('photos')
+      .split(',')
+      .filter((id): id is keyof typeof demoMedia => Object.hasOwn(demoMedia, id))
+      .map((id) => ({ id, ...field('captionIt', text(`caption_it_${id}`)), ...field('captionEn', text(`caption_en_${id}`)) }));
+    // Una nota scritta solo in inglese resta nel corpo: l'API la rifiuta e lo dice, niente si perde in silenzio.
+    const note = (prefix: string) => {
+      const it = text(`${prefix}_it`);
+      const en = text(`${prefix}_en`);
+      return it === '' && en === '' ? {} : { [`${prefix === 'equipment' ? 'equipmentNote' : 'capacityNote'}`]: { ...field('it', it), ...field('en', en) } };
+    };
+    const details = [1, 2, 3, 4, 5, 6].flatMap((row) => {
+      const labelIt = text(`detail_label_it_${row}`);
+      const valueIt = text(`detail_value_it_${row}`);
+      const labelEn = text(`detail_label_en_${row}`);
+      const valueEn = text(`detail_value_en_${row}`);
+      if (labelIt === '' && valueIt === '' && labelEn === '' && valueEn === '') return [];
+      // Una coppia incompleta parte com'è: l'API la rifiuta con un errore chiaro.
+      return [{ labelIt, valueIt, ...field('labelEn', labelEn), ...field('valueEn', valueEn) }];
+    });
+    const content = {
+      ...field('title', text('title')),
+      ...field('descriptionIt', text('description_it')),
+      ...field('descriptionEn', text('description_en')),
+      ...(photos.length > 0 ? { photos } : {}),
+      ...note('equipment'),
+      ...note('capacity'),
+      ...(details.length > 0 ? { details } : {}),
+    };
+    const back = manageSpotTypesPath(lang, beach);
+    // Tutto vuoto non è una scheda: per tornare alla predefinita c'è il ripristino.
+    if (Object.keys(content).length === 0) return { to: `${withQuery(back, { tipo: typeId, err: 'invalid_request' })}#scheda` };
+    const result = await apiCall('PUT', `/v1/manage/beaches/${beach}/type-cards/${encodeURIComponent(typeId)}`, { body: { content }, token: cookieToken(request) });
+    if (result.ok) return { to: `${withQuery(back, { tipo: typeId, ok: '1' })}#scheda` };
+    if (result.status === 401) return { to: accountPath(lang, 'signIn') };
+    return { to: `${withQuery(back, { tipo: typeId, err: result.status === 0 ? 'unavailable' : result.code })}#scheda` };
+  },
+  async 'tipo-scheda-ripristina'(request, form, lang) {
+    const beach = form('beach');
+    const typeId = form('type');
+    if (!slugPattern.test(beach) || !uuidPattern.test(typeId)) return bad();
+    const result = await apiCall('DELETE', `/v1/manage/beaches/${beach}/type-cards/${encodeURIComponent(typeId)}`, { token: cookieToken(request) });
+    const back = manageSpotTypesPath(lang, beach);
+    if (result.ok) {
+      const { getDictionary, config } = await import('@ombre/shared');
+      return { to: withQuery(back, { ok: getDictionary(lang, config.brandName).typeCards.resetDone }) };
+    }
+    if (result.status === 401) return { to: accountPath(lang, 'signIn') };
+    return { to: withQuery(back, { err: result.status === 0 ? 'unavailable' : result.code }) };
+  },
+
   async 'stagionale-proponi'(request, form, lang) {
     const contract = form('contract');
     if (!uuidPattern.test(contract)) return bad();
@@ -1483,7 +1543,8 @@ export async function POST(request: Request, context: { params: Promise<{ action
     // Checkboxes with the same name arrive as several values: they are joined.
     const field = name === 'weekdays' ? 'weekday' : name === 'spots' ? 'spot' : name === 'amenities' ? 'srv' : name;
     const values = data.getAll(field).filter((value): value is string => typeof value === 'string');
-    return name === 'weekdays' || name === 'gallery' || name === 'spots' || name === 'amenities' ? values.join(',') : (values[0] ?? '');
+    // Anche le foto della scheda del tipo (D63) sono caselle con lo stesso nome.
+    return name === 'weekdays' || name === 'gallery' || name === 'spots' || name === 'amenities' || name === 'photos' ? values.join(',') : (values[0] ?? '');
   };
   const lang = form('lang');
   if (!isLocale(lang)) return bad();

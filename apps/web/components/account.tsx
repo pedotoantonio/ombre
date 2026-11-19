@@ -29,6 +29,7 @@ import {
   managePlannerPath,
   managePlannerSegment,
   manageReviewsSegment,
+  manageSpotTypesSegment,
   manageStatsPath,
   manageStatsSegment,
   manageTodayPath,
@@ -58,6 +59,7 @@ import { PageHead, PageShell } from './PageShell';
 import { GuestOverview, OidcConsentView, PasswordView, RegisterView } from './guest';
 import { SiteEditorView } from './site-editor';
 import { Cell, DataTable, Row, RowHead } from './table';
+import { TypeCardsManageView } from './type-cards-manage';
 
 type Query = Record<string, string | string[] | undefined>;
 const first = (value: string | string[] | undefined): string | undefined => (Array.isArray(value) ? value[0] : value);
@@ -171,7 +173,9 @@ export async function accountMetadata(locale: Locale, segments: string[]): Promi
                       ? t.collect.short
                       : segments[2] === manageReviewsSegment[locale]
                         ? t.reviews.short
-                        : null;
+                        : segments[2] === manageSpotTypesSegment[locale]
+                          ? t.typeCards.manageShort
+                          : null;
     if (subTitle !== null) {
       const beachSession = await signedIn();
       const club = beachSession?.me.memberships.find((entry) => entry.beachSlug === id)?.beachName;
@@ -1195,6 +1199,9 @@ export async function AccountRoute({ locale, segments, query }: { locale: Locale
     return <CollectView locale={locale} beachSlug={segments[1]!} query={query} />;
   if (segments.length === 3 && page === 'manage' && segments[2] === manageReviewsSegment[locale])
     return <ReviewsManageView locale={locale} beachSlug={segments[1]!} query={query} />;
+  // La sottopagina «Postazioni» (D63): le schede dei tipi del lido.
+  if (segments.length === 3 && page === 'manage' && segments[2] === manageSpotTypesSegment[locale])
+    return <TypeCardsManageView locale={locale} beachSlug={segments[1]!} query={query} />;
   if (segments.length === 2 && page === 'season') return <SeasonView locale={locale} contractId={segments[1]!} query={query} />;
   if (segments.length === 2 && page === 'site') return <SiteEditorView locale={locale} beachSlug={segments[1]!} query={query} />;
   notFound();
