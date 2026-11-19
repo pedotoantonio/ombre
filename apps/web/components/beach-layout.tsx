@@ -583,7 +583,7 @@ function DrawGrid({
                           </li>,
                         );
                       } else if (spot) {
-                        const veil = veils.get(spot.spotId);
+                        const veil = spot.namedZoneId ? veils.get(spot.namedZoneId) : undefined;
                         const veiled = veil ? ' draw-cell--velo' : '';
                         const content = (
                           <>
@@ -1226,7 +1226,7 @@ export async function BeachLayoutView({ locale, beachSlug, query }: { locale: Lo
                       spots={spots}
                       idPrefix="anteprima"
                       renderSpot={(spot) => {
-                        const veil = veils.get(spot.spotId);
+                        const veil = spot.namedZoneId ? veils.get(spot.namedZoneId) : undefined;
                         return (
                           <li>
                             <span
