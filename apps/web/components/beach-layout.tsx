@@ -1212,7 +1212,7 @@ export async function BeachLayoutView({ locale, beachSlug, query }: { locale: Lo
                         ) : null}
                         {hasMaintenance ? (
                           <li>
-                            <SpotSymbol sign="umbrella" state="maintenance" />
+                            <SpotSymbol sign="umbrella" state="maintenance" size={44} />
                             {d.maintenanceBadge}
                           </li>
                         ) : null}
