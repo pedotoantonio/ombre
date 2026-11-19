@@ -1,6 +1,6 @@
 # Stato del progetto
 
-Aggiornato al 18/11/2026.
+Aggiornato al 19/11/2026.
 
 ## Dove siamo
 
@@ -126,6 +126,30 @@ indicizzato.
   (il periodo dal–al nominato negli otto punti che dicevano solo «giorno»,
   i ruoli per esteso nel glossario e nei passi, «parola d'ordine» diventata
   «password» nelle email del conto).
+- Iterazione «Al passo con il mercato» (19/11/2026), dalla perizia comparativa
+  sui concorrenti, specifica in
+  [specifica-al-passo-col-mercato.md](specifica-al-passo-col-mercato.md)
+  ([prompt](prompt-al-passo-col-mercato.md), testi dell'esperto in
+  [testi-al-passo.md](testi-al-passo.md)), decisioni D49–D54: servizi dello
+  stabilimento da un catalogo fisso di dodici voci traducibili, scelti dal
+  Gestore e usati come filtri a caselle nella Ricerca ombrellone (senza
+  JavaScript), distintivi sulle carte e elenco con icone sulla scheda; zone
+  con nome nella planimetria (nome proprio del Gestore, per postazione e per
+  fila), riportate identiche in planimetria, proposta, riepilogo, carrello,
+  ordine, pass, conto, verifica all'ingresso e reception; recensioni
+  verificate (solo l'Ospite con soggiorno concluso, una per soggiorno, voto
+  1–5 e testo, nome del conto e mai l'email), con media e numero su carte e
+  scheda, replica del Gestore e segnalazione alla piattaforma che lascia la
+  recensione visibile; caparra per stabilimento («caparra adesso, saldo allo
+  stabilimento», percentuale 10–90 scelta dal Gestore) sul fornitore di
+  prova, con acconto e saldo visibili ovunque, incasso del saldo al banco e
+  registro che quadra sul totale; condizioni e termine di annullamento per
+  stabilimento (predefinito di piattaforma 48 ore, testi facoltativi it/en),
+  visibili prima di pagare, con l'annullamento dal conto dell'Ospite entro il
+  termine e rimborso pieno; riga «niente profilazione, solo cookie tecnici»
+  nel piè di pagina e voce in Assistenza, senza banner. L'email di conferma
+  ora distingue totale, pagato adesso e da saldare all'arrivo (prima diceva
+  «Totale pagato» anche al banco «da incassare»).
 - Prenotazione dell'ospite: scelta della postazione, riepilogo con codice promozionale,
   riserva, dati, pagamento di prova, pass con codice QR e codice breve.
 - Reception: verifica del pass con ingresso, uscita e rientro, prenotazione al banco,
@@ -170,10 +194,16 @@ indicizzato.
   stabilimento, altri fornitori OIDC; le chiavi vere di Google sono del
   committente (dipendenza aperta).
 - Console centrale della piattaforma, gruppi e cooperative, piani in `plan_feature`.
-- Annullamento da parte dell'ospite: aspetta le condizioni di cancellazione.
+- Dall'iterazione «Al passo con il mercato», rimandati e scritti (§8 della
+  specifica): tariffe adulto/bambino e mezze giornate (aspettano i listini
+  veri del committente), recensioni importate da Google, modifica ed
+  eliminazione della recensione, decisione della piattaforma sulle
+  recensioni segnalate (va con la console di piattaforma), annullamento
+  dell'Ospite oltre il termine (oggi rimanda allo stabilimento; i testi e le
+  percentuali definitivi delle condizioni li deciderà il committente).
 - Chiusura di un'intera giornata con annullamento di tutte le prenotazioni.
 - Caricamento di foto proprie e dominio personalizzato nel sito dello stabilimento.
-- Pagine di località, «Chi siamo», recensioni, distanza dalla spiaggia; sulla mappa:
+- Pagine di località, «Chi siamo», distanza dalla spiaggia; sulla mappa:
   ricerca per area visibile, «vicino a me», raggruppamento dei segnaposti.
 - Console della reception a griglia («Ombrè Skipper»), banner «Dritta Ombrè», elenco
   degli stabilimenti in pagina iniziale: vedi i limiti in
@@ -182,7 +212,19 @@ indicizzato.
 
 ## Collaudo
 
-Esito completo in [collaudo.md](collaudo.md). In sintesi, l'11/11/2026, dopo il nuovo
+Esito completo in [collaudo.md](collaudo.md).
+
+Il 19/11/2026, iterazione «Al passo con il mercato»: 258 test con database
+(contratto a 126 rotte), 923 controlli fumo con la suite nuova
+`smoke:mercato` (110 controlli: filtri con «tutti i servizi», distintivi e
+voti sulle carte, recensioni con replica e segnalazione, caparra al 30% con
+sandbox e residuo, annullamento dal conto entro e oltre il termine, registro
+che quadra — somma delle ripartizioni uguale al lordo —, piè di pagina e FAQ
+nelle due lingue); gli otto criteri del committente tutti superati, nessun
+difetto del prodotto. Ambiente di collaudo ricostruito (migrazioni fino alla
+022) e lasciato acceso.
+
+In sintesi, l'11/11/2026, dopo il nuovo
 progetto grafico: 102 test e 469 controlli sul sistema in esecuzione superati, backup
 ripristinato. Una revisione indipendente di grafica e accessibilità ha trovato venti
 rilievi, nessuno bloccante: quindici corretti, gli altri registrati tra i limiti. Dei 15 scenari di
@@ -254,9 +296,12 @@ stabilimento inesistente) ha il codice 404 giusto, ma senza script appare vuota.
 ## Ambiente dimostrativo
 
 Progetto compose `ombre-demo`, porte 3220 (sito) e 3221 (API), segreti in `.env.demo`
-(non versionato). Contiene due stabilimenti di fantasia, entrambi con sito
-pubblicato, copertina e galleria di fotografie vere (D43); «Lido Aurora» ha anche
-abbonamenti e prenotazioni già fatte: guida in [demo.md](demo.md). Si avvia e si ferma così, dalla cartella `ombre/`:
+(non versionato). Contiene tre stabilimenti di fantasia, tutti con sito
+pubblicato e fotografie vere (D43); «Lido Aurora» ha anche abbonamenti,
+prenotazioni già fatte, zone con nome e tre recensioni con la replica del
+gestore; «Cala del Moro» lavora con la caparra al 30% e condizioni proprie
+di annullamento; l'Ospite dimostrativo è `ospite@ombre.example`: guida in
+[demo.md](demo.md). Si avvia e si ferma così, dalla cartella `ombre/`:
 
 ```bash
 docker compose --env-file .env.demo -p ombre-demo --profile tunnel up -d
@@ -280,6 +325,9 @@ avvio. Vedi la decisione D19.
 
 ## Dipendenze esterne aperte
 
+- Testi e percentuali definitivi delle condizioni di annullamento e della
+  caparra: il meccanismo c'è (D52, D53) coi predefiniti di piattaforma;
+  le parole e i numeri veri li decide il committente.
 - Chiavi OAuth di Google del committente per «Entra con Google» (client id e
   segreto): finché mancano, il flusso gira sul fornitore di prova
   configurabile (`OMBRE_OIDC_PROVIDER=test`), collaudato per intero.
