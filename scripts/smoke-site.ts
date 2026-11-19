@@ -65,7 +65,8 @@ check(opened.includes('Nessuna bozza in corso'), 'editor: does not open without 
 check((await manager.get(`/bagni/${beach}`)).includes('site-cover'), 'public page: the seeded website has no cover picture');
 check((/<title>([^<]*)<\/title>/.exec(opened)?.[1] ?? '') === `Sito dello stabilimento · Bagno delle Dune | ${brand}`, 'editor: the page has no title naming the beach club');
 check(opened.includes('<legend>Testi in inglese</legend>') && opened.includes('Facoltativi: se li lasci vuoti'), 'editor: the English group has a long legend, or its note is missing');
-check((opened.match(/<img class="checks__thumb" src="\/demo\/[a-z]+\.jpg"/g) ?? []).length === (opened.match(/name="gallery"/g) ?? []).length && opened.includes('name="gallery"'), 'editor: a gallery option has no thumbnail');
+// La libreria del sito ora porta anche le foto dei tipi (D62), servite da /demo/tipi/.
+check((opened.match(/<img class="checks__thumb" src="\/demo\/(?:tipi\/)?[a-z]+\.jpg"/g) ?? []).length === (opened.match(/name="gallery"/g) ?? []).length && opened.includes('name="gallery"'), 'editor: a gallery option has no thumbnail');
 // The editor lives in the application frame of the management area (D36): the top bar
 // says who is signed in and offers the way out.
 check(opened.includes('class="manage-top"') && opened.includes('Gestore dimostrativo') && opened.includes('action="/azioni/uscita"'), 'editor: no bar with who is signed in');

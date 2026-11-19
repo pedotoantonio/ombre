@@ -46,7 +46,7 @@ done
 echo "Servizi pronti"
 
 step "Percorsi sul sito e sull'API in esecuzione"
-for check in smoke smoke:flow smoke:areas smoke:site smoke:conto smoke:mercato smoke:spiaggia smoke:booking smoke:api smoke:2fa; do
+for check in smoke smoke:flow smoke:areas smoke:site smoke:conto smoke:mercato smoke:spiaggia smoke:schede smoke:booking smoke:api smoke:2fa; do
   pnpm -s "$check" | tail -1
 done
 
