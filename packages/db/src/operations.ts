@@ -13,7 +13,7 @@ import { auditEvent, beachZone, booking, hold, inventoryDay, promotion, spot, sp
  * It is derived, never stored: inventory state and active hold say whether the day
  * can still be sold; the booking presence and the access events say where the guest is.
  */
-export type OperationalState = 'free' | 'reserved' | 'expected' | 'present' | 'departed' | 'blocked' | 'not_for_sale';
+export type OperationalState = 'free' | 'reserved' | 'expected' | 'present' | 'departed' | 'blocked' | 'not_for_sale' | 'maintenance';
 
 export interface OperationsSpot {
   spotId: string;
@@ -26,6 +26,8 @@ export interface OperationsSpot {
   umbrellas: number;
   sunbeds: number;
   maxGuests: number;
+  /** Under maintenance (D56): the card's state becomes `maintenance` while it lasts. */
+  maintenance: boolean;
   state: OperationalState;
   /** Why the day cannot be sold; null for every other state. The console card looks the same, the table tells them apart. */
   notForSale: 'never_published' | 'withdrawn' | null;
@@ -59,10 +61,15 @@ interface StateSource {
   holdLive: boolean;
   presence: (typeof booking.$inferSelect)['presence'] | null;
   entered: boolean;
+  /** Under maintenance (D56): the card says so, whatever the day underneath holds. */
+  maintenance: boolean;
 }
 
 /** The one reading of inventory, hold, presence and accesses: console and spot card agree by construction. */
 function deriveState(row: StateSource): { state: OperationalState; notForSale: OperationsSpot['notForSale'] } {
+  // Maintenance wins over everything (D56): the spot stays drawn, nothing is sellable,
+  // and the bookings already taken are handled by the reception from the card itself.
+  if (row.maintenance) return { state: 'maintenance', notForSale: null };
   if (row.dayState === null) return { state: 'not_for_sale', notForSale: 'never_published' };
   if (row.dayState === 'unpublishable') return { state: 'not_for_sale', notForSale: 'withdrawn' };
   if (row.dayState === 'blocked') return { state: 'blocked', notForSale: null };
@@ -104,6 +111,7 @@ export function listDayOperations(db: Database, actor: Actor, day: string): Prom
         umbrellas: spot.umbrellas,
         sunbeds: spot.sunbeds,
         maxGuests: spot.maxGuests,
+        maintenance: spot.maintenance,
         dayState: inventoryDay.state,
         priceCents: inventoryDay.priceCents,
         shared: inventoryDay.shared,
@@ -122,7 +130,7 @@ export function listDayOperations(db: Database, actor: Actor, day: string): Prom
       .where(eq(spot.retired, false))
       .orderBy(zoneOrder, asc(spot.rowNumber), asc(spot.col));
 
-    const counts: Record<OperationalState, number> = { free: 0, reserved: 0, expected: 0, present: 0, departed: 0, blocked: 0, not_for_sale: 0 };
+    const counts: Record<OperationalState, number> = { free: 0, reserved: 0, expected: 0, present: 0, departed: 0, blocked: 0, not_for_sale: 0, maintenance: 0 };
     let revenueCents = 0;
     const spots = rows.map((row) => {
       const { state, notForSale } = deriveState(row);
@@ -139,6 +147,7 @@ export function listDayOperations(db: Database, actor: Actor, day: string): Prom
         umbrellas: row.umbrellas,
         sunbeds: row.sunbeds,
         maxGuests: row.maxGuests,
+        maintenance: row.maintenance,
         state,
         notForSale,
         shared: row.shared ?? false,
@@ -205,6 +214,8 @@ export interface SpotCard {
   maxGuests: number;
   /** Rental label of the spot («Stagionale», «Albergo» or a custom text): management data, never public. */
   rentalType: string | null;
+  /** Under maintenance (D56): the card's state becomes `maintenance` while it lasts. */
+  maintenance: boolean;
   state: OperationalState;
   /** Why the day cannot be sold; null for every other state. */
   notForSale: 'never_published' | 'withdrawn' | null;
@@ -240,6 +251,7 @@ export function spotCard(db: Database, actor: Actor, input: { day: string; code:
         sunbeds: spot.sunbeds,
         maxGuests: spot.maxGuests,
         rentalType: spot.rentalType,
+        maintenance: spot.maintenance,
         dayState: inventoryDay.state,
         priceCents: inventoryDay.priceCents,
         shared: inventoryDay.shared,
@@ -317,6 +329,7 @@ export function spotCard(db: Database, actor: Actor, input: { day: string; code:
       sunbeds: row.sunbeds,
       maxGuests: row.maxGuests,
       rentalType: row.rentalType,
+      maintenance: row.maintenance,
       state,
       notForSale,
       blockedReason,

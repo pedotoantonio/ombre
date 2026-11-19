@@ -12,6 +12,8 @@ import {
   addRow,
   addRows,
   addSpot,
+  appendOp,
+  applyDraft,
   applyPaymentOutcome,
   assignZoneToRow,
   assignZoneToSpot,
@@ -52,12 +54,15 @@ import {
   deleteSpotType,
   deleteZone,
   deskBooking,
+  discardDraft,
   DomainError,
+  DraftApplyError,
   endAssignment,
   findActiveBeach,
   flagReview,
   getBooking,
   getCart,
+  getDraft,
   getHold,
   getOrder,
   getLayout,
@@ -141,11 +146,13 @@ import {
   updateItem,
   updateSpot,
   updateSpotType,
+  undoLastOp,
   withdrawDay,
   quoteSpot,
   maxExtraQuantity,
   type Database,
   type DomainErrorCode,
+  type DraftOp,
   type PayRequestMessageData,
   type PaymentRequestRow,
   type PublicBeach,
@@ -165,6 +172,7 @@ import {
   expandRecurrence,
   holderContactMaxLength,
   holderNameMaxLength,
+  layoutElementKinds,
   maxColumns,
   maxGapRows,
   occupantNameMaxLength,
@@ -178,6 +186,7 @@ import {
   spotTypeNameMaxLength,
   spotZones,
   suggestSpot,
+  walkwayOrientations,
   zoneNameMaxLength,
   zoneNameMinLength,
   type Action,
@@ -256,6 +265,17 @@ const domainStatus: Record<DomainErrorCode, 401 | 403 | 404 | 409 | 422 | 429> =
   review_exists: 409,
   cancel_not_allowed: 409,
   cancel_deadline_passed: 409,
+  // ---- The planner's draft (D57) ----
+  draft_spot_missing: 404,
+  draft_element_missing: 404,
+  draft_zone_missing: 404,
+  draft_cell_taken: 409,
+  draft_invalid_op: 422,
+  draft_empty: 409,
+  // «Salva la spiaggia» failed on one op: the body also carries failedIndex and reason.
+  draft_apply_failed: 409,
+  spot_has_future_bookings: 409,
+  spot_has_history: 409,
 };
 
 const slugSchema = z.string().regex(/^[a-z0-9]+(-[a-z0-9]+)*$/).max(80);
@@ -530,6 +550,48 @@ const updateSpotSchema = z
   .refine((change) => Object.values(change).some((value) => value !== undefined));
 const rowRentalSchema = z.object({ zone: zoneSchema, rowNumber: z.number().int().min(1).max(200), rentalType: rentalTypeSchema.nullable(), rentalNotes: rentalNotesSchema.nullable() });
 const retiredSchema = z.object({ retired: z.boolean() });
+// ---- The planner's draft (D57): the vocabulary of the operations ----
+// A spot or element created by the draft is referenced by its synthetic id
+// (draft-3, draft-3-12) until «Salva la spiaggia» creates the real one.
+const draftIdSchema = z.union([z.uuid(), z.string().regex(/^draft-\d+(-\d+)?$/)]);
+const draftRowSchema = z.number().int().min(1).max(200);
+const draftOpSchema = z.discriminatedUnion('op', [
+  z.object({ op: z.literal('create_spot'), zone: zoneSchema, row: draftRowSchema, col: colSchema, code: spotCodeSchema.optional(), typeId: z.uuid().optional(), ...equipmentFields }),
+  // Reuses the bulk generation of D34: at most 10 rows × 50, 200 spots, one prefix across the rows.
+  z.object({ op: z.literal('create_grid'), zone: zoneSchema, fromRow: draftRowSchema.optional(), rows: z.number().int().min(1).max(10), cols: z.number().int().min(1).max(50), prefix: z.string().regex(/^[A-Z]{1,4}$/), typeId: z.uuid().optional(), ...equipmentFields }),
+  z.object({ op: z.literal('move_spot'), spotId: draftIdSchema, zone: zoneSchema, row: draftRowSchema, col: colSchema }),
+  z.object({
+    op: z.literal('edit_spot'),
+    spotId: draftIdSchema,
+    patch: z
+      .object({
+        code: spotCodeSchema.optional(),
+        typeId: z.uuid().optional(),
+        ...equipmentFields,
+        namedZoneId: z.uuid().nullable().optional(),
+        maintenance: z.boolean().optional(),
+        rentalType: rentalTypeSchema.nullable().optional(),
+        rentalNotes: rentalNotesSchema.nullable().optional(),
+      })
+      .refine((patch) => Object.values(patch).some((value) => value !== undefined)),
+  }),
+  z.object({ op: z.literal('delete_spot'), spotId: draftIdSchema }),
+  // `row` is rowAfter for a horizontal walkway (0 = before row 1) and the cell row elsewhere; `span` is the width of a rectangle.
+  z.object({
+    op: z.literal('add_element'),
+    kind: z.enum(layoutElementKinds),
+    zone: zoneSchema.nullable(),
+    row: z.number().int().min(0).max(200),
+    col: colSchema,
+    span: z.number().int().min(1).max(maxColumns).optional(),
+    label: elementLabelSchema.nullable().optional(),
+    sign: z.enum(decorationSigns).optional(),
+    orientation: z.enum(walkwayOrientations).optional(),
+  }),
+  z.object({ op: z.literal('move_element'), elementId: draftIdSchema, zone: zoneSchema.nullable(), row: z.number().int().min(0).max(200), col: colSchema }),
+  z.object({ op: z.literal('remove_element'), elementId: draftIdSchema }),
+  z.object({ op: z.literal('assign_zone'), spotId: draftIdSchema, zoneId: z.uuid().nullable() }),
+]);
 // ---- Amenities of the beach club (D49): catalogue identifiers only ----
 // The whole set at once: the checkbox form sends everything that is ticked.
 const amenitiesSchema = z.object({
@@ -1674,6 +1736,40 @@ export function createApp(options: AppOptions): Hono {
     const { typeId } = parse(spotTypeRefSchema, await body(c.req.raw), 'type');
     await setSpotType(db, actor, { spotId: parse(z.uuid(), c.req.param('spotId'), 'spot'), typeId });
     return c.body(null, 204);
+  });
+
+  // ---- The planner's draft (D57): every gesture is an op on the draft; «Salva la spiaggia» applies them in one transaction ----
+  route({ method: 'get', path: '/v1/manage/beaches/:slug/layout/draft', summary: 'The planner draft: its operations, each described, and the layout preview with the draft applied in memory', tag: 'Beach club', auth: 'session', success: 200, errors: [401, 403] }, async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'layout.edit');
+    return c.json(await getDraft(db, actor));
+  });
+
+  route({ method: 'post', path: '/v1/manage/beaches/:slug/layout/draft/ops', summary: 'Append one operation to the planner draft, after a light validation; nothing touches the beach yet', tag: 'Beach club', auth: 'session', request: draftOpSchema, success: 201, errors: [400, 401, 403, 404, 409, 422] }, async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'layout.edit');
+    return c.json(await appendOp(db, actor, parse(draftOpSchema, await body(c.req.raw), 'operation') as DraftOp), 201);
+  });
+
+  route({ method: 'post', path: '/v1/manage/beaches/:slug/layout/draft/undo', summary: 'Undo the last operation of the planner draft', tag: 'Beach club', auth: 'session', success: 200, errors: [401, 403, 409] }, async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'layout.edit');
+    return c.json(await undoLastOp(db, actor));
+  });
+
+  route({ method: 'post', path: '/v1/manage/beaches/:slug/layout/draft/discard', summary: 'Discard the planner draft, emptying its operations', tag: 'Beach club', auth: 'session', success: 200, errors: [401, 403] }, async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'layout.edit');
+    return c.json(await discardDraft(db, actor));
+  });
+
+  route({ method: 'post', path: '/v1/manage/beaches/:slug/layout/draft/apply', summary: 'Save the beach: apply the whole draft in one transaction, or nothing, and write layout.saved in the audit trail', tag: 'Beach club', auth: 'session', success: 200, errors: [401, 403, 409] }, async (c) => {
+    const actor = await actorFor(c.req.header('Authorization'), c.req.param('slug'), 'layout.edit');
+    try {
+      return c.json(await applyDraft(db, actor));
+    } catch (error) {
+      // The summary needs the op at fault: the body carries failedIndex and reason (D57).
+      if (error instanceof DraftApplyError) {
+        return c.json({ error: { code: error.code, message: error.message, failedIndex: error.failedIndex, reason: error.reason } }, 409);
+      }
+      throw error;
+    }
   });
 
   // ---- Spot types ----

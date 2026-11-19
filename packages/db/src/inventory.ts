@@ -43,7 +43,24 @@ export type DomainErrorCode =
   | 'review_exists'
   // ---- Cancellation from the account (D53) ----
   | 'cancel_not_allowed'
-  | 'cancel_deadline_passed';
+  | 'cancel_deadline_passed'
+  // ---- The planner's draft (D57) ----
+  // The op points at a spot, element or zone that the draft no longer has.
+  | 'draft_spot_missing'
+  | 'draft_element_missing'
+  | 'draft_zone_missing'
+  // The target cell is already taken by a spot or an element in the draft.
+  | 'draft_cell_taken'
+  // The op is malformed or impossible on this grid.
+  | 'draft_invalid_op'
+  // Undo or apply on a draft with no operations.
+  | 'draft_empty'
+  // «Salva la spiaggia» failed: NOTHING was applied; failedIndex and reason say why.
+  | 'draft_apply_failed'
+  // Deleting from the planner (D57): a booked future refuses with its count, a
+  // sold past points at retirement or maintenance.
+  | 'spot_has_future_bookings'
+  | 'spot_has_history';
 
 /** A refusal the caller can explain to the user. Anything else is an internal fault. */
 export class DomainError extends Error {
@@ -215,7 +232,8 @@ export function listAvailability(db: Database, beachId: string, day: string, to:
       .innerJoin(spotType, eq(spotType.id, spot.typeId))
       .leftJoin(beachZone, eq(beachZone.id, spot.namedZoneId))
       .leftJoin(hold, eq(hold.id, inventoryDay.activeHoldId))
-      .where(and(inArray(inventoryDay.day, days), eq(spot.retired, false), isFree))
+      // A spot under maintenance (D56) cannot be bought, exactly like a retired one.
+      .where(and(inArray(inventoryDay.day, days), eq(spot.retired, false), eq(spot.maintenance, false), isFree))
       .groupBy(spot.id, spot.code, spot.zone, beachZone.name, spot.rowNumber, spot.col, spotType.name, spotType.mark, spot.umbrellas, spot.sunbeds, spot.maxGuests)
       .having(sql`count(*) = ${days.length}`)
       .orderBy(zoneOrder, asc(spot.rowNumber), asc(spot.col)),
@@ -238,8 +256,10 @@ export interface DaySpot {
   umbrellas: number;
   sunbeds: number;
   maxGuests: number;
-  /** `unavailable` covers everything that cannot be bought on every day of the period: held, sold, blocked, never published, past. */
+  /** `unavailable` covers everything that cannot be bought on every day of the period: held, sold, blocked, never published, past, under maintenance. */
   status: 'free' | 'shared' | 'unavailable';
+  /** Under maintenance (D56): never buyable, but it stays in the drawing. */
+  maintenance: boolean;
   /** Only for a spot that can be bought: the sum over the period. */
   priceCents: number | null;
 }
@@ -266,6 +286,7 @@ export function listDayMap(db: Database, beachId: string, day: string, to: strin
         umbrellas: spot.umbrellas,
         sunbeds: spot.sunbeds,
         maxGuests: spot.maxGuests,
+        maintenance: spot.maintenance,
         freeDays: sql<number>`count(*) filter (where ${isFree})::int`,
         priceCents: sql<number | null>`sum(${inventoryDay.priceCents}) filter (where ${isFree})::int`,
         shared: sql<boolean>`coalesce(bool_and(${inventoryDay.shared}) filter (where ${isFree}), false)`,
@@ -278,8 +299,9 @@ export function listDayMap(db: Database, beachId: string, day: string, to: strin
       .where(eq(spot.retired, false))
       .groupBy(spot.id, spot.code, spot.zone, beachZone.name, spot.rowNumber, spot.col, spotType.name, spotType.mark, spot.umbrellas, spot.sunbeds, spot.maxGuests)
       .orderBy(zoneOrder, asc(spot.rowNumber), asc(spot.col));
+    // A spot under maintenance (D56) stays in the drawing but can never be bought.
     return rows.map(({ freeDays, priceCents, shared, ...place }) =>
-      freeDays === days.length && priceCents !== null
+      !place.maintenance && freeDays === days.length && priceCents !== null
         ? { ...place, status: shared ? ('shared' as const) : ('free' as const), priceCents }
         : { ...place, status: 'unavailable' as const, priceCents: null },
     );
@@ -341,7 +363,7 @@ export async function searchBeaches(db: Database, search: BeachSearch): Promise<
         .from(inventoryDay)
         .innerJoin(spot, eq(spot.id, inventoryDay.spotId))
         .leftJoin(hold, eq(hold.id, inventoryDay.activeHoldId))
-        .where(and(inArray(inventoryDay.day, days), eq(spot.retired, false), isFree, gte(spot.maxGuests, search.guests ?? 1), search.sharedOnly ? eq(inventoryDay.shared, true) : undefined))
+        .where(and(inArray(inventoryDay.day, days), eq(spot.retired, false), eq(spot.maintenance, false), isFree, gte(spot.maxGuests, search.guests ?? 1), search.sharedOnly ? eq(inventoryDay.shared, true) : undefined))
         .groupBy(inventoryDay.spotId)
         .having(sql`count(*) = ${days.length}`),
     );
@@ -358,7 +380,7 @@ export async function nextAvailableDay(db: Database, target: PublicBeach): Promi
       .from(inventoryDay)
       .innerJoin(spot, eq(spot.id, inventoryDay.spotId))
       .leftJoin(hold, eq(hold.id, inventoryDay.activeHoldId))
-      .where(and(sql`${inventoryDay.day} >= (now() at time zone ${target.timezone})::date`, eq(spot.retired, false), isFree));
+      .where(and(sql`${inventoryDay.day} >= (now() at time zone ${target.timezone})::date`, eq(spot.retired, false), eq(spot.maintenance, false), isFree));
     return row?.day ?? null;
   });
 }
@@ -650,7 +672,7 @@ export async function quoteSpotWithin(tx: Transaction, request: DayRequest): Pro
     .from(inventoryDay)
     .innerJoin(spot, eq(spot.id, inventoryDay.spotId))
     .leftJoin(hold, eq(hold.id, inventoryDay.activeHoldId))
-    .where(and(eq(inventoryDay.spotId, request.spotId), inArray(inventoryDay.day, days), eq(spot.retired, false), isFree))
+    .where(and(eq(inventoryDay.spotId, request.spotId), inArray(inventoryDay.day, days), eq(spot.retired, false), eq(spot.maintenance, false), isFree))
     .orderBy(asc(inventoryDay.day));
   if (rows.length !== days.length) {
     throw new DomainError('inventory_conflict', days.length === 1 ? 'This spot is not available on this day' : 'This spot is not available on every day of this period');
@@ -770,8 +792,10 @@ export async function acquireHoldWithin(tx: Transaction, beachId: string, reques
     return toResult(previous, await holdFamilyRows(tx, previous), await holdExtraLines(tx, previous.id), true);
   }
   if (rows.length !== days.length) throw new DomainError('not_found', 'Spot or day not found');
-  const [place] = await tx.select({ retired: spot.retired }).from(spot).where(eq(spot.id, request.spotId));
+  const [place] = await tx.select({ retired: spot.retired, maintenance: spot.maintenance }).from(spot).where(eq(spot.id, request.spotId));
   if (place?.retired) throw new DomainError('inventory_conflict', 'This spot has been retired from sale');
+  // Maintenance (D56): not bookable from any channel — online, desk, cart — while it lasts.
+  if (place?.maintenance) throw new DomainError('inventory_conflict', 'This spot is under maintenance');
   const [clock] = await tx.select({ past: sql<boolean>`${days[0]}::date < (now() at time zone ${beach.timezone})::date` }).from(beach).where(eq(beach.id, beachId));
   if (clock?.past) throw new DomainError('inventory_conflict', 'This day has already passed');
 

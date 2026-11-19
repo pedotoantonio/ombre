@@ -43,6 +43,9 @@ export const spot = pgTable('spot', {
   rentalType: text('rental_type'),
   rentalNotes: text('rental_notes'),
   retired: boolean('retired').notNull().default(false),
+  // Under maintenance (D56): not bookable while true, stays in the drawing,
+  // bookings already taken remain. Distinct from the retirement from sale.
+  maintenance: boolean('maintenance').notNull().default(false),
   // Filled by a trigger when left out: the next free column of the row.
   col: smallint('col').notNull(),
   // Filled by a trigger when left out: the builtin type of the zone.
@@ -92,6 +95,19 @@ export const layoutElement = pgTable('layout_element', {
   sign: text('sign', {
     enum: ['palma', 'chiosco', 'doccia', 'bandiera', 'salvagente', 'cartello', 'cestino', 'amaca', 'altalena', 'giochi', 'tavolino', 'grill', 'acqua', 'armadietti', 'campo', 'pingpong'],
   }),
+});
+
+/**
+ * The planner's draft (D57): one per beach club, an ordered list of operations
+ * in JSON, with the author and time of the last touch. Applied in ONE
+ * transaction by «Salva la spiaggia»; availability, search and the desk never
+ * read it.
+ */
+export const layoutDraft = pgTable('layout_draft', {
+  beachId: uuid('beach_id').primaryKey(),
+  ops: jsonb('ops').notNull().default([]),
+  updatedBy: uuid('updated_by'),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const cabin = pgTable('cabin', {

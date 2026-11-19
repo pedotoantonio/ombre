@@ -115,14 +115,17 @@ async function resolveZone(tx: Transaction, beachId: string, zoneId: string | nu
 
 /** Assigns one spot to a zone, or detaches it with null. */
 export function assignZoneToSpot(db: Database, actor: Actor, input: { spotId: string; zoneId: string | null }): Promise<void> {
-  return withActor(db, actor.beachId, actor.userId, async (tx) => {
-    const named = await resolveZone(tx, actor.beachId, input.zoneId);
-    const [current] = await tx.select({ code: spot.code, namedZoneId: spot.namedZoneId }).from(spot).where(eq(spot.id, input.spotId));
-    if (!current) throw new DomainError('not_found', 'Spot not found');
-    if (current.namedZoneId === input.zoneId) return;
-    await tx.update(spot).set({ namedZoneId: input.zoneId }).where(eq(spot.id, input.spotId));
-    await audit(tx, actor, 'zone.assign-spot', input.spotId, { code: current.code, zoneId: input.zoneId, zoneName: named?.name ?? null });
-  });
+  return withActor(db, actor.beachId, actor.userId, (tx) => assignZoneToSpotWithin(tx, actor, input));
+}
+
+/** The same assignment inside an existing beach transaction, for the planner's apply (D57, D59). */
+export async function assignZoneToSpotWithin(tx: Transaction, actor: Actor, input: { spotId: string; zoneId: string | null }): Promise<void> {
+  const named = await resolveZone(tx, actor.beachId, input.zoneId);
+  const [current] = await tx.select({ code: spot.code, namedZoneId: spot.namedZoneId }).from(spot).where(eq(spot.id, input.spotId));
+  if (!current) throw new DomainError('not_found', 'Spot not found');
+  if (current.namedZoneId === input.zoneId) return;
+  await tx.update(spot).set({ namedZoneId: input.zoneId }).where(eq(spot.id, input.spotId));
+  await audit(tx, actor, 'zone.assign-spot', input.spotId, { code: current.code, zoneId: input.zoneId, zoneName: named?.name ?? null });
 }
 
 export interface RowZone {
