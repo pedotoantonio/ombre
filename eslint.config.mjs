@@ -11,4 +11,12 @@ export default tseslint.config(
       '@typescript-eslint/consistent-type-imports': 'error',
     },
   },
+  // Gli script statici progressivi del sito (per esempio il trascinamento del
+  // pianificatore, D60) girano nel navigatore: i globali sono i suoi.
+  {
+    files: ['apps/web/public/**/*.js'],
+    languageOptions: {
+      globals: { document: 'readonly', window: 'readonly', setTimeout: 'readonly', clearTimeout: 'readonly' },
+    },
+  },
 );

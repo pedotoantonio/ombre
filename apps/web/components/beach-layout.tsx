@@ -28,16 +28,20 @@ import {
 } from '@ombre/shared';
 import { apiCall, formatPeriod, slugPattern, type ApiLayoutElement } from '@/lib/api';
 import { Hidden, Notice, requireMe, SectionNotice } from './account';
+import { SpotSymbol, type SpotArtState } from './beach-art';
 import { MarkLegendItems, PlanCanvas, planSize, SpotMark, zoneRows } from './beach';
 import { DecorationMark } from './decorations';
 import { ManageShell } from './manage-shell';
 import { PageHead } from './PageShell';
 
-// The "Spiaggia" page of the reserved area: the preview of the beach map with its zones on
-// top, then the drawing editor (sea side, walkways, structures, cabin blocks), the zone
-// distances, the spot types and the configuration forms. Everything works without JavaScript,
-// like the rest of the area: the chosen tool lives in the query string and every grid cell is
-// a submit button with its coordinates. The reception sees and uses the zone distances only.
+// The "Spiaggia" page of the reserved area is the PLANNER (D57): every gesture — create,
+// move, edit, delete, scenery, zone brush — queues one operation on the per-club draft;
+// nothing touches the real beach until «Salva la spiaggia» shows the summary and applies
+// everything in one transaction. The preview renders the draft; the public only ever sees
+// the saved beach. Everything works without JavaScript: the drag of a spot (D60) is a
+// progressive shortcut that fills and submits the same move form. The catalogues (types,
+// named zones, sea side, distances) stay immediate, outside the draft. The reception sees
+// and uses the zone distances only.
 
 type Query = Record<string, string | string[] | undefined>;
 
@@ -69,6 +73,8 @@ interface ApiLayoutSpot {
   rentalType: string | null;
   rentalNotes: string | null;
   retired: boolean;
+  /** Under maintenance (D56): not bookable while it lasts, stays in the drawing. */
+  maintenance: boolean;
   /** The named zone of the spot (D50); both null when it belongs to none. */
   namedZoneId: string | null;
   zoneName: string | null;
@@ -102,6 +108,53 @@ interface ApiSpotType {
   spots: number;
 }
 
+// ---- The draft of the planner (D57), as the API serves it ----
+
+/** A spot of the draft preview: the layout's shape plus whether it exists only in the draft. */
+interface ApiDraftSpot {
+  spotId: string;
+  code: string;
+  zone: SpotZone;
+  rowNumber: number;
+  col: number;
+  typeId: string;
+  typeName: string;
+  typeMark: SpotMarkKind;
+  umbrellas: number;
+  sunbeds: number;
+  maxGuests: number;
+  rentalType: string | null;
+  rentalNotes: string | null;
+  retired: boolean;
+  maintenance: boolean;
+  namedZoneId: string | null;
+  zoneName: string | null;
+  draftOnly: boolean;
+}
+
+/** One stored operation with its structured description; stale when the real layout changed under it. */
+interface ApiDraftOpView {
+  op: { op: string } & Record<string, unknown>;
+  description: Record<string, unknown> & { action: string };
+  stale: boolean;
+}
+
+interface ApiDraft {
+  ops: ApiDraftOpView[];
+  updatedBy: string | null;
+  updatedAt: string | null;
+  preview: {
+    seaSide: SeaSide;
+    shoreGapRows: number;
+    landGapRows: number;
+    spots: ApiDraftSpot[];
+    elements: (ApiLayoutElement & { draftOnly: boolean })[];
+  };
+}
+
+/** The spot shape the editor works on: the draft preview plus the saved contract, when any. */
+type EditorSpot = ApiDraftSpot & { activeContract: ApiActiveContract | null };
+
 /** The label "Stagionale" is an annotation: here it is read without regard for case. */
 function labelledSeasonal(rentalType: string | null): boolean {
   return rentalType !== null && rentalType.trim().toLowerCase() === 'stagionale';
@@ -109,10 +162,124 @@ function labelledSeasonal(rentalType: string | null): boolean {
 
 const rentalListId = 'tipi-affitto';
 
+/** The management state of a spot in the drawing: retirement wins, then maintenance (D56). */
+function manageArtState(spot: { retired: boolean; maintenance: boolean }): SpotArtState {
+  if (spot.retired) return 'unavailable';
+  if (spot.maintenance) return 'maintenance';
+  return 'available';
+}
+
+/** The pastel veil of a named zone (D59): one deterministic hue per zone, sober and stable. */
+function zoneVeils(namedZones: ApiNamedZone[]): Map<string, CSSProperties> {
+  return new Map(
+    namedZones.map((zone, index) => {
+      const hue = Math.round((index * 137.508) % 360);
+      return [zone.zoneId, { '--zona-velo': `hsl(${hue} 55% 88%)` } as CSSProperties];
+    }),
+  );
+}
+
+/** Time of the last touch of the draft, in the club's zone. */
+function formatWhen(iso: string, locale: Locale): string {
+  return new Intl.DateTimeFormat(locale === 'it' ? 'it-IT' : 'en-GB', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Europe/Rome' }).format(new Date(iso));
+}
+
+// ---- The operations of the draft, in words: built from the structured descriptions ----
+
+type Dictionary = ReturnType<typeof getDictionary>;
+
+function describeElement(t: Dictionary, description: Record<string, unknown>): string {
+  const kind = description.kind as string | undefined;
+  const sign = description.sign as string | undefined;
+  const label = description.label as string | null | undefined;
+  const kinds = t.layout.elementKinds as Record<string, string>;
+  const signs = t.booking.decorations as Record<string, string>;
+  const base = kind === 'decoration' && sign && signs[sign] ? signs[sign] : kind && kinds[kind] ? kinds[kind] : (kind ?? '');
+  return label ? `${base} «${label}»` : base;
+}
+
+function describeCell(t: Dictionary, zone: unknown, row: unknown, col: unknown): string {
+  const zones = t.booking.zones as Record<string, string>;
+  const zoneName = typeof zone === 'string' && zones[zone] ? zones[zone] : t.layout.allZones;
+  if (row === 0) return t.draft.cellBeforeRow1(zoneName, Number(col ?? 1));
+  return t.draft.cell(zoneName, Number(row ?? 1), Number(col ?? 1));
+}
+
+/** The pieces of an edit_spot phrase, in the order of the form (D56, D57). */
+function describeChanges(t: Dictionary, description: Record<string, unknown>): string {
+  const d = t.draft.changes;
+  const patch = (description.patch ?? {}) as Record<string, unknown>;
+  const pieces: string[] = [];
+  if (typeof patch.code === 'string') pieces.push(d.code(patch.code));
+  if (typeof description.typeName === 'string' && description.typeName) pieces.push(d.type(description.typeName));
+  if (typeof patch.umbrellas === 'number') pieces.push(d.umbrellas(patch.umbrellas));
+  if (typeof patch.sunbeds === 'number') pieces.push(d.sunbeds(patch.sunbeds));
+  if (typeof patch.maxGuests === 'number') pieces.push(d.maxGuests(patch.maxGuests));
+  if ('namedZoneId' in patch && patch.namedZoneId !== undefined) {
+    pieces.push(patch.namedZoneId === null ? d.zoneNone : d.zone(String(description.zoneName ?? '')));
+  }
+  if (typeof patch.maintenance === 'boolean') pieces.push(patch.maintenance ? d.maintenanceOn : d.maintenanceOff);
+  if ('rentalType' in patch && patch.rentalType !== undefined) pieces.push(patch.rentalType === null ? d.rentalTypeNone : d.rentalType(String(patch.rentalType)));
+  if ('rentalNotes' in patch && patch.rentalNotes !== undefined) pieces.push(patch.rentalNotes === null ? d.rentalNotesNone : d.rentalNotes);
+  return pieces.join(', ');
+}
+
+/** ONE sentence per operation, built from the structured description with the dictionaries. */
+function opPhrase(t: Dictionary, view: ApiDraftOpView): string {
+  const d = t.draft;
+  const zones = t.booking.zones as Record<string, string>;
+  const info = view.description;
+  const kinds = d.kinds as Record<string, string>;
+  // A stale op carries only its action and reason: the kind label stands in for the phrase.
+  const fallback = kinds[info.action] ?? info.action;
+  switch (info.action) {
+    case 'create_spot':
+      if (info.code === undefined) return fallback;
+      return d.ops.create_spot(String(info.code), zones[String(info.zone)] ?? String(info.zone), Number(info.row), Number(info.col), (info.typeName as string | null) ?? null);
+    case 'create_grid':
+      if (info.firstCode === undefined) return fallback;
+      return d.ops.create_grid(Number(info.rows), Number(info.cols), zones[String(info.zone)] ?? String(info.zone), String(info.firstCode), String(info.lastCode), (info.typeName as string | null) ?? null);
+    case 'move_spot': {
+      if (info.code === undefined) return fallback;
+      const from = info.from as { zone: string; row: number; col: number };
+      const to = info.to as { zone: string; row: number; col: number };
+      return d.ops.move_spot(String(info.code), describeCell(t, from.zone, from.row, from.col), describeCell(t, to.zone, to.row, to.col));
+    }
+    case 'edit_spot':
+      if (info.code === undefined) return fallback;
+      return d.ops.edit_spot(String(info.code), describeChanges(t, info));
+    case 'delete_spot':
+      if (info.code === undefined) return fallback;
+      return d.ops.delete_spot(String(info.code), zones[String(info.zone)] ?? String(info.zone), Number(info.row), Number(info.col));
+    case 'add_element':
+      if (info.kind === undefined) return fallback;
+      return d.ops.add_element(describeElement(t, info), describeCell(t, info.zone, info.row, info.col));
+    case 'move_element': {
+      if (info.kind === undefined) return fallback;
+      const to = info.to as { zone: string | null; row: number | null; col: number };
+      return d.ops.move_element(describeElement(t, info), describeCell(t, to.zone, to.row ?? 0, to.col));
+    }
+    case 'remove_element':
+      if (info.kind === undefined) return fallback;
+      return d.ops.remove_element(describeElement(t, info));
+    case 'assign_zone':
+      if (info.code === undefined) return fallback;
+      return info.zoneName ? d.ops.assign_zone(String(info.code), String(info.zoneName)) : d.ops.assign_zone_none(String(info.code));
+    default:
+      return fallback;
+  }
+}
+
+/** The translated reason a stale or refused operation carries. */
+function reasonText(t: Dictionary, reason: string): string {
+  const known = t.account.errors as Record<string, string>;
+  return known[reason] ?? known.invalid_request ?? reason;
+}
+
 // ---- The drawing editor ----
 
-/** The tools of the drawing, as they travel in the query string. */
-const toolIds = ['passerella-orizzontale', 'passerella-verticale', 'struttura', 'blocco-cabine', 'decorazione', 'gomma'] as const;
+/** The tools of the drawing, as they travel in the query string; «postazione» creates a spot (D57). */
+const toolIds = ['postazione', 'passerella-orizzontale', 'passerella-verticale', 'struttura', 'blocco-cabine', 'decorazione', 'gomma'] as const;
 type Tool = (typeof toolIds)[number];
 
 function readTool(value: string | undefined): Tool | null {
@@ -218,7 +385,9 @@ function InterticeRow({ locale, zone, rowAfter, cols, active, lanes }: { locale:
 /**
  * The editor grid: every free cell and every pertinent interstice is a submit button
  * carrying its coordinates; spots keep their cell (retired included), drawn elements show
- * up in place and become remove buttons under the eraser. One form, no scripts.
+ * up in place and become remove buttons under the eraser. One form, no scripts. With the
+ * zone brush active (D59) the form posts the brush action instead and every SPOT becomes
+ * the button; the cells also carry their coordinates as data for the progressive drag (D60).
  */
 function DrawGrid({
   locale,
@@ -228,54 +397,88 @@ function DrawGrid({
   tool,
   step,
   label,
+  types,
+  brush,
+  brushZoneName,
+  veils,
   common,
 }: {
   locale: Locale;
-  spots: ApiLayoutSpot[];
+  spots: EditorSpot[];
   elements: ApiLayoutElement[];
   seaSide: SeaSide;
   tool: Tool | null;
   step: StepStart | null;
   label: string;
+  types: ApiSpotType[];
+  /** The active zone brush (D59): a zone id, «nessuna» to detach, or null when off. */
+  brush: string | null;
+  brushZoneName: string | null;
+  veils: Map<string, CSSProperties>;
   common: Record<string, string>;
 }) {
   const t = getDictionary(locale, config.brandName);
   const l = t.layout;
+  const d = t.draft;
+  const painting = brush !== null;
   const lanes = elements.filter((element) => element.kind === 'walkway' && element.orientation === 'vertical').sort((a, b) => (a.colStart ?? 0) - (b.colStart ?? 0));
   const size = planSize(spots, elements);
   // One growth column, so a new element can land right past the current drawing.
   const cols = Math.min(size.cols + 1, maxColumns);
-  const rectTool = tool === 'struttura' || tool === 'blocco-cabine';
-  const decorating = tool === 'decorazione';
-  const eraser = tool === 'gomma';
+  const rectTool = !painting && (tool === 'struttura' || tool === 'blocco-cabine');
+  const decorating = !painting && tool === 'decorazione';
+  const spotting = !painting && tool === 'postazione';
+  const eraser = !painting && tool === 'gomma';
   const flip = seaSide === 'bottom' ? ' draw-rows--flip' : '';
   const zones = spotZones.filter((zone) => spots.some((spot) => spot.zone === zone) || elements.some((element) => element.zone === zone && element.orientation !== 'vertical'));
 
-  const stepText =
-    tool === null
+  const stepText = painting
+    ? brush === 'nessuna'
+      ? d.brushActiveNone
+      : d.brushActive(brushZoneName ?? '')
+    : tool === null
       ? l.toolNone
       : tool === 'gomma'
         ? l.stepEraser
-        : tool === 'decorazione'
-          ? l.stepDecoration
-          : tool === 'passerella-verticale'
-            ? `${l.stepSingle} ${l.verticalAllZones}`
-            : step
-              ? l.stepEnd(`${t.booking.zones[step.zone]}, ${step.row}, ${step.col}`)
-              : l.stepStart;
+        : tool === 'postazione'
+          ? d.stepSpot
+          : tool === 'decorazione'
+            ? l.stepDecoration
+            : tool === 'passerella-verticale'
+              ? `${l.stepSingle} ${l.verticalAllZones}`
+              : step
+                ? l.stepEnd(`${t.booking.zones[step.zone]}, ${step.row}, ${step.col}`)
+                : l.stepStart;
 
   return (
-    <form method="post" action="/azioni/spiaggia-disegno" className="draw">
-      <Hidden values={{ ...common, strumento: tool ?? '', ...(step ? { passo: step.token } : {}) }} />
+    <form method="post" action={painting ? '/azioni/spiaggia-pennello' : '/azioni/spiaggia-disegno'} className="draw">
+      <Hidden values={{ ...common, ...(painting ? { pennello: brush } : { strumento: tool ?? '', ...(step ? { passo: step.token } : {}) }) }} />
       <p className="draw__step" role="status">
         {stepText}
-        {step && tool ? (
+        {painting ? (
+          <>
+            {' '}
+            <Link href="?#disegno">{d.brushStop}</Link>
+          </>
+        ) : step && tool ? (
           <>
             {' '}
             <Link href={`?strumento=${tool}#disegno`}>{l.cancelStep}</Link>
           </>
         ) : null}
       </p>
+      {spotting ? (
+        <div className="field draw__label-field">
+          <label htmlFor="disegno-tipo-postazione">{d.spotToolType}</label>
+          <select id="disegno-tipo-postazione" name="tipo-postazione">
+            {types.map((type) => (
+              <option key={type.typeId} value={type.typeId}>
+                {type.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      ) : null}
       {decorating ? (
         <div className="field draw__label-field">
           <label htmlFor="disegno-soggetto">{l.signField}</label>
@@ -297,7 +500,7 @@ function DrawGrid({
           </p>
         </div>
       ) : null}
-      {tool === 'passerella-verticale' ? (
+      {tool === 'passerella-verticale' && !painting ? (
         <div className="draw-strip" role="group" aria-label={l.verticalStrip}>
           <p className="draw-strip__label">{l.verticalStrip}</p>
           <ol className="draw-strip__cells">
@@ -323,14 +526,14 @@ function DrawGrid({
             const walkways = elements.filter((element) => element.zone === zone && element.kind === 'walkway' && element.orientation === 'horizontal');
             const rows = [...new Set([...inZone.map((spot) => spot.rowNumber), ...rects.map((rect) => rect.rowNumber ?? 1)])].sort((a, b) => a - b);
             const horizontalActive = (rowAfter: number) =>
-              tool === 'passerella-orizzontale' && (step === null || (step.zone === zone && step.row === rowAfter));
+              !painting && tool === 'passerella-orizzontale' && (step === null || (step.zone === zone && step.row === rowAfter));
             return (
               <section className="draw-zone" key={zone} aria-label={t.booking.zones[zone]}>
                 <p className="plan-zone__label">
                   <strong>{t.booking.zones[zone]}</strong>
                 </p>
                 <div className={`draw-zone__rows${flip ? ' draw-rows--flip' : ''}`}>
-                  {tool === 'passerella-orizzontale' ? (
+                  {tool === 'passerella-orizzontale' && !painting ? (
                     <InterticeRow locale={locale} zone={zone} rowAfter={0} cols={cols} active={horizontalActive(0)} lanes={lanes} />
                   ) : null}
                   {walkways.filter((lane) => (lane.rowAfter ?? 0) === 0).map((lane) => (
@@ -339,13 +542,14 @@ function DrawGrid({
                   {rows.map((row) => {
                     const bySpotCol = new Map(inZone.filter((spot) => spot.rowNumber === row).map((spot) => [spot.col, spot]));
                     const byRectStart = new Map(rects.filter((rect) => rect.rowNumber === row).map((rect) => [rect.colStart ?? 1, rect]));
-                    const cellActive = decorating || (rectTool && (step === null || (step.zone === zone && step.row === row)));
+                    const cellActive = decorating || spotting || (rectTool && (step === null || (step.zone === zone && step.row === row)));
                     const cells: ReactNode[] = [];
                     let col = 1;
                     while (col <= cols) {
                       const rect = byRectStart.get(col);
                       const spot = bySpotCol.get(col);
                       const last = rect ? (rect.colEnd ?? col) : col;
+                      const cella = `${zone}/${row}/${col}`;
                       if (rect && rect.kind === 'decoration') {
                         cells.push(
                           <li key={`deco-${col}`}>
@@ -379,26 +583,51 @@ function DrawGrid({
                           </li>,
                         );
                       } else if (spot) {
+                        const veil = veils.get(spot.spotId);
+                        const veiled = veil ? ' draw-cell--velo' : '';
+                        const content = (
+                          <>
+                            <SpotSymbol sign={spot.typeMark} state={manageArtState(spot)} />
+                            <span className="draw-cell__code" aria-hidden="true">
+                              {spot.code}
+                            </span>
+                          </>
+                        );
                         cells.push(
                           <li key={`spot-${col}`}>
-                            <span className="draw-cell draw-cell--spot">
-                              <SpotMark mark={spot.typeMark} status={spot.retired ? 'unavailable' : 'free'} />
-                              <span className="draw-cell__code" aria-hidden="true">
-                                {spot.code}
+                            {painting ? (
+                              <button
+                                type="submit"
+                                name="postazione"
+                                value={spot.spotId}
+                                className={`draw-cell draw-cell--spot draw-cell--pennello${veiled}`}
+                                style={veil}
+                                data-pf-spot={spot.spotId}
+                                data-pf-cella={cella}
+                              >
+                                {content}
+                                <span className="visually-hidden">{d.brushSpot(spot.code)}</span>
+                              </button>
+                            ) : (
+                              <span className={`draw-cell draw-cell--spot${veiled}`} style={veil} data-pf-spot={spot.spotId} data-pf-code={spot.code} data-pf-cella={cella}>
+                                {content}
+                                <span className="visually-hidden">
+                                  {l.cellTaken(t.booking.zones[zone], row, col, spot.code)}
+                                  {spot.zoneName ? `. ${t.zone.badge(spot.zoneName)}` : ''}
+                                </span>
                               </span>
-                              <span className="visually-hidden">{l.cellTaken(t.booking.zones[zone], row, col, spot.code)}</span>
-                            </span>
+                            )}
                           </li>,
                         );
                       } else {
                         cells.push(
                           <li key={`free-${col}`}>
                             {cellActive ? (
-                              <button type="submit" name="cella" value={`${zone}/${row}/${col}`} className="draw-cell draw-cell--free">
+                              <button type="submit" name="cella" value={cella} className="draw-cell draw-cell--free" data-pf-cella={cella}>
                                 <span className="visually-hidden">{l.cellFree(t.booking.zones[zone], row, col)}</span>
                               </button>
                             ) : (
-                              <span className="draw-cell draw-cell--idle" aria-hidden="true" />
+                              <span className="draw-cell draw-cell--idle" aria-hidden="true" data-pf-cella={cella} />
                             )}
                           </li>,
                         );
@@ -420,7 +649,7 @@ function DrawGrid({
                           <p className="draw-row__label">{t.booking.row(row)}</p>
                           <ol className="draw-row__cells">{cells}</ol>
                         </div>
-                        {tool === 'passerella-orizzontale' ? (
+                        {tool === 'passerella-orizzontale' && !painting ? (
                           <InterticeRow locale={locale} zone={zone} rowAfter={row} cols={cols} active={horizontalActive(row)} lanes={lanes} />
                         ) : null}
                         {walkways.filter((lane) => (lane.rowAfter ?? 0) === row).map((lane) => (
@@ -482,7 +711,7 @@ function ZoneSelect({ locale, id, allZones = false }: { locale: Locale; id: stri
   );
 }
 
-function EquipmentFields({ locale, prefix, spot }: { locale: Locale; prefix: string; spot?: ApiLayoutSpot }) {
+function EquipmentFields({ locale, prefix, spot }: { locale: Locale; prefix: string; spot?: EditorSpot }) {
   const l = getDictionary(locale, config.brandName).layout;
   const fields = [
     { name: 'umbrellas', label: l.umbrellas, min: 0, value: spot?.umbrellas },
@@ -568,9 +797,15 @@ function TypeSelect({ locale, id, types }: { locale: Locale; id: string; types: 
   );
 }
 
-function SpotEditor({ locale, spot, types, zones, common }: { locale: Locale; spot: ApiLayoutSpot; types: ApiSpotType[]; zones: ApiNamedZone[]; common: Record<string, string> }) {
+/**
+ * One spot of the planner: every form queues an operation on the draft (D57). A spot that
+ * exists only in the draft has no contract and cannot be retired: those gestures need the
+ * saved spot. The maintenance box (D56) travels with the edit form.
+ */
+function SpotEditor({ locale, spot, types, zones, common }: { locale: Locale; spot: EditorSpot; types: ApiSpotType[]; zones: ApiNamedZone[]; common: Record<string, string> }) {
   const t = getDictionary(locale, config.brandName);
   const l = t.layout;
+  const d = t.draft;
   const seasonal = labelledSeasonal(spot.rentalType);
   const htmlId = `postazione-${spot.spotId}`;
   return (
@@ -581,15 +816,23 @@ function SpotEditor({ locale, spot, types, zones, common }: { locale: Locale; sp
         {/* La zona con nome (D50), dove l'editor mostra la postazione. */}
         {spot.zoneName ? <span className="badge">{t.zone.badge(spot.zoneName)}</span> : null}
         {spot.retired ? <span className="badge">{l.retiredBadge}</span> : null}
+        {spot.maintenance ? <span className="badge">{d.maintenanceBadge}</span> : null}
+        {spot.draftOnly ? <span className="badge">{d.draftOnlyBadge}</span> : null}
       </p>
-      <p className="layout-spot__contract">
-        {spot.activeContract ? l.activeContract(formatPeriod(spot.activeContract.validFrom, spot.activeContract.validTo, locale)) : l.noContract}
-      </p>
+      {spot.draftOnly ? null : (
+        <p className="layout-spot__contract">
+          {spot.activeContract ? l.activeContract(formatPeriod(spot.activeContract.validFrom, spot.activeContract.validTo, locale)) : l.noContract}
+        </p>
+      )}
       {/* An annotation out of step with the contracts is allowed, but never silent. */}
-      {seasonal && !spot.activeContract ? <p className="layout-warn">{l.warnLabelWithoutContract}</p> : null}
-      {!seasonal && spot.activeContract ? <p className="layout-warn">{l.warnContractWithoutLabel}</p> : null}
+      {!spot.draftOnly && seasonal && !spot.activeContract ? <p className="layout-warn">{l.warnLabelWithoutContract}</p> : null}
+      {!spot.draftOnly && !seasonal && spot.activeContract ? <p className="layout-warn">{l.warnContractWithoutLabel}</p> : null}
       <form method="post" action="/azioni/spiaggia-modifica" className="form-row layout-spot__form">
         <Hidden values={{ ...common, spot: spot.spotId }} />
+        <div className="field">
+          <label htmlFor={`${htmlId}-codice`}>{l.code}</label>
+          <input id={`${htmlId}-codice`} name="code" maxLength={10} pattern="[A-Za-z0-9][A-Za-z0-9-]{0,9}" autoComplete="off" defaultValue={spot.code} required />
+        </div>
         <EquipmentFields locale={locale} prefix={htmlId} spot={spot} />
         <RentalFields locale={locale} prefix={htmlId} rentalType={spot.rentalType} rentalNotes={spot.rentalNotes} />
         {/* La tendina della zona con nome (D50): «Nessuna zona» stacca la postazione. */}
@@ -603,6 +846,12 @@ function SpotEditor({ locale, spot, types, zones, common }: { locale: Locale; sp
               </option>
             ))}
           </select>
+        </div>
+        {/* La manutenzione (D56): non prenotabile finché dura, resta nel disegno. */}
+        <div className="field">
+          <label>
+            <input type="checkbox" name="maintenance" value="yes" defaultChecked={spot.maintenance} /> {d.maintenanceField}
+          </label>
         </div>
         <button className="button button--secondary button--small" type="submit">
           {l.saveSpot} <span className="visually-hidden">{spot.code}</span>
@@ -628,12 +877,14 @@ function SpotEditor({ locale, spot, types, zones, common }: { locale: Locale; sp
         </button>
       </form>
       <div className="layout-spot__actions">
-        <form method="post" action="/azioni/spiaggia-ritiro" className="inline-form">
-          <Hidden values={{ ...common, spot: spot.spotId, retired: spot.retired ? 'no' : 'yes' }} />
-          <button className="button button--secondary button--small" type="submit">
-            {spot.retired ? l.restore : l.retire} <span className="visually-hidden">{spot.code}</span>
-          </button>
-        </form>
+        {spot.draftOnly ? null : (
+          <form method="post" action="/azioni/spiaggia-ritiro" className="inline-form">
+            <Hidden values={{ ...common, spot: spot.spotId, retired: spot.retired ? 'no' : 'yes' }} />
+            <button className="button button--secondary button--small" type="submit">
+              {spot.retired ? l.restore : l.retire} <span className="visually-hidden">{spot.code}</span>
+            </button>
+          </form>
+        )}
         <form method="post" action="/azioni/spiaggia-elimina" className="inline-form">
           <Hidden values={{ ...common, spot: spot.spotId }} />
           <button className="button button--secondary button--small" type="submit">
@@ -722,38 +973,131 @@ function TypeEditor({ locale, type, common }: { locale: Locale; type: ApiSpotTyp
   );
 }
 
+/** The numbered operations of the draft, in words; the culprit of a refused save stands out. */
+function DraftOpsList({ locale, ops, culprit, culpritReason }: { locale: Locale; ops: ApiDraftOpView[]; culprit?: number; culpritReason?: string }) {
+  const t = getDictionary(locale, config.brandName);
+  const d = t.draft;
+  return (
+    <ol className="bozza-ops">
+      {ops.map((view, index) => (
+        <li key={index} className={index === culprit ? 'bozza-ops__colpevole' : undefined}>
+          {opPhrase(t, view)}
+          {view.stale ? (
+            <>
+              {' '}
+              <strong>{d.stale(reasonText(t, String(view.description.reason ?? 'invalid_request')))}</strong>
+            </>
+          ) : null}
+          {index === culprit ? (
+            <>
+              {' '}
+              <strong>
+                {d.failedBadge}
+                {culpritReason ? `: ${reasonText(t, culpritReason)}` : ''}
+              </strong>
+            </>
+          ) : null}
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+/** The confirmation summary of «Salva la spiaggia» (?salva=1): words first, one POST to apply. */
+function SaveSummary({ locale, beachSlug, draft, common, query }: { locale: Locale; beachSlug: string; draft: ApiDraft; common: Record<string, string>; query: Query }) {
+  const t = getDictionary(locale, config.brandName);
+  const d = t.draft;
+  const failedRaw = first(query.fallita);
+  const culprit = failedRaw !== undefined && /^\d{1,3}$/.test(failedRaw) ? Number(failedRaw) : undefined;
+  const reason = first(query.motivo);
+  const hasStale = draft.ops.some((view) => view.stale);
+  return (
+    <div className="panel" id="riepilogo">
+      <h2>{d.summaryTitle}</h2>
+      <p className="prose">{d.summaryLead}</p>
+      {culprit !== undefined || reason ? (
+        <div className="alert" role="alert">
+          <p>
+            <strong>{d.failedTitle}</strong> {culprit !== undefined ? d.failedAt(culprit + 1) : ''} {reason ? reasonText(t, reason) : ''}
+          </p>
+          <p>{d.failedNothing}</p>
+        </div>
+      ) : null}
+      {draft.ops.length === 0 ? (
+        <p className="prose">{d.empty}</p>
+      ) : (
+        <>
+          <DraftOpsList locale={locale} ops={draft.ops} culprit={culprit} culpritReason={reason} />
+          {hasStale ? <p className="layout-warn">{reasonText(t, 'draft_apply_failed')}</p> : null}
+          <form method="post" action="/azioni/spiaggia-bozza-salva" className="inline-form">
+            <Hidden values={common} />
+            <button className="button" type="submit">
+              {d.confirm}
+            </button>
+          </form>
+        </>
+      )}
+      <p>
+        <Link className="button button--secondary" href={beachLayoutPath(locale, beachSlug)}>
+          {d.backToPlanner}
+        </Link>
+      </p>
+    </div>
+  );
+}
+
 export async function BeachLayoutView({ locale, beachSlug, query }: { locale: Locale; beachSlug: string; query: Query }) {
   if (!slugPattern.test(beachSlug)) notFound();
   const t = getDictionary(locale, config.brandName);
   const l = t.layout;
+  const d = t.draft;
   const { me, token } = await requireMe(locale);
   const membership = me.memberships.find((entry) => entry.beachSlug === beachSlug);
   if (!membership || !can(membership.role, 'layout.gaps')) notFound();
   const editor = can(membership.role, 'layout.edit');
   const other = locales.find((candidate) => candidate !== locale) ?? locale;
 
-  const [layout, typesResult, zonesResult] = await Promise.all([
+  const [layout, typesResult, zonesResult, draftResult] = await Promise.all([
     apiCall<ApiLayout>('GET', `/v1/manage/beaches/${beachSlug}/layout`, { token }),
     editor ? apiCall<{ types: ApiSpotType[] }>('GET', `/v1/manage/beaches/${beachSlug}/types`, { token }) : null,
     editor ? apiCall<{ zones: ApiNamedZone[] }>('GET', `/v1/manage/beaches/${beachSlug}/zones`, { token }) : null,
+    // The draft with its preview (D57): the planner draws THIS, never the saved layout.
+    editor ? apiCall<ApiDraft>('GET', `/v1/manage/beaches/${beachSlug}/layout/draft`, { token }) : null,
   ]);
-  const spots = layout.ok ? layout.data.spots : [];
-  const elements = layout.ok ? layout.data.elements : [];
-  const seaSide: SeaSide = layout.ok ? layout.data.seaSide : 'top';
-  const gaps = layout.ok ? { shoreGapRows: layout.data.shoreGapRows, landGapRows: layout.data.landGapRows } : { shoreGapRows: 1, landGapRows: 1 };
+  const draft = draftResult?.ok ? draftResult.data : null;
+  const savedSpots = layout.ok ? layout.data.spots : [];
+  // The saved contracts by spot: a spot born in the draft has none yet.
+  const contractOf = new Map(savedSpots.map((spot) => [spot.spotId, spot.activeContract]));
+  const spots: EditorSpot[] = draft
+    ? draft.preview.spots.map((spot) => ({ ...spot, activeContract: contractOf.get(spot.spotId) ?? null }))
+    : savedSpots.map((spot) => ({ ...spot, draftOnly: false }));
+  const elements: ApiLayoutElement[] = draft ? draft.preview.elements : layout.ok ? layout.data.elements : [];
+  const seaSide: SeaSide = draft ? draft.preview.seaSide : layout.ok ? layout.data.seaSide : 'top';
+  const gaps = draft
+    ? { shoreGapRows: draft.preview.shoreGapRows, landGapRows: draft.preview.landGapRows }
+    : layout.ok
+      ? { shoreGapRows: layout.data.shoreGapRows, landGapRows: layout.data.landGapRows }
+      : { shoreGapRows: 1, landGapRows: 1 };
   const types = typesResult?.ok ? typesResult.data.types : [];
   const namedZones = zonesResult?.ok ? zonesResult.data.zones : [];
   const common = { lang: locale, beach: beachSlug };
   // Quick choices first, then every label already used in this club: the manager stays free to type anything.
   const rentalOptions = [...new Set<string>([...rentalTypeSuggestions, ...spots.flatMap((spot) => (spot.rentalType ? [spot.rentalType] : []))])];
   const hasRetired = spots.some((spot) => spot.retired);
+  const hasMaintenance = spots.some((spot) => spot.maintenance);
   const size = planSize(spots, elements);
+  const veils = zoneVeils(namedZones);
+  const draftOps = draft?.ops ?? [];
 
-  const tool = readTool(first(query.strumento));
+  // The zone brush (D59) excludes the drawing tools: one form, one gesture at a time.
+  const brushAsked = first(query.pennello);
+  const brush = brushAsked === 'nessuna' || namedZones.some((zone) => zone.zoneId === brushAsked) ? (brushAsked as string) : null;
+  const brushZoneName = brush && brush !== 'nessuna' ? (namedZones.find((zone) => zone.zoneId === brush)?.name ?? null) : null;
+  const tool = brush ? null : readTool(first(query.strumento));
   const step = tool === 'passerella-orizzontale' || tool === 'struttura' || tool === 'blocco-cabine' ? readStep(first(query.passo)) : null;
   const stepLabel = (first(query.etichetta) ?? '').slice(0, elementLabelMaxLength);
 
-  return (
+  const shell = (children: ReactNode) => (
     <ManageShell
       locale={locale}
       beachSlug={beachSlug}
@@ -768,6 +1112,26 @@ export async function BeachLayoutView({ locale, beachSlug, query }: { locale: Lo
         { label: l.short },
       ]}
     >
+      {children}
+    </ManageShell>
+  );
+
+  // «Salva la spiaggia» (D57): the summary view, reached by address, confirms or names the culprit.
+  if (editor && draft && first(query.salva) === '1') {
+    return shell(
+      <>
+        <PageHead title={l.title(membership.beachName)} lead={d.summaryLead} />
+        <section className="section">
+          <div className="container stack">
+            <SaveSummary locale={locale} beachSlug={beachSlug} draft={draft} common={common} query={query} />
+          </div>
+        </section>
+      </>,
+    );
+  }
+
+  return shell(
+    <>
       <PageHead title={l.title(membership.beachName)} lead={l.lead} />
       <section className="section">
         <div className="container stack">
@@ -782,10 +1146,53 @@ export async function BeachLayoutView({ locale, beachSlug, query }: { locale: Lo
             </div>
           ) : (
             <>
+              {/* ---- The draft panel (D57): the operations in words, undo, discard, save ---- */}
+              {editor && draft ? (
+                <div className="panel" id="bozza">
+                  <h2>{d.panelTitle}</h2>
+                  <p className="prose">{d.panelLead}</p>
+                  {draftOps.length === 0 ? (
+                    <p className="prose">{d.empty}</p>
+                  ) : (
+                    <>
+                      <p>
+                        <strong>{d.opsCount(draftOps.length)}</strong>
+                        {draft.updatedAt ? ` · ${d.lastTouch(formatWhen(draft.updatedAt, locale))}` : ''}
+                      </p>
+                      <DraftOpsList locale={locale} ops={draftOps} />
+                      <div className="layout-spot__actions">
+                        <form method="post" action="/azioni/spiaggia-bozza-annulla" className="inline-form">
+                          <Hidden values={common} />
+                          <button className="button button--secondary" type="submit">
+                            {d.undo}
+                          </button>
+                        </form>
+                        <form method="post" action="/azioni/spiaggia-bozza-scarta" className="inline-form">
+                          <Hidden values={common} />
+                          <button className="button button--secondary" type="submit">
+                            {d.discard}
+                          </button>
+                        </form>
+                        <Link className="button" href={`${beachLayoutPath(locale, beachSlug)}?salva=1#riepilogo`}>
+                          {d.save}
+                        </Link>
+                      </div>
+                    </>
+                  )}
+                </div>
+              ) : null}
+
               <div className="plan" role="group" aria-labelledby="anteprima-titolo" style={{ '--plan-cols': size.cols, '--plan-lanes': size.lanes } as CSSProperties}>
                 <div className="plan__head">
                   <h2 id="anteprima-titolo">{l.previewTitle}</h2>
-                  <p>{l.previewLead}</p>
+                  {/* L'anteprima della bozza (D57): etichetta chiara finché non si salva. */}
+                  {editor && draft && draftOps.length > 0 ? (
+                    <p>
+                      <strong>{d.previewBadge}</strong> — {d.previewNote}
+                    </p>
+                  ) : (
+                    <p>{l.previewLead}</p>
+                  )}
                 </div>
                 {spots.length === 0 && elements.length === 0 ? (
                   <div className="empty">
@@ -794,13 +1201,19 @@ export async function BeachLayoutView({ locale, beachSlug, query }: { locale: Lo
                   </div>
                 ) : (
                   <>
-                    {hasRetired || spots.some((spot) => spot.typeMark !== 'umbrella') ? (
+                    {hasRetired || hasMaintenance || spots.some((spot) => spot.typeMark !== 'umbrella') ? (
                       <ul className="plan-legend" aria-label={t.booking.legendTitle}>
                         <MarkLegendItems locale={locale} marks={spots.map((spot) => spot.typeMark)} />
                         {hasRetired ? (
                           <li>
                             <SpotMark mark="umbrella" status="unavailable" />
                             {l.retiredBadge}
+                          </li>
+                        ) : null}
+                        {hasMaintenance ? (
+                          <li>
+                            <SpotSymbol sign="umbrella" state="maintenance" />
+                            {d.maintenanceBadge}
                           </li>
                         ) : null}
                       </ul>
@@ -812,20 +1225,27 @@ export async function BeachLayoutView({ locale, beachSlug, query }: { locale: Lo
                       elements={elements}
                       spots={spots}
                       idPrefix="anteprima"
-                      renderSpot={(spot) => (
-                        <li>
-                          <span className={spot.retired ? 'plan-spot plan-spot--taken' : 'plan-spot'}>
-                            <SpotMark mark={spot.typeMark} status={spot.retired ? 'unavailable' : 'free'} />
-                            <span className="plan-spot__code" aria-hidden="true">
-                              {spot.code}
+                      renderSpot={(spot) => {
+                        const veil = veils.get(spot.spotId);
+                        return (
+                          <li>
+                            <span
+                              className={`plan-spot${spot.retired ? ' plan-spot--taken' : ''}${veil ? ' plan-spot--velo' : ''}`}
+                              style={veil}
+                            >
+                              <SpotSymbol sign={spot.typeMark} state={manageArtState(spot)} umbrellas={spot.umbrellas} sunbeds={spot.sunbeds} />
+                              <span className="plan-spot__code" aria-hidden="true">
+                                {spot.code}
+                              </span>
+                              <span className="visually-hidden">
+                                {t.booking.mapSpot(spot.typeName, spot.code, spot.retired ? t.booking.retiredMark : spot.maintenance ? d.maintenanceBadge : t.booking.status.free)}.{' '}
+                                {spot.zoneName ? `${t.zone.badge(spot.zoneName)}. ` : ''}
+                                {t.booking.equipment(spot.umbrellas, spot.sunbeds)}. {t.booking.guests(spot.maxGuests)}
+                              </span>
                             </span>
-                            <span className="visually-hidden">
-                              {t.booking.mapSpot(spot.typeName, spot.code, spot.retired ? t.booking.retiredMark : t.booking.status.free)}.{' '}
-                              {t.booking.equipment(spot.umbrellas, spot.sunbeds)}. {t.booking.guests(spot.maxGuests)}
-                            </span>
-                          </span>
-                        </li>
-                      )}
+                          </li>
+                        );
+                      }}
                     />
                   </>
                 )}
@@ -867,7 +1287,43 @@ export async function BeachLayoutView({ locale, beachSlug, query }: { locale: Lo
                       </li>
                     ))}
                   </ul>
-                  <DrawGrid locale={locale} spots={spots} elements={elements} seaSide={seaSide} tool={tool} step={step} label={stepLabel} common={common} />
+                  {/* Il pennello di zona (D59): scelta la zona, ogni tocco su una postazione accoda l'assegnazione. */}
+                  <h3>{d.brushTitle}</h3>
+                  <p className="prose">{d.brushLead}</p>
+                  {namedZones.length > 0 ? (
+                    <form method="get" action={beachLayoutPath(locale, beachSlug)} className="form-row">
+                      <div className="field">
+                        <label htmlFor="pennello-zona">{d.brushField}</label>
+                        <select id="pennello-zona" name="pennello" defaultValue={brush ?? ''}>
+                          {namedZones.map((zone) => (
+                            <option key={zone.zoneId} value={zone.zoneId}>
+                              {zone.name}
+                            </option>
+                          ))}
+                          <option value="nessuna">{d.brushNone}</option>
+                        </select>
+                      </div>
+                      <button className="button button--secondary" type="submit">
+                        {d.brushStart}
+                      </button>
+                    </form>
+                  ) : (
+                    <p className="prose">{t.zone.manageLead}</p>
+                  )}
+                  <DrawGrid
+                    locale={locale}
+                    spots={spots}
+                    elements={elements}
+                    seaSide={seaSide}
+                    tool={tool}
+                    step={step}
+                    label={stepLabel}
+                    types={types}
+                    brush={brush}
+                    brushZoneName={brushZoneName}
+                    veils={veils}
+                    common={common}
+                  />
                   <h3>{l.coordTitle}</h3>
                   <p className="prose">{l.coordLead}</p>
                   <form method="post" action="/azioni/spiaggia-disegno-modulo" className="form-row">
@@ -930,8 +1386,60 @@ export async function BeachLayoutView({ locale, beachSlug, query }: { locale: Lo
                             <strong>{l.elementKinds[element.kind]}</strong>
                             {element.sign ? <span className="badge">{t.booking.decorations[element.sign]}</span> : null}
                             {element.label ? <span className="badge">{element.label}</span> : null}
+                            {(element as ApiLayoutElement & { draftOnly?: boolean }).draftOnly ? <span className="badge">{d.draftOnlyBadge}</span> : null}
                           </p>
                           <p className="layout-spot__contract">{placeOf(locale, element)}</p>
+                          {/* Lo spostamento della scenografia (D58): un'operazione di bozza come le altre. */}
+                          <form method="post" action="/azioni/spiaggia-elemento-sposta" className="form-row">
+                            <Hidden values={{ ...common, elemento: element.elementId }} />
+                            <div className="field">
+                              <label htmlFor={`elemento-${element.elementId}-zona`}>{l.zone}</label>
+                              <select
+                                id={`elemento-${element.elementId}-zona`}
+                                name="zone"
+                                defaultValue={element.zone ?? 'tutte'}
+                              >
+                                <option value="tutte">{l.allZonesOption}</option>
+                                {spotZones.map((zone) => (
+                                  <option key={zone} value={zone}>
+                                    {t.booking.zones[zone]}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                            <div className="field">
+                              <label htmlFor={`elemento-${element.elementId}-fila`}>{l.rowAfterField}</label>
+                              <input
+                                id={`elemento-${element.elementId}-fila`}
+                                name="row"
+                                type="number"
+                                inputMode="numeric"
+                                min={0}
+                                max={200}
+                                defaultValue={element.rowNumber ?? element.rowAfter ?? 0}
+                                required
+                              />
+                            </div>
+                            <div className="field">
+                              <label htmlFor={`elemento-${element.elementId}-colonna`}>{d.moveColField}</label>
+                              <input
+                                id={`elemento-${element.elementId}-colonna`}
+                                name="col"
+                                type="number"
+                                inputMode="numeric"
+                                min={1}
+                                max={maxColumns}
+                                defaultValue={element.colStart ?? 1}
+                                required
+                              />
+                            </div>
+                            <button className="button button--secondary button--small" type="submit">
+                              {d.moveSubmit}{' '}
+                              <span className="visually-hidden">
+                                {l.elementKinds[element.kind]}, {placeOf(locale, element)}
+                              </span>
+                            </button>
+                          </form>
                           <form method="post" action="/azioni/spiaggia-elemento-rimuovi" className="inline-form">
                             <Hidden values={{ ...common, elemento: element.elementId, ...(tool ? { strumento: tool } : {}) }} />
                             <button className="button button--secondary button--small" type="submit">
@@ -945,6 +1453,49 @@ export async function BeachLayoutView({ locale, beachSlug, query }: { locale: Lo
                       ))}
                     </ul>
                   )}
+                </div>
+              ) : null}
+
+              {/* ---- Lo spostamento (D60): il modulo che vale per tutti; il drag lo compila e lo invia ---- */}
+              {editor && spots.length > 0 ? (
+                <div className="panel" id="sposta">
+                  <h2>{d.moveTitle}</h2>
+                  <p className="prose">{d.moveLead}</p>
+                  <p className="field__hint">{d.dragHint}</p>
+                  <form method="post" action="/azioni/spiaggia-sposta" className="form-row" id="modulo-sposta">
+                    <Hidden values={common} />
+                    <div className="field">
+                      <label htmlFor="sposta-postazione">{d.moveSpotField}</label>
+                      <select id="sposta-postazione" name="spot" required>
+                        {spots.map((spot) => (
+                          <option key={spot.spotId} value={spot.spotId}>
+                            {spot.code} — {t.booking.zones[spot.zone]}, {spot.rowNumber}/{spot.col}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="field">
+                      <label htmlFor="sposta-zona">{d.moveZoneField}</label>
+                      <select id="sposta-zona" name="zone" required>
+                        {spotZones.map((zone) => (
+                          <option key={zone} value={zone}>
+                            {t.booking.zones[zone]}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="field">
+                      <label htmlFor="sposta-fila">{d.moveRowField}</label>
+                      <input id="sposta-fila" name="row" type="number" inputMode="numeric" min={1} max={200} required />
+                    </div>
+                    <div className="field">
+                      <label htmlFor="sposta-colonna">{d.moveColField}</label>
+                      <input id="sposta-colonna" name="col" type="number" inputMode="numeric" min={1} max={maxColumns} required />
+                    </div>
+                    <button className="button button--secondary" type="submit">
+                      {d.moveSubmit}
+                    </button>
+                  </form>
                 </div>
               ) : null}
 
@@ -976,8 +1527,8 @@ export async function BeachLayoutView({ locale, beachSlug, query }: { locale: Lo
                     ))}
                   </datalist>
 
-                  {/* Zone con nome (D50): crea, rinomina ed elimina; l'assegnazione passa dalla
-                      postazione e dal gesto per fila, qui sotto tra le postazioni. */}
+                  {/* Zone con nome (D50): crea, rinomina ed elimina; l'assegnazione passa dal
+                      pennello (D59), dalla postazione e dal gesto per fila, qui sotto. */}
                   <div className="panel" id="zone">
                     <h2>{t.zone.manageTitle}</h2>
                     <p className="prose">{t.zone.manageLead}</p>
@@ -1114,7 +1665,7 @@ export async function BeachLayoutView({ locale, beachSlug, query }: { locale: Lo
                     </form>
                   </div>
 
-                  {/* Bulk generation of rows (spec §4, D34): one prefix, progressive numbering. */}
+                  {/* Bulk generation of rows (spec §4, D34): one prefix, progressive numbering — as ONE draft op. */}
                   <div className="panel" id="aggiungi-file">
                     <h2>{l.addRowsTitle}</h2>
                     <p className="prose">{l.addRowsLead}</p>
@@ -1142,24 +1693,28 @@ export async function BeachLayoutView({ locale, beachSlug, query }: { locale: Lo
                     </form>
                   </div>
 
+                  {/* The single spot in a chosen cell (D57): zone, row and column name the cell. */}
                   <div className="panel" id="aggiungi-postazione">
                     <h2>{l.addSpotTitle}</h2>
-                    <p className="prose">{l.addSpotLead}</p>
+                    <p className="prose">{d.stepSpot}</p>
                     <form method="post" action="/azioni/spiaggia-postazione" className="form-row">
                       <Hidden values={common} />
                       <ZoneSelect locale={locale} id="postazione-zona" />
                       <div className="field">
-                        <label htmlFor="postazione-codice">{l.code}</label>
-                        <input id="postazione-codice" name="code" maxLength={10} pattern="[A-Za-z0-9][A-Za-z0-9-]{0,9}" autoComplete="off" required />
+                        <label htmlFor="postazione-fila">{d.moveRowField}</label>
+                        <input id="postazione-fila" name="row" type="number" inputMode="numeric" min={1} max={200} required />
                       </div>
                       <div className="field">
-                        <label htmlFor="postazione-fila">{l.rowNumber}</label>
-                        <input id="postazione-fila" name="row" type="number" inputMode="numeric" min={1} max={200} />
+                        <label htmlFor="postazione-colonna">{d.moveColField}</label>
+                        <input id="postazione-colonna" name="col" type="number" inputMode="numeric" min={1} max={maxColumns} required />
+                      </div>
+                      <div className="field">
+                        <label htmlFor="postazione-codice">{d.codeOptional}</label>
+                        <input id="postazione-codice" name="code" maxLength={10} pattern="[A-Za-z0-9][A-Za-z0-9-]{0,9}" autoComplete="off" />
                       </div>
                       <TypeSelect locale={locale} id="postazione-tipo" types={types} />
                       <EquipmentFields locale={locale} prefix="postazione" />
                       <p className="field__hint">{l.typeDefaultsHint}</p>
-                      <RentalFields locale={locale} prefix="postazione" />
                       <button className="button button--secondary" type="submit">
                         {l.addSpot}
                       </button>
@@ -1227,12 +1782,16 @@ export async function BeachLayoutView({ locale, beachSlug, query }: { locale: Lo
                       )}
                     </div>
                   ) : null}
+
+                  {/* Il trascinamento progressivo (D60): vanilla, statico, solo su questa pagina.
+                      Senza JavaScript tutto funziona identico via modulo. */}
+                  <script src="/pianificatore.js" defer />
                 </>
               ) : null}
             </>
           )}
         </div>
       </section>
-    </ManageShell>
+    </>,
   );
 }

@@ -192,7 +192,7 @@ export interface ApiHold extends ApiQuote {
   cancellation: ApiCancellation;
 }
 
-export type ApiResult<T> = { ok: true; data: T } | { ok: false; status: number; code: string; message?: string };
+export type ApiResult<T> = { ok: true; data: T } | { ok: false; status: number; code: string; message?: string; detail?: Record<string, unknown> };
 
 function baseUrl(): string {
   return (process.env.OMBRE_API_URL ?? 'http://127.0.0.1:3211').replace(/\/+$/, '');
@@ -221,7 +221,14 @@ async function call<T>(path: string, init?: RequestInit): Promise<ApiResult<T>> 
     const body = (text ? JSON.parse(text) : null) as unknown;
     if (response.ok) return { ok: true, data: body as T };
     const failure = (body as { error?: { code?: string; message?: string } } | null)?.error;
-    return { ok: false, status: response.status, code: failure?.code ?? 'unknown', ...(failure?.message ? { message: failure.message } : {}) };
+    // The whole error object travels along: the planner's apply names the op at fault in it (D57).
+    return {
+      ok: false,
+      status: response.status,
+      code: failure?.code ?? 'unknown',
+      ...(failure?.message ? { message: failure.message } : {}),
+      ...(failure ? { detail: failure as unknown as Record<string, unknown> } : {}),
+    };
   } catch {
     return { ok: false, status: 0, code: 'unreachable' };
   }

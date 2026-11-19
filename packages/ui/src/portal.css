@@ -1468,6 +1468,57 @@ button.draw-cell--free:hover {
   font-weight: 800;
 }
 
+/* ---- Il pianificatore a bozza (D57, D59, D60) ---- */
+
+/* Velo pastello della zona con nome (D59): la tinta arriva per variabile dalla pagina,
+   sobria dietro il simbolo; il bordo la scurisce appena perché il velo non sia mai solo. */
+.plan-spot--velo,
+.draw-cell--velo {
+  background: var(--zona-velo, var(--carta));
+  border-color: color-mix(in srgb, var(--abisso) 18%, var(--zona-velo, var(--bordo)));
+}
+
+/* Col pennello di zona la postazione è un vero pulsante: bordo pieno e mano. */
+button.draw-cell--pennello {
+  border-style: solid;
+  border-color: var(--bordo-campo);
+  cursor: pointer;
+}
+
+button.draw-cell--pennello:hover {
+  border-color: var(--oceano);
+}
+
+/* Trascinamento progressivo (D60): la postazione presa e la cella mirata. */
+.draw-cell--trascinabile {
+  cursor: grab;
+}
+
+.draw-cell--presa {
+  opacity: 0.55;
+  cursor: grabbing;
+}
+
+.draw-cell--mira {
+  border: 2px solid var(--oceano);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--oceano) 35%, transparent);
+}
+
+/* L'elenco numerato della bozza e l'operazione colpevole del riepilogo. */
+.bozza-ops {
+  margin: 0;
+  padding-inline-start: 1.5rem;
+  display: grid;
+  gap: var(--spazio-2);
+}
+
+.bozza-ops__colpevole {
+  padding: var(--spazio-2);
+  border: 2px solid var(--errore);
+  border-radius: var(--raggio);
+  background: var(--errore-tenue);
+}
+
 /* Interstizio orizzontale: un bersaglio alto 2.75rem per ogni colonna. */
 button.draw-cell--lane {
   min-height: 2.75rem;
