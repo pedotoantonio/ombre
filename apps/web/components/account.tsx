@@ -28,6 +28,7 @@ import {
   manageExtrasSegment,
   managePlannerPath,
   managePlannerSegment,
+  manageReviewsSegment,
   manageStatsPath,
   manageStatsSegment,
   manageTodayPath,
@@ -47,6 +48,7 @@ import { ConventionsView, dealPriceText } from './conventions';
 import { ExtrasView } from './extras';
 import { OperationsView } from './operations';
 import { PlannerView } from './planner';
+import { ReviewsManageView } from './reviews-manage';
 import { StatisticsView } from './statistics';
 import { privateMetadata } from '@/lib/seo';
 import { signedIn, type Me } from '@/lib/session';
@@ -139,7 +141,9 @@ export async function accountMetadata(locale: Locale, segments: string[]): Promi
                     ? t.comms.short
                     : segments[2] === manageCollectSegment[locale]
                       ? t.collect.short
-                      : null;
+                      : segments[2] === manageReviewsSegment[locale]
+                        ? t.reviews.short
+                        : null;
     if (subTitle !== null) {
       const beachSession = await signedIn();
       const club = beachSession?.me.memberships.find((entry) => entry.beachSlug === id)?.beachName;
@@ -1150,6 +1154,8 @@ export async function AccountRoute({ locale, segments, query }: { locale: Locale
     return <CommsView locale={locale} beachSlug={segments[1]!} query={query} />;
   if (segments.length === 3 && page === 'manage' && segments[2] === manageCollectSegment[locale])
     return <CollectView locale={locale} beachSlug={segments[1]!} query={query} />;
+  if (segments.length === 3 && page === 'manage' && segments[2] === manageReviewsSegment[locale])
+    return <ReviewsManageView locale={locale} beachSlug={segments[1]!} query={query} />;
   if (segments.length === 2 && page === 'season') return <SeasonView locale={locale} contractId={segments[1]!} query={query} />;
   if (segments.length === 2 && page === 'site') return <SiteEditorView locale={locale} beachSlug={segments[1]!} query={query} />;
   notFound();

@@ -189,6 +189,14 @@ export function manageCommsPath(locale: Locale, beachSlug: string): string {
   return `${accountPath(locale, 'manage', beachSlug)}/${manageCommsSegment[locale]}`;
 }
 
+/** Last segment of the reviews moderation page (D51), under the management page of a beach club. */
+export const manageReviewsSegment: Record<Locale, string> = { it: 'recensioni', en: 'reviews' };
+
+/** Address of the reviews moderation page of a beach club, inside the reserved area. */
+export function manageReviewsPath(locale: Locale, beachSlug: string): string {
+  return `${accountPath(locale, 'manage', beachSlug)}/${manageReviewsSegment[locale]}`;
+}
+
 /** Last segment of the «Incassi e richieste» page of one booking (spec §4.3, D31). */
 export const manageCollectSegment: Record<Locale, string> = { it: 'incassi', en: 'payments' };
 
@@ -198,7 +206,7 @@ export function manageCollectPath(locale: Locale, beachSlug: string): string {
 }
 
 /** The pages one level under the management page of a beach club: the depth whitelist. */
-const manageSubPages: Record<Locale, string>[] = [beachLayoutSegment, manageCabinsSegment, manageTodaySegment, managePlannerSegment, manageStatsSegment, manageDealsSegment, manageExtrasSegment, manageCommsSegment, manageCollectSegment];
+const manageSubPages: Record<Locale, string>[] = [beachLayoutSegment, manageCabinsSegment, manageTodaySegment, managePlannerSegment, manageStatsSegment, manageDealsSegment, manageExtrasSegment, manageCommsSegment, manageCollectSegment, manageReviewsSegment];
 
 /**
  * The temporary public payment page /paga/{token} (spec §4.3): a new first-level

@@ -1,4 +1,4 @@
-import { accountPath, beachLayoutPath, beachPath, bookingPath, bookPath, cartPath, decorationSigns, holdPath, isLocale, manageCabinsPath, manageCollectPath, manageDealsPath, manageExtrasPath, manageTodayPath, orderPath, parseEuro, payPath, type Locale } from '@ombre/shared';
+import { accountPath, beachLayoutPath, beachPath, bookingPath, bookPath, cartPath, decorationSigns, holdPath, isLocale, manageCabinsPath, manageCollectPath, manageDealsPath, manageExtrasPath, manageReviewsPath, manageTodayPath, orderPath, parseEuro, payPath, type Locale } from '@ombre/shared';
 import { api, apiCall, dayPattern, formatPeriod, periodDays, sandboxNotify, slugPattern, uuidPattern } from '@/lib/api';
 import { cartCookie, cartCookieHeader, clearCartCookieHeader, clearSessionCookieHeader, parseCartTicket, sessionCookie, sessionCookieHeader, type CartTicket } from '@/lib/session';
 
@@ -1173,6 +1173,36 @@ const actions: Record<string, (request: Request, form: Form, lang: Locale) => Pr
     if (!uuidPattern.test(serviceId)) return Promise.resolve(bad());
     // A used service cannot be deleted: the message points at retirement instead.
     return extrasAct(request, form, lang, `/${encodeURIComponent(serviceId)}`, 'DELETE', undefined, { invalid_state: 'extra_used' });
+  },
+
+  // Recensioni (D51): la replica dello stabilimento e la segnalazione alla piattaforma.
+  async 'recensione-replica'(request, form, lang) {
+    const beach = form('beach');
+    const reviewId = form('recensione');
+    if (!slugPattern.test(beach) || !uuidPattern.test(reviewId)) return bad();
+    const { getDictionary, config } = await import('@ombre/shared');
+    const back = manageReviewsPath(lang, beach);
+    const result = await apiCall('POST', `/v1/manage/beaches/${beach}/reviews/${encodeURIComponent(reviewId)}/reply`, {
+      body: { reply: form('reply').trim() },
+      token: cookieToken(request),
+    });
+    if (result.ok) return { to: back, ok: getDictionary(lang, config.brandName).reviews.replied };
+    if (result.status === 401) return { to: accountPath(lang, 'signIn') };
+    return { to: back, err: result.status === 0 ? 'unavailable' : result.code };
+  },
+  async 'recensione-segnala'(request, form, lang) {
+    const beach = form('beach');
+    const reviewId = form('recensione');
+    if (!slugPattern.test(beach) || !uuidPattern.test(reviewId)) return bad();
+    const back = manageReviewsPath(lang, beach);
+    const result = await apiCall('POST', `/v1/manage/beaches/${beach}/reviews/${encodeURIComponent(reviewId)}/flag`, {
+      body: { reason: form('reason').trim() },
+      token: cookieToken(request),
+    });
+    if (result.ok) return { to: back, ok: '1' };
+    if (result.status === 401) return { to: accountPath(lang, 'signIn') };
+    const code = result.status === 0 ? 'unavailable' : result.code === 'invalid_state' ? 'review_already_flagged' : result.code;
+    return { to: back, err: code };
   },
 
   'reception-accesso': async (request, form, lang) => {

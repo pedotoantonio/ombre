@@ -8,6 +8,7 @@ import {
   getDictionary,
   manageCollectPath,
   managePlannerPath,
+  manageReviewsPath,
   manageStatsPath,
   manageTodayPath,
   type Locale,
@@ -23,7 +24,7 @@ import { PageShell, type Crumb } from './PageShell';
 // guest, the season holder and the cabin holder keep the ordinary shell.
 
 /** The voices of the side navigation, in the order of the spec. */
-export type ManageNavId = 'today' | 'planner' | 'bookings' | 'collect' | 'stats' | 'beach' | 'layout' | 'site';
+export type ManageNavId = 'today' | 'planner' | 'bookings' | 'collect' | 'stats' | 'reviews' | 'beach' | 'layout' | 'site';
 
 /** Inline icons in the stroke style of the project, one per voice; the label names them. */
 function NavIcon({ id }: { id: ManageNavId }) {
@@ -57,6 +58,10 @@ function NavIcon({ id }: { id: ManageNavId }) {
         <path d="M5 20v-7M10 20V6M15 20v-9M20 20v-4" />
         <path d="M3.5 20h17" />
       </>
+    ),
+    reviews: (
+      // A five-pointed star in the stroke style of the project: the sign of the ratings.
+      <path d="M12 4.5l2.2 4.6 5 .7-3.6 3.5.9 5-4.5-2.4-4.5 2.4.9-5L4.8 9.8l5-.7Z" />
     ),
     beach: (
       <>
@@ -120,6 +125,7 @@ export function ManageShell({
     { id: 'bookings', href: `${accountPath(locale, 'manage', beachSlug)}${dayQuery}`, show: true },
     { id: 'collect', href: manageCollectPath(locale, beachSlug), show: can(role, 'bookings.read') },
     { id: 'stats', href: manageStatsPath(locale, beachSlug), show: can(role, 'reports.read') },
+    { id: 'reviews', href: manageReviewsPath(locale, beachSlug), show: can(role, 'reviews.moderate') },
     { id: 'beach', href: beachLayoutPath(locale, beachSlug), show: can(role, 'layout.gaps') },
     { id: 'layout', href: `${beachLayoutPath(locale, beachSlug)}#disegno`, show: can(role, 'layout.edit') },
     { id: 'site', href: accountPath(locale, 'site', beachSlug), show: can(role, 'site.read') },
