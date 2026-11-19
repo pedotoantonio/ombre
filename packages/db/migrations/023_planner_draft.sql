@@ -28,6 +28,12 @@ CREATE POLICY layout_draft_tenant ON layout_draft TO ombre_app
 -- La bozza si legge, si crea, si accoda (UPDATE di ops) e si scarta.
 GRANT SELECT, INSERT, UPDATE, DELETE ON layout_draft TO ombre_app;
 
+-- D57: l'eliminazione dal pianificatore porta via con la postazione le giornate
+-- pubblicate future senza prenotazioni; finora nessuno cancellava inventory_day.
+-- Le chiavi esterne di hold e booking restano l'ultima guardia della storia,
+-- e la politica inventory_day_tenant (001) confina il gesto nello stabilimento.
+GRANT DELETE ON inventory_day TO ombre_app;
+
 -- D58: gli elementi del disegno ora si SPOSTANO dal pianificatore conservando
 -- l'identità (le cabine agganciate a un blocco non si staccano). Il «mai
 -- modificati sul posto» di 011 decade per decisione scritta.
