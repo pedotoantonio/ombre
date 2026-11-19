@@ -100,6 +100,18 @@ async function typesAct(request: Request, form: Form, lang: Locale, path: string
   return { to: `${withQuery(back, { terr: errorMap[code] ?? code })}#tipi` };
 }
 
+/** Runs a named-zone call (D50) and returns to the «Zone con nome» panel with the result next to it. */
+async function zonesAct(request: Request, form: Form, lang: Locale, path: string, method: string, body: unknown, errorMap: Record<string, string> = {}): Promise<Outcome> {
+  const beach = form('beach');
+  if (!slugPattern.test(beach)) return bad();
+  const result = await apiCall<unknown>(method, `/v1/manage/beaches/${beach}/zones${path}`, { body, token: cookieToken(request) });
+  const back = beachLayoutPath(lang, beach);
+  if (result.ok) return { to: `${withQuery(back, { zok: '1' })}#zone` };
+  if (result.status === 401) return { to: accountPath(lang, 'signIn') };
+  const code = result.status === 0 ? 'unavailable' : result.code;
+  return { to: `${withQuery(back, { zerr: errorMap[code] ?? code })}#zone` };
+}
+
 /** Runs a cabins call and returns to the cabins page of the club with the result. */
 async function cabinsAct(
   request: Request,
@@ -989,12 +1001,35 @@ const actions: Record<string, (request: Request, form: Form, lang: Locale) => Pr
   'spiaggia-modifica': (request, form, lang) => {
     const spotId = form('spot');
     if (!uuidPattern.test(spotId)) return Promise.resolve(bad());
+    // La tendina della zona con nome (D50): «Nessuna zona» arriva vuota e stacca la postazione.
+    const named = form('namedZone');
     return layoutAct(request, form, lang, `/spots/${encodeURIComponent(spotId)}`, 'PUT', {
       umbrellas: wholeNumber(form('umbrellas')),
       sunbeds: wholeNumber(form('sunbeds')),
       maxGuests: wholeNumber(form('guests')),
       rentalType: annotation(form('rentalType')),
       rentalNotes: annotation(form('rentalNotes')),
+      namedZoneId: uuidPattern.test(named) ? named : null,
+    });
+  },
+  // Zone con nome (D50): crea, rinomina, elimina e il gesto per fila intera.
+  'zona-crea': (request, form, lang) => zonesAct(request, form, lang, '', 'POST', { name: form('name') }, { invalid_state: 'zone_name_taken', cap_reached: 'zone_limit' }),
+  'zona-rinomina': (request, form, lang) => {
+    const zoneId = form('zona');
+    if (!uuidPattern.test(zoneId)) return Promise.resolve(bad());
+    return zonesAct(request, form, lang, `/${encodeURIComponent(zoneId)}`, 'PUT', { name: form('name') }, { invalid_state: 'zone_name_taken' });
+  },
+  'zona-elimina': (request, form, lang) => {
+    const zoneId = form('zona');
+    if (!uuidPattern.test(zoneId)) return Promise.resolve(bad());
+    return zonesAct(request, form, lang, `/${encodeURIComponent(zoneId)}`, 'DELETE', undefined);
+  },
+  'zona-fila': (request, form, lang) => {
+    const named = form('namedZone');
+    return layoutAct(request, form, lang, '/rows/zone', 'PUT', {
+      zone: form('zone'),
+      rowNumber: wholeNumber(form('row')),
+      zoneId: uuidPattern.test(named) ? named : null,
     });
   },
   'spiaggia-fila-affitto': (request, form, lang) =>

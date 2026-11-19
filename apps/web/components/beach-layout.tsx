@@ -19,6 +19,8 @@ import {
   spotMarks,
   spotTypeNameMaxLength,
   spotZones,
+  zoneNameMaxLength,
+  zoneNameMinLength,
   type Locale,
   type SeaSide,
   type SpotMark as SpotMarkKind,
@@ -67,7 +69,17 @@ interface ApiLayoutSpot {
   rentalType: string | null;
   rentalNotes: string | null;
   retired: boolean;
+  /** The named zone of the spot (D50); both null when it belongs to none. */
+  namedZoneId: string | null;
+  zoneName: string | null;
   activeContract: ApiActiveContract | null;
+}
+
+/** A named zone of the club (D50), with how many spots belong to it. */
+interface ApiNamedZone {
+  zoneId: string;
+  name: string;
+  spots: number;
 }
 
 interface ApiLayout {
@@ -556,7 +568,7 @@ function TypeSelect({ locale, id, types }: { locale: Locale; id: string; types: 
   );
 }
 
-function SpotEditor({ locale, spot, types, common }: { locale: Locale; spot: ApiLayoutSpot; types: ApiSpotType[]; common: Record<string, string> }) {
+function SpotEditor({ locale, spot, types, zones, common }: { locale: Locale; spot: ApiLayoutSpot; types: ApiSpotType[]; zones: ApiNamedZone[]; common: Record<string, string> }) {
   const t = getDictionary(locale, config.brandName);
   const l = t.layout;
   const seasonal = labelledSeasonal(spot.rentalType);
@@ -566,6 +578,8 @@ function SpotEditor({ locale, spot, types, common }: { locale: Locale; spot: Api
       <p className="layout-spot__head" id={`${htmlId}-titolo`}>
         <strong>{t.booking.spot(spot.code)}</strong>
         <span className="badge">{spot.typeName}</span>
+        {/* La zona con nome (D50), dove l'editor mostra la postazione. */}
+        {spot.zoneName ? <span className="badge">{t.zone.badge(spot.zoneName)}</span> : null}
         {spot.retired ? <span className="badge">{l.retiredBadge}</span> : null}
       </p>
       <p className="layout-spot__contract">
@@ -578,6 +592,18 @@ function SpotEditor({ locale, spot, types, common }: { locale: Locale; spot: Api
         <Hidden values={{ ...common, spot: spot.spotId }} />
         <EquipmentFields locale={locale} prefix={htmlId} spot={spot} />
         <RentalFields locale={locale} prefix={htmlId} rentalType={spot.rentalType} rentalNotes={spot.rentalNotes} />
+        {/* La tendina della zona con nome (D50): «Nessuna zona» stacca la postazione. */}
+        <div className="field">
+          <label htmlFor={`${htmlId}-zona-nome`}>{t.zone.assignSpot}</label>
+          <select id={`${htmlId}-zona-nome`} name="namedZone" defaultValue={spot.namedZoneId ?? ''}>
+            <option value="">{t.zone.assignRowNone}</option>
+            {zones.map((zone) => (
+              <option key={zone.zoneId} value={zone.zoneId}>
+                {zone.name}
+              </option>
+            ))}
+          </select>
+        </div>
         <button className="button button--secondary button--small" type="submit">
           {l.saveSpot} <span className="visually-hidden">{spot.code}</span>
         </button>
@@ -706,15 +732,17 @@ export async function BeachLayoutView({ locale, beachSlug, query }: { locale: Lo
   const editor = can(membership.role, 'layout.edit');
   const other = locales.find((candidate) => candidate !== locale) ?? locale;
 
-  const [layout, typesResult] = await Promise.all([
+  const [layout, typesResult, zonesResult] = await Promise.all([
     apiCall<ApiLayout>('GET', `/v1/manage/beaches/${beachSlug}/layout`, { token }),
     editor ? apiCall<{ types: ApiSpotType[] }>('GET', `/v1/manage/beaches/${beachSlug}/types`, { token }) : null,
+    editor ? apiCall<{ zones: ApiNamedZone[] }>('GET', `/v1/manage/beaches/${beachSlug}/zones`, { token }) : null,
   ]);
   const spots = layout.ok ? layout.data.spots : [];
   const elements = layout.ok ? layout.data.elements : [];
   const seaSide: SeaSide = layout.ok ? layout.data.seaSide : 'top';
   const gaps = layout.ok ? { shoreGapRows: layout.data.shoreGapRows, landGapRows: layout.data.landGapRows } : { shoreGapRows: 1, landGapRows: 1 };
   const types = typesResult?.ok ? typesResult.data.types : [];
+  const namedZones = zonesResult?.ok ? zonesResult.data.zones : [];
   const common = { lang: locale, beach: beachSlug };
   // Quick choices first, then every label already used in this club: the manager stays free to type anything.
   const rentalOptions = [...new Set<string>([...rentalTypeSuggestions, ...spots.flatMap((spot) => (spot.rentalType ? [spot.rentalType] : []))])];
@@ -948,6 +976,73 @@ export async function BeachLayoutView({ locale, beachSlug, query }: { locale: Lo
                     ))}
                   </datalist>
 
+                  {/* Zone con nome (D50): crea, rinomina ed elimina; l'assegnazione passa dalla
+                      postazione e dal gesto per fila, qui sotto tra le postazioni. */}
+                  <div className="panel" id="zone">
+                    <h2>{t.zone.manageTitle}</h2>
+                    <p className="prose">{t.zone.manageLead}</p>
+                    <SectionNotice locale={locale} query={query} okKey="zok" errKey="zerr" />
+                    {namedZones.length > 0 ? (
+                      <ul className="layout-spots">
+                        {namedZones.map((zone) => (
+                          <li className="layout-spot" key={zone.zoneId} aria-labelledby={`zona-${zone.zoneId}-titolo`}>
+                            <p className="layout-spot__head" id={`zona-${zone.zoneId}-titolo`}>
+                              <strong>{t.zone.badge(zone.name)}</strong>
+                              <span className="badge">{t.zone.spots(zone.spots)}</span>
+                            </p>
+                            <form method="post" action="/azioni/zona-rinomina" className="form-row">
+                              <Hidden values={{ ...common, zona: zone.zoneId }} />
+                              <div className="field">
+                                <label htmlFor={`zona-${zone.zoneId}-nome`}>{t.zone.nameField}</label>
+                                <input
+                                  id={`zona-${zone.zoneId}-nome`}
+                                  name="name"
+                                  minLength={zoneNameMinLength}
+                                  maxLength={zoneNameMaxLength}
+                                  defaultValue={zone.name}
+                                  autoComplete="off"
+                                  required
+                                />
+                              </div>
+                              <button className="button button--secondary button--small" type="submit">
+                                {t.zone.rename} <span className="visually-hidden">{zone.name}</span>
+                              </button>
+                            </form>
+                            <div className="layout-spot__actions">
+                              <form method="post" action="/azioni/zona-elimina" className="inline-form">
+                                <Hidden values={{ ...common, zona: zone.zoneId }} />
+                                <button className="button button--secondary button--small" type="submit">
+                                  {t.zone.delete} <span className="visually-hidden">{zone.name}</span>
+                                </button>
+                              </form>
+                            </div>
+                            {/* L'avvertenza sta PRIMA del tasto nell'ordine di lettura della carta: le postazioni non spariscono. */}
+                            <p className="layout-spot__note">{t.zone.deleteWarning}</p>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                    <h3>{t.zone.create}</h3>
+                    <form method="post" action="/azioni/zona-crea" className="form-row">
+                      <Hidden values={common} />
+                      <div className="field">
+                        <label htmlFor="zona-nuova-nome">{t.zone.nameField}</label>
+                        <input
+                          id="zona-nuova-nome"
+                          name="name"
+                          minLength={zoneNameMinLength}
+                          maxLength={zoneNameMaxLength}
+                          autoComplete="off"
+                          required
+                          aria-describedby="zona-nuova-aiuto"
+                        />
+                        <p className="field__hint" id="zona-nuova-aiuto">{t.zone.nameWarning}</p>
+                      </div>
+                      <button className="button button--secondary" type="submit">{t.zone.create}</button>
+                    </form>
+                    <p className="field__hint">{t.zone.limit}</p>
+                  </div>
+
                   <div className="panel" id="tipi">
                     <h2>{l.typesTitle}</h2>
                     <p className="prose">{l.typesLead}</p>
@@ -1094,9 +1189,37 @@ export async function BeachLayoutView({ locale, beachSlug, query }: { locale: Lo
                                 </span>
                               </button>
                             </form>
+                            {/* Il gesto per fila delle zone con nome (D50), accanto all'affitto per fila. */}
+                            <form method="post" action="/azioni/zona-fila" className="form-row layout-row__rental">
+                              <Hidden values={{ ...common, zone, row: String(row) }} />
+                              <p className="layout-row__lead">
+                                <strong>{t.zone.assignRow}</strong>
+                              </p>
+                              <div className="field">
+                                <label htmlFor={`zona-fila-${zone}-${row}`}>{t.zone.assignSpot}</label>
+                                <select
+                                  id={`zona-fila-${zone}-${row}`}
+                                  name="namedZone"
+                                  defaultValue={inRow.every((entry) => entry.namedZoneId === inRow[0]?.namedZoneId) ? (inRow[0]?.namedZoneId ?? '') : ''}
+                                >
+                                  <option value="">{t.zone.assignRowNone}</option>
+                                  {namedZones.map((named) => (
+                                    <option key={named.zoneId} value={named.zoneId}>
+                                      {named.name}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                              <button className="button button--secondary button--small" type="submit">
+                                {l.applyRow}{' '}
+                                <span className="visually-hidden">
+                                  {t.zone.manageTitle}: {t.booking.zones[zone]}, {t.booking.row(row)}
+                                </span>
+                              </button>
+                            </form>
                             <ul className="layout-spots">
                               {inRow.map((spot) => (
-                                <SpotEditor key={spot.spotId} locale={locale} spot={spot} types={types} common={common} />
+                                <SpotEditor key={spot.spotId} locale={locale} spot={spot} types={types} zones={namedZones} common={common} />
                               ))}
                             </ul>
                           </section>
