@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import QRCode from 'qrcode';
 import { accountPath, beachPath, cartPath, config, formatMoney, getDictionary, locales, type Locale } from '@ombre/shared';
-import { api, apiCall, formatDate, formatPeriod, localName, type ApiExtraService, type ApiLocalName } from '@/lib/api';
+import { api, apiCall, formatDate, formatInstant, formatPeriod, localName, type ApiExtraService, type ApiLocalName } from '@/lib/api';
 import { signedIn, type Me } from '@/lib/session';
 import { Hidden, Notice, requireMe } from './account';
 import { ExtraQuantityFields } from './beach';
@@ -10,6 +10,7 @@ import { PageHead, PageShell } from './PageShell';
 
 type Query = Record<string, string | string[] | undefined>;
 const other = (locale: Locale): Locale => locales.find((candidate) => candidate !== locale) ?? locale;
+const first = (value: string | string[] | undefined): string | undefined => (Array.isArray(value) ? value[0] : value);
 
 /** A group of «Le mie prenotazioni» as the API hands it over (D47). */
 interface MyBookingGroup {
@@ -18,6 +19,8 @@ interface MyBookingGroup {
   beachSlug: string;
   beachName: string;
   spotCode: string;
+  /** La zona con nome della postazione (D50); null quando non ne ha. */
+  zoneName: string | null;
   from: string;
   to: string;
   days: number;
@@ -28,6 +31,12 @@ interface MyBookingGroup {
   paymentState: 'paid' | 'partial' | 'to_collect';
   extras: { name: ApiLocalName; quantity: number }[];
   passCredential: string | null;
+  /** La propria recensione del soggiorno (D51); null finché non esiste. */
+  review: { rating: number; body: string | null } | null;
+  /** Vero per un soggiorno concluso, non annullato e senza recensione (D51). */
+  canReview: boolean;
+  /** L'annullamento dal conto (D53): possibile solo entro il termine, a soggiorno non iniziato. */
+  cancellation: { allowed: boolean; deadline: string | null };
 }
 
 interface MyBookings {
@@ -46,17 +55,34 @@ export interface GuestContract {
 }
 
 /** One booked stay of the guest, with its pass and the ways to add to it (D46, D47). */
-async function MyBookingPanel({ locale, group, catalogue }: { locale: Locale; group: MyBookingGroup; catalogue: ApiExtraService[] }) {
+async function MyBookingPanel({
+  locale,
+  group,
+  catalogue,
+  timezone,
+  confirmAsked,
+}: {
+  locale: Locale;
+  group: MyBookingGroup;
+  catalogue: ApiExtraService[];
+  /** Il fuso dello stabilimento, per scrivere il termine di annullamento (D53). */
+  timezone?: string;
+  /** Vero quando l'indirizzo chiede la conferma dell'annullamento di QUESTO gruppo. */
+  confirmAsked?: boolean;
+}) {
   const t = getDictionary(locale, config.brandName);
   const a = t.account;
+  const z = t.zone;
   const period = group.from === group.to ? formatDate(group.from, locale) : t.booking.periodValue(formatPeriod(group.from, group.to, locale), group.days);
   const qr = group.passCredential ? await QRCode.toString(group.passCredential, { type: 'svg', margin: 1, errorCorrectionLevel: 'M' }) : null;
   const remaining = group.totalCents - group.paidCents;
   return (
-    <div className="panel">
+    <div className="panel" id={`prenotazione-${group.groupId}`}>
       <h3>{a.seasonTitle(group.spotCode, group.beachName)}</h3>
       <p className="prose">
-        {group.code} · {period} · {a.guest}: {group.guestName}
+        {/* La zona con nome accanto alla postazione (D50), con le stesse parole di ovunque. */}
+        {group.code} · {group.zoneName ? `${z.badge(group.zoneName)} · ` : ''}
+        {period} · {a.guest}: {group.guestName}
       </p>
       {group.extras.length > 0 ? (
         <p className="prose">
@@ -64,8 +90,10 @@ async function MyBookingPanel({ locale, group, catalogue }: { locale: Locale; gr
         </p>
       ) : null}
       <p className="prose">
+        {/* Con la caparra (D52): quanto è già «Pagato adesso» e il residuo da saldare. */}
         {a.booking}: {a.bookingStates[group.status]} · {t.booking.total}: {formatMoney(group.totalCents, locale)} · {a.colPayment}:{' '}
         {a.paymentStates[group.paymentState]}
+        {remaining > 0 && group.paidCents > 0 ? ` · ${t.deposit.paidNow}: ${formatMoney(group.paidCents, locale)}` : ''}
         {remaining > 0 ? ` · ${a.residual(formatMoney(remaining, locale))}` : ''}
       </p>
       {qr ? (
@@ -96,6 +124,79 @@ async function MyBookingPanel({ locale, group, catalogue }: { locale: Locale; gr
               <span className="visually-hidden">{` · ${group.code}`}</span>
             </button>
           </form>
+        </>
+      ) : null}
+      {/* L'annullamento dal conto (D53): entro il termine il gesto con la conferma senza
+          script; oltre il termine SOLO il testo che rimanda allo stabilimento. */}
+      {group.status === 'confirmed' && group.cancellation.allowed && group.cancellation.deadline ? (
+        <>
+          <p className="prose">
+            <strong>{t.cancel.deadline(formatInstant(group.cancellation.deadline, locale, timezone ?? 'Europe/Rome'))}</strong>
+          </p>
+          {confirmAsked ? (
+            <div className="alert" role="alert">
+              <p>{t.cancel.confirm(formatMoney(group.paidCents, locale))}</p>
+              <form method="post" action="/azioni/conto-annulla" className="inline-form">
+                <Hidden values={{ lang: locale, group: group.groupId, paid: String(group.paidCents) }} />
+                <button className="button" type="submit">
+                  {t.cancel.confirmYes}
+                  <span className="visually-hidden">{` · ${group.code}`}</span>
+                </button>
+              </form>{' '}
+              <Link className="button button--secondary" href={accountPath(locale, 'overview')}>
+                {t.cancel.confirmNo}
+              </Link>
+            </div>
+          ) : (
+            <p>
+              <Link className="button button--secondary" href={`${accountPath(locale, 'overview')}?conferma=${group.groupId}#prenotazione-${group.groupId}`}>
+                {t.cancel.button}
+                <span className="visually-hidden">{` · ${group.code}`}</span>
+              </Link>
+            </p>
+          )}
+        </>
+      ) : null}
+      {group.status === 'confirmed' && !group.cancellation.allowed ? <p className="prose">{t.cancel.tooLate}</p> : null}
+      {/* La recensione del soggiorno concluso (D51): il modulo, oppure la propria recensione. */}
+      {group.canReview ? (
+        <form method="post" action="/azioni/conto-recensione" className="stack">
+          <Hidden values={{ lang: locale, group: group.groupId }} />
+          <h4>{t.reviews.formTitle}</h4>
+          <fieldset className="field">
+            <legend>{t.reviews.ratingLabel}</legend>
+            <p className="field__hint">{t.reviews.ratingScale}</p>
+            <div className="form-row">
+              {[1, 2, 3, 4, 5].map((value) => (
+                <label className="portal-check" key={value} htmlFor={`voto-${group.groupId}-${value}`}>
+                  <input id={`voto-${group.groupId}-${value}`} type="radio" name="rating" value={value} required />
+                  <span>{value}</span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
+          <div className="field">
+            <label htmlFor={`recensione-${group.groupId}`}>{t.reviews.bodyLabel}</label>
+            {/* L'avviso PRIMA del campo: il testo non si modifica dopo l'invio. */}
+            <p className="field__hint" id={`recensione-${group.groupId}-nota`}>
+              {t.reviews.bodyHint}
+            </p>
+            <textarea id={`recensione-${group.groupId}`} name="body" maxLength={600} rows={4} aria-describedby={`recensione-${group.groupId}-nota`} />
+          </div>
+          <p className="field__hint">{t.reviews.publicName}</p>
+          <button className="button button--secondary" type="submit">
+            {t.reviews.submit}
+            <span className="visually-hidden">{` · ${group.code}`}</span>
+          </button>
+        </form>
+      ) : null}
+      {group.review ? (
+        <>
+          <h4>{t.reviews.yours}</h4>
+          <p className="prose">
+            <strong>{t.reviews.rating(group.review.rating)}</strong>
+            {group.review.body ? ` · ${group.review.body}` : ''}
+          </p>
         </>
       ) : null}
     </div>
@@ -130,16 +231,20 @@ export async function GuestOverview({
   ]);
   const bookings: MyBookings = result.ok ? result.data : { nextArrivals: 0, totalSpentCents: 0, upcoming: [], past: [] };
   const carts = cartsResult.ok ? cartsResult.data.carts : [];
-  // The extra services of each beach club with an upcoming stay, asked once per club (D46 §5).
+  // The extra services of each beach club with an upcoming stay, asked once per club
+  // (D46 §5); the same answer hands over the club's time zone, for the cancellation
+  // deadline of D53 written in local time.
   const slugs = [...new Set(bookings.upcoming.filter((group) => group.status === 'confirmed').map((group) => group.beachSlug))];
   const catalogues = new Map(
     await Promise.all(
-      slugs.map(async (slug): Promise<[string, ApiExtraService[]]> => {
+      slugs.map(async (slug): Promise<[string, { extras: ApiExtraService[]; timezone?: string }]> => {
         const extras = await api.extras(slug);
-        return [slug, extras.ok ? extras.data.extras : []];
+        return [slug, extras.ok ? { extras: extras.data.extras, timezone: extras.data.beach.timezone } : { extras: [] }];
       }),
     ),
   );
+  // La conferma dell'annullamento (D53): il gruppo chiesto nell'indirizzo, senza script.
+  const confirmGroup = first(query.conferma);
   return (
     <PageShell locale={locale} page="help" highlight={false} alternatePath={accountPath(other(locale), 'overview')} crumbs={[{ label: a.myAccountTitle }]} signedInAs={me.user.name}>
       <PageHead title={a.myAccountTitle} lead={a.hello(me.user.name)} />
@@ -158,7 +263,14 @@ export async function GuestOverview({
               <>
                 <h3>{a.upcomingTitle}</h3>
                 {bookings.upcoming.map((group) => (
-                  <MyBookingPanel key={group.groupId} locale={locale} group={group} catalogue={catalogues.get(group.beachSlug) ?? []} />
+                  <MyBookingPanel
+                    key={group.groupId}
+                    locale={locale}
+                    group={group}
+                    catalogue={catalogues.get(group.beachSlug)?.extras ?? []}
+                    timezone={catalogues.get(group.beachSlug)?.timezone}
+                    confirmAsked={confirmGroup === group.groupId}
+                  />
                 ))}
               </>
             ) : null}

@@ -415,6 +415,44 @@ const actions: Record<string, (request: Request, form: Form, lang: Locale) => Pr
     return { to: back, err: code };
   },
 
+  // La recensione dal conto (D51): voto 1–5 e testo facoltativo, una per soggiorno.
+  // L'esito torna sulla pagina del conto, come gli altri gesti dell'Ospite.
+  async 'conto-recensione'(request, form, lang) {
+    const group = form('group');
+    const rating = form('rating');
+    if (!uuidPattern.test(group) || !/^[1-5]$/.test(rating)) return bad();
+    const text = form('body').trim().slice(0, 600);
+    const back = accountPath(lang, 'overview');
+    const result = await apiCall('POST', `/v1/account/bookings/${group}/review`, {
+      body: { rating: Number(rating), body: text === '' ? null : text },
+      token: cookieToken(request),
+    });
+    if (result.ok) {
+      const { getDictionary, config } = await import('@ombre/shared');
+      return { to: back, ok: getDictionary(lang, config.brandName).reviews.thanks };
+    }
+    if (result.status === 401) return { to: accountPath(lang, 'signIn') };
+    return { to: back, err: result.status === 0 ? 'unavailable' : result.code };
+  },
+
+  // L'annullamento dal conto (D53): solo entro il termine, rimborso pieno di quanto
+  // pagato. L'importo del messaggio è il «paid» mostrato dalla pagina stessa.
+  async 'conto-annulla'(request, form, lang) {
+    const group = form('group');
+    const paid = form('paid');
+    if (!uuidPattern.test(group)) return bad();
+    const back = accountPath(lang, 'overview');
+    const result = await apiCall('POST', `/v1/account/bookings/${group}/cancel`, { token: cookieToken(request) });
+    if (result.ok) {
+      const { getDictionary, config, formatMoney } = await import('@ombre/shared');
+      const t = getDictionary(lang, config.brandName).cancel;
+      const cents = /^\d{1,9}$/.test(paid) ? Number(paid) : 0;
+      return { to: back, ok: cents > 0 ? t.done(formatMoney(cents, lang)) : t.doneNoRefund };
+    }
+    if (result.status === 401) return { to: accountPath(lang, 'signIn') };
+    return { to: back, err: result.status === 0 ? 'unavailable' : result.code };
+  },
+
   // The local consent of the TEST identity provider (D48): mints the signed code and
   // sends the navigator to the same return address the real Google would use.
   async 'oidc-consenso'(_request, form, lang) {
