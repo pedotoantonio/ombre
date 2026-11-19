@@ -530,3 +530,65 @@ Riga nel piè di pagina pubblico nelle due lingue (`footer.privacy`):
 niente cookie di profilazione né pubblicità, solo cookie tecnici
 (sessione, carrello, lingua); voce nuova in Assistenza che lo spiega con
 parole piane. Nessun banner: la sua assenza è il messaggio.
+
+## D55 — Il linguaggio grafico «beach-art» — accettata (19/11/2026)
+
+Una famiglia sola di SVG originali scritti in codice (mai ricalchi dei
+riferimenti, mai raster): modulo presentazionale `beach-art` reso dal
+server, vista dall'alto, contorni morbidi, palette dai gettoni Solar &
+Fresh. Simboli delle postazioni con la dotazione visibile (ombrellone a
+spicchi coi lettini accostati), scenografia completa (mare con onde,
+sabbia, passerelle, palme, dune, chiosco, docce, torretta, bandiera,
+cestini, campi, giochi, natanti); i segni del repertorio D35 ridisegnati
+mantenendo le chiavi. Griglia a celle quadrate, leggibile a 390 px.
+Usato dappertutto: scheda pubblica, editor, console, planner, reception
+e pass.
+
+## D56 — Stati con colore e glifo, legenda unica — accettata (19/11/2026)
+
+Cinque stati del gestionale — disponibile (salvia, spunta), prenotato
+(azzurro, calendario), occupato (corallo, persona), Stagionale (indaco,
+tessera; mai «abbonamento»), manutenzione (ambra, chiave) — sempre
+colore + glifo, mai il colore da solo; il pubblico conserva i suoi stati
+ridisegnati con lo stesso principio. Legenda compatta identica nelle due
+lingue, al telefono dietro un `<details>`. `spot.maintenance` nuova
+(migrazione 023): non prenotabile finché vera, resta nel disegno, le
+prenotazioni già prese restano; distinta dal ritiro dalla vendita.
+
+## D57 — Pianificatore con bozza e salvataggio esplicito — accettata (19/11/2026)
+
+La pagina «Spiaggia» diventa il pianificatore sulla griglia esistente
+(niente coordinate libere, niente Konva). Ogni gesto accoda
+un'operazione a una bozza per stabilimento (`layout_draft`, migrazione
+023): creare singole e file/griglie (numerazione automatica di D34),
+spostare, modificare (tipo, dotazione, codice, zona, manutenzione),
+eliminare solo senza prenotazioni future, scenografia, zone a pennello.
+L'anteprima del pianificatore mostra la bozza; il pubblico solo il
+salvato. «Annulla l'ultima», «Scarta», «Salva» con riepilogo in parole e
+applicazione in una transazione (se un'operazione non è più valida,
+niente si applica e il riepilogo la indica); ogni salvataggio scrive
+`layout.saved` nel registro delle azioni. Cataloghi (tipi, zone, lato
+del mare) immediati come oggi, fuori dalla bozza. Rotte nuove solo per
+la bozza (draft, ops, undo, discard, apply).
+
+## D58 — Scenografia nel pianificatore — accettata (19/11/2026)
+
+Gli elementi del disegno si aggiungono, si spostano e si tolgono dalla
+bozza; non sono prenotabili e non toccano prenotazioni né registro
+economico. Il repertorio si amplia con i soggetti nuovi del linguaggio
+D55 (torretta, bandiera, cestini, campi da beach volley e bocce,
+pedalò, canoa, SUP, dune).
+
+## D59 — Zone disegnate sul pianificatore — accettata (19/11/2026)
+
+Le postazioni si colorano con un velo pastello per zona con nome; il
+«pennello di zona» senza JavaScript (scelta la zona, ogni clic accoda
+l'assegnazione); restano i gesti per fila e per postazione di D50.
+
+## D60 — Lo spostamento conserva l'identità — accettata (19/11/2026)
+
+L'identità della postazione sta nell'id, mai nella cella: lo spostamento
+cambia fascia, fila e colonna e non tocca codice, prenotazioni, pass e
+storia. Il trascinamento con aggancio alla griglia è JavaScript
+progressivo che compila e invia lo stesso modulo della via senza
+JavaScript, mai l'unica via.
