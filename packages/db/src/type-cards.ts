@@ -113,7 +113,7 @@ export function listTypeCardsForManager(db: Database, actor: Actor): Promise<Man
  * shared module; the photos must be keys of the sample library (demoMedia),
  * the same library of the site: never outside addresses (D62).
  */
-export function setTypeCard(db: Database, actor: Actor, input: { typeId: string; content: TypeCardContent }): Promise<{ typeId: string; content: TypeCardContent }> {
+export async function setTypeCard(db: Database, actor: Actor, input: { typeId: string; content: TypeCardContent }): Promise<{ typeId: string; content: TypeCardContent }> {
   const content = parseTypeCardContent(input.content);
   for (const photo of content.photos ?? []) {
     if (!(photo.id in demoMedia)) throw new DomainError('invalid_state', `The picture «${photo.id}» is not in the sample library`);
