@@ -404,3 +404,102 @@ strumento non compone; la fermata peggiore è `#0077b6`, bianco sopra
 Sette correzioni, tutte della stessa famiglia (blu pieno → blu scurito sui
 fondi spuma), nessun gettone cambiato, nessun markup toccato. Dopo le
 correzioni: **0 coppie sotto soglia su 5.456 nodi misurati**.
+
+## I pulsanti del menu (D68)
+
+Aggiunta del **direttore artistico**, 20/11/2026, per la specifica della
+home arcobaleno (§2) e la decisione D68: le sei voci del menu come pulsanti
+colorati nell'ordine dell'arcobaleno. Tutti i rapporti sono **misurati**
+(script usa-e-getta nello scratchpad, formula WCAG, due decimali) sui tre
+fondi chiari su cui i pulsanti possono posare: carta `#ffffff`, avorio
+`#f8f9fa` (fondo pagina), spuma `#e3f1fa`. Il fondo proprio della barra dei
+menu (D67) deve essere **uno di questi tre**: la tavola regge su tutti.
+
+**Motivazione (una riga).** Scelta la via del **fondo pieno, scurito dove il
+colore pieno non regge, con testo bianco** (giallo sole, unica eccezione
+obbligata, con testo abisso): misurata, tiene l'AA su ogni fondo chiaro con
+margini uniformi (testi da 4,87:1 in su, componenti da 3,18:1), mentre la via
+dei veli con testo scuro e bordo colorato cade su tre coppie misurate — testo
+arancio `#a85600` sul suo velo `#fde7cd` **4,38**, bordo arancio pieno
+`#f77f00` su avorio **2,49**, bordo giallo `#fcbf49` su avorio **1,57**.
+
+### Il sistema (uguale per i sei pulsanti)
+
+- **Fondo pieno** nel colore della voce; dove il pieno non regge il bianco
+  sopra, si usa la **variante scurita già a verbale** (§2): corallo
+  `#b3202c`, arancio `#a85600`, verde acqua `#1b6f65`. Blu `#0077b6` e viola
+  `#7b2cbf` reggono da pieni. Giallo sole resta pieno `#fcbf49` **solo con
+  testo abisso** (§6).
+- **Testo bianco** (`--su-scuro`), raggio pillola, peso medio; sul giallo il
+  testo è **abisso**.
+- **Bordo**: `1px` dello stesso colore del fondo (il fondo stesso è il
+  confine del componente, ≥ 4,56:1 ovunque). Solo il **giallo** ha un bordo
+  proprio **`#a85600`** (= `--ambra-testo`), obbligatorio: il giallo sul
+  chiaro sta a 1,44–1,66 e non può fare da confine.
+- **Passaggio (hover)**: il fondo si scurisce di un passo, **testo
+  invariato**. Il passo è quello già a verbale di `--oceano` →
+  `--oceano-scuro` (canali ×0,72 circa); i tre scuriti nuovi sono
+  `#811720`, `#793e00`, `#135049`, `#59208a` (sotto). Il giallo al passaggio
+  diventa `--sole` `#ee9b00` (abisso sopra 5,49), col bordo `#a85600` fermo
+  a fare da confine.
+- **Voce corrente (`aria-current="page"`)**: fondo di riposo **+
+  sottolineatura spessa `3px` nel colore del testo + peso forte (800)** —
+  segno **non di solo colore**, leggibile anche in bianco e nero (stessa
+  resa in italiano e in inglese).
+- **Anello di fuoco**: `outline 3px var(--fuoco)` (abisso) con **scarto
+  (`outline-offset`) di `2px`**, così il fondo pagina separa anello e fondo
+  del pulsante: 12,36 / 11,72 / 10,73 su carta / avorio / spuma (≥ 3).
+- Il **cambio lingua resta neutro** (strumento, non voce): nessun gettone
+  `--menu-*` lo riguarda.
+
+### La tavola dei sei pulsanti (rapporti misurati)
+
+| # | Voce | Fondo (riposo) | Testo | Bordo | Passaggio | Corrente | Fuoco | Rapporti misurati |
+|---|---|---|---|---|---|---|---|---|
+| 1 | Ricerca ombrellone | corallo scurito `#b3202c` | bianco | = fondo | `#811720` | sottolineatura 3px bianca + 800 | `--fuoco`, scarto 2px | testo **6,65** (riposo), **10,11** (passaggio); componente su carta/avorio/spuma **6,65 / 6,30 / 5,77**, al passaggio 10,11 / 9,59 / 8,78 |
+| 2 | Ospite: come funziona | arancio scurito `#a85600` | bianco | = fondo | `#793e00` | sottolineatura 3px bianca + 800 | `--fuoco`, scarto 2px | testo **5,26** / **8,39**; componente **5,26 / 4,99 / 4,56**, al passaggio 8,39 / 7,96 / 7,29 |
+| 3 | Stagionale: come funziona | giallo sole pieno `#fcbf49` | **abisso** `#1d3557` | **`#a85600`** (obbligatorio) | `--sole` `#ee9b00` | sottolineatura 3px **abisso** + 800 | `--fuoco`, scarto 2px | testo **7,47** / **5,49**; bordo su carta/avorio/spuma **5,26 / 4,99 / 4,56**, sul fondo giallo **3,18**; il fondo da solo sta a 1,66 / 1,57 / 1,44 e al passaggio a 2,25 / 2,14 / 1,96 → **il confine è il bordo**, mai il fondo |
+| 4 | Gestore: come funziona | verde acqua scurito `#1b6f65` | bianco | = fondo | `#135049` | sottolineatura 3px bianca + 800 | `--fuoco`, scarto 2px | testo **5,99** / **9,25**; componente **5,99 / 5,68 / 5,20**, al passaggio 9,25 / 8,77 / 8,03 |
+| 5 | Assistenza | blu mare pieno `#0077b6` | bianco | = fondo | `--oceano-scuro` `#00557f` | sottolineatura 3px bianca + 800 | `--fuoco`, scarto 2px | testo **4,87** / **8,06**; componente **4,87 / 4,62 / 4,23**, al passaggio 8,06 / 7,65 / 7,00 |
+| 6 | Area riservata (riga del marchio) | viola pieno `#7b2cbf` | bianco | = fondo | `#59208a` | sottolineatura 3px bianca + 800 | `--fuoco`, scarto 2px | testo **7,11** / **10,51**; componente **7,11 / 6,74 / 6,17**, al passaggio 10,51 / 9,97 / 9,12 |
+
+Nessuna coppia vincolata sotto soglia; la più bassa è **3,18** (bordo
+`#a85600` sul fondo giallo, soglia 3), il testo più basso **4,87** (bianco
+su blu mare, soglia 4,5).
+
+### I gettoni `--menu-*` (da aggiungere in coda a tokens.css)
+
+Il frontend applica **questi nomi e basta**, niente esadecimali nei fogli
+dei componenti:
+
+```css
+/* I pulsanti del menu (D68): fondo pieno, testo bianco (giallo: abisso).
+   Passaggio = fondo scurito di un passo; i rapporti sono nella tavola. */
+--menu-corallo-fondo: #b3202c;          /* = il rosso di --errore: bianco sopra 6,65 */
+--menu-corallo-passaggio: #811720;      /* nuovo scurito: bianco sopra 10,11 */
+--menu-corallo-testo: var(--su-scuro);
+--menu-arancio-fondo: #a85600;          /* = --ambra-testo: bianco sopra 5,26 */
+--menu-arancio-passaggio: #793e00;      /* nuovo scurito: bianco sopra 8,39 */
+--menu-arancio-testo: var(--su-scuro);
+--menu-giallo-fondo: var(--giallo);     /* #fcbf49: abisso sopra 7,47; mai testo bianco (§6) */
+--menu-giallo-passaggio: var(--sole);   /* #ee9b00: abisso sopra 5,49 */
+--menu-giallo-testo: var(--abisso);
+--menu-giallo-bordo: var(--ambra-testo);/* #a85600, obbligatorio: il confine del pulsante (≥ 4,56 sui chiari) */
+--menu-verde-fondo: #1b6f65;            /* = --libero-testo: bianco sopra 5,99 */
+--menu-verde-passaggio: #135049;        /* nuovo scurito: bianco sopra 9,25 */
+--menu-verde-testo: var(--su-scuro);
+--menu-blu-fondo: var(--oceano);        /* #0077b6: bianco sopra 4,87 */
+--menu-blu-passaggio: var(--oceano-scuro); /* #00557f: bianco sopra 8,06 */
+--menu-blu-testo: var(--su-scuro);
+--menu-viola-fondo: var(--viola);       /* #7b2cbf: bianco sopra 7,11 */
+--menu-viola-passaggio: #59208a;        /* nuovo scurito: bianco sopra 10,51 */
+--menu-viola-testo: var(--su-scuro);
+```
+
+Corrispondenza voce → gettone: 1 Ricerca ombrellone `corallo`, 2 Ospite
+`arancio`, 3 Stagionale `giallo`, 4 Gestore `verde`, 5 Assistenza `blu`,
+6 Area riservata `viola`. I quattro scuriti nuovi (`#811720`, `#793e00`,
+`#135049`, `#59208a`) esistono **solo** per il passaggio di questi pulsanti:
+non vanno riusati altrove senza tornare a questa tavola. Il gradiente
+`--arcobaleno` resta **vietato** sui pulsanti (§4): l'arcobaleno qui lo fa
+la fila dei sei colori, non il gradiente.
