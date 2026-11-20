@@ -9,6 +9,15 @@
   background: var(--spuma);
 }
 
+/* La fascia arcobaleno dell'eroe (tema arcobaleno §4): riga decorativa sul bordo alto. */
+.portal-hero::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 0.375rem;
+  background: var(--arcobaleno);
+}
+
 .portal-hero__art {
   background: var(--mare-foto);
 }
@@ -144,6 +153,18 @@
   .portal-hero__panel {
     padding: var(--spazio-8);
   }
+}
+
+/* Le sottolineature spesse dei titoli di sezione della prima pagina (tema arcobaleno §4):
+   la home si riconosce dall'eroe, così nessun'altra pagina le eredita e il markup non cambia. */
+main:has(.portal-hero) .section > .container > h2::after {
+  content: '';
+  display: block;
+  width: 3rem;
+  height: 0.25rem;
+  margin-top: var(--spazio-2);
+  border-radius: var(--raggio-pillola);
+  background: var(--arcobaleno);
 }
 
 /* ---- Modulo di ricerca: funziona senza script, i campi restano nell'ordine in cui si leggono ---- */

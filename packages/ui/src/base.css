@@ -1853,9 +1853,19 @@ input[type='radio'] {
 
 /* Footer */
 .site-footer {
+  position: relative;
   padding-block: var(--spazio-12) var(--spazio-6);
   background: var(--abisso);
   color: var(--su-scuro-secondario);
+}
+
+/* Il bordo decorativo arcobaleno del piè di pagina (tema arcobaleno §4). */
+.site-footer::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 0.25rem;
+  background: var(--arcobaleno);
 }
 
 .site-footer__grid {
