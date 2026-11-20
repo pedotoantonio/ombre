@@ -9,3 +9,5 @@ next-env.d.ts
 .env.*
 !.env.example
 backups/
+# La regola `dati/` alla radice del repository serve ad altri progetti: qui riammette la rotta dei segnaposto.
+!apps/web/app/dati/
