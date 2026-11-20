@@ -275,6 +275,16 @@ indicizzato.
 
 Esito completo in [collaudo.md](collaudo.md).
 
+Il 20/11/2026, iterazione «Il tema arcobaleno» (rifacimento puramente
+visivo): 287 test con database (contratto fermo a 135 rotte) e 1186
+controlli fumo tutti verdi al primo giro, senza toccare una sola
+asserzione; prove visive dei sette criteri con immagini guardate una per
+una (gradiente solo su eroe, sottolineature e piè di pagina; errori e
+stati a norma; planimetria pastello leggibile anche in grigio); vaglio
+d'accessibilità a verbale (5.456 nodi su 19 pagine, sette regole
+scurite, zero coppie sotto soglia). Ambiente di collaudo ricostruito e
+lasciato acceso.
+
 Il 19/11/2026 (notte), iterazione «La scheda della postazione»: 287 test
 con database (contratto a 135 rotte), 1186 controlli fumo con la suite
 nuova `smoke:schede` (141 controlli: ritorno esatto da ogni ingresso,
