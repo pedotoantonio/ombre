@@ -1,6 +1,111 @@
 # Collaudo
 
-## Collaudo della home arcobaleno (20/11/2026)
+## Collaudo della home dell'Ospite (20/11/2026)
+
+Collaudo della commessa «la home è dell'Ospite»
+([specifica](specifica-home-ospite.md), D70, criteri §6 1–6): via i tre
+pulsanti dei ruoli (`portal-roles`) dall'eroe, che tiene titolo,
+sottotitolo e modulo di ricerca; le carte «Per chi è» diventano l'ingresso
+dei ruoli con pulsanti secondari (`button button--secondary card__cta`)
+verso le tre guide; il Gestore resta a due tocchi dall'accesso. Frontend
+committato in `a6efc57`.
+
+Eseguito su **pila vergine usa-e-getta** con `bash scripts/collaudo.sh`:
+progetto compose dedicato `ombre-collaudo-pila` (web `127.0.0.1:3250`, API
+`127.0.0.1:3251`), PostgreSQL dei test usa-e-getta sulla porta
+predefinita **54329**, `build` → `up -d db migrate api worker web` →
+health → undici suite fumo nell'ordine → backup **ripristinato davvero**
+(stesse righe in ogni tabella, 71 politiche di sicurezza) → `down -v`
+della sola pila del giro. L'ambiente fisso `ombre-collaudo` (`:3232`) e
+`ombre-demo` **mai toccati**. Due giri completi: al primo, un rosso in
+`smoke:flow` diagnosticato come **controllo della suite legato alla
+vecchia forma** (sotto); aggiornata la suite, **secondo giro da pila
+vergine tutto verde**.
+
+### Controlli estesi (mai ridotti): +23 fumo
+
+- **`scripts/smoke.ts` +22**, da 478 a 500 — blocco «La home è
+  dell'Ospite (D70)», su `/` e `/en` (11 per lingua): `portal-roles`
+  assente; i testi esatti dei tre vecchi tasti assenti in ogni variante
+  di resa dell'apostrofo («Cerco un ombrellone», «Affitto il mio
+  ombrellone», «Gestisco uno stabilimento» / "I'm looking for an
+  umbrella", "I rent out my umbrella", "I manage a beach club" — mentre
+  «Gestore stabilimento» e "Beach manager" restano legittimi nelle carte
+  e nel menu); l'eroe `portal-hero` conserva `h1` e modulo
+  `portal-search`; **esattamente tre** collegamenti `button
+  button--secondary card__cta`, confrontati su classi e `href`
+  nell'ordine `/come-funziona`, `/stagionale`, `/gestore-stabilimento`
+  (it) e `/en/how-it-works`, `/en/season-holder`, `/en/beach-manager`
+  (en); i due tocchi del Gestore: `/gestore-stabilimento` →
+  `/area/accesso` e `/en/beach-manager` → `/en/account/sign-in`.
+- **`scripts/smoke-flow.ts` +1**, da 76 a 77: il controllo «un solo
+  bottone sulla home» contava ogni `class="button…"` e per D70 vedeva
+  anche i tre pulsanti secondari delle carte. Aggiornato alla nuova
+  forma **estendendolo**: il tasto d'invio della ricerca resta l'**unico
+  pulsante primario** fuori dal riquadro della mappa, e in più si
+  pretende che i secondari siano **esattamente i tre** `card__cta` delle
+  carte e nient'altro.
+
+Nessuna asserzione esistente tolta né indebolita; nessun ritocco a
+`scripts/collaudo.sh` (progetto e porte invariati).
+
+### Test e collaudi fumo (secondo giro, pila vergine)
+
+| Parte | Controlli | Esito |
+|---|---|---|
+| Lint e tipi (`pnpm lint`, `pnpm typecheck`) | tutto il codice | Superati |
+| Test con PostgreSQL vero (porta predefinita 54329) | **287** (47 shared, 11 comms, 61 db, 161 api, 7 worker), contratto OpenAPI a **135 rotte** (invariato) | Superati |
+| Pagine pubbliche (`smoke`) | 500 (**+22**) | Superati |
+| Ricerca, planimetria e riserva (`smoke:flow`) | 77 (**+1**) | Superati |
+| Aree riservate (`smoke:areas`) | 85 | Superati |
+| Sito dello stabilimento (`smoke:site`) | 25 | Superati |
+| Conto, Google e carrello (`smoke:conto`) | 139 | Superati |
+| Al passo col mercato (`smoke:mercato`) | 110 | Superati |
+| La spiaggia illustrata (`smoke:spiaggia`) | 121 | Superati |
+| La scheda della postazione (`smoke:schede`) | 141 | Superati |
+| Prenotazione end-to-end (`smoke:booking`) | 15 | Superati |
+| Presa simultanea (`smoke:api`) | 13 | Superati |
+| Due passaggi (`smoke:2fa`, per ultima) | 11 | Superati |
+| Backup e prova di ripristino | quadratura | Superati |
+
+In totale **1237 controlli fumo** (1214 + 23 del collaudatore), tutti
+verdi al secondo giro.
+
+### Criteri di accettazione (specifica §6)
+
+1. **Eroe dell'Ospite — superato.** Su `/` e `/en` l'eroe mostra titolo
+   (`h1`), sottotitolo e modulo di ricerca; `portal-roles` e i testi dei
+   tre vecchi tasti non compaiono più in nessun punto della pagina, in
+   italiano e in inglese (controlli nuovi).
+2. **Carte «Per chi è» come ingresso dei ruoli — superato.** Le tre carte
+   portano pulsanti secondari (`button button--secondary card__cta`),
+   esattamente tre per lingua, verso le tre guide nell'ordine giusto; il
+   Gestore raggiunge l'accesso in due tocchi: menu o carta → guida →
+   «Area riservata» (`/area/accesso`, `/en/account/sign-in`), verificato
+   dai controlli nuovi.
+3. **Menu a cinque voci invariato, nessun'altra pagina cambiata —
+   superato.** I controlli D67/D41 dell'intestazione restano verdi
+   identici su `/` e `/en`; tutte le altre suite sono invariate e verdi
+   (aree riservate, sito, conto, mercato, spiaggia, schede, prenotazioni,
+   2FA), con le 135 rotte a contratto.
+4. **D70 richiama D41 e ne supera la sola parte dei «tre tasti di pari
+   peso» — superato.** Registrato in [decisioni.md](decisioni.md) (D70);
+   il resto di D41 (menu a cinque voci, nomi delle pagine) resta
+   esercitato dai controlli esistenti, tutti verdi.
+5. **Tutti i collaudi verdi, quelli dell'eroe estesi e mai ridotti —
+   superato.** 287 test, 135 rotte a contratto, 1237 controlli fumo
+   (+23); nessuna asserzione tolta; l'unico controllo aggiornato
+   (`smoke-flow`) è stato esteso, non indebolito.
+6. **Schermate della home (1366 e 390), stato.md e demo — in capo al
+   coordinatore.**
+
+### Difetti trovati
+
+Nessun difetto del prodotto. Un solo rosso al primo giro, in
+`smoke:flow` («expected exactly one main button»): **difetto della
+suite**, scritta per la forma precedente alla D70; aggiornata come sopra,
+secondo giro tutto verde.
+
 
 Collaudo della commessa «la home arcobaleno»
 ([specifica](specifica-home-arcobaleno.md), D67–D69, criteri §6 1–6):

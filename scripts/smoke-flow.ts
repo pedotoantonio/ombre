@@ -42,9 +42,13 @@ const exploreForm = /<form class="portal-search"[^>]*>[^]*?<\/form>/.exec((await
 const firstDay = /name="day"[^>]*min="(\d{4}-\d{2}-\d{2})"|min="(\d{4}-\d{2}-\d{2})"[^>]*name="day"/.exec(exploreForm);
 const romeToday = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome' }).format(new Date());
 check((firstDay?.[1] ?? firstDay?.[2]) === romeToday, `explore: the search does not start from today (${firstDay?.[1] ?? firstDay?.[2]})`);
-// Besides the search, the only other button is the invitation to Explore inside the map box.
+// Besides the search, the only other PRIMARY button is the invitation to Explore inside
+// the map box; since D70 the «Per chi è» cards carry three SECONDARY buttons (their CTAs),
+// which are welcome — but nothing else joins them.
 const mapBox = /<div class="portal-map__invite">[^]*?<\/div>/.exec(home.html)?.[0] ?? '';
-check(count(form, /type="submit"/g) === 1 && count(home.html.replace(mapBox, ''), /class="button[ "]/g) === 1, 'home: expected exactly one main button, the search');
+const homeButtons = home.html.replace(mapBox, '').match(/class="button( [^"]*)?"/g) ?? [];
+check(count(form, /type="submit"/g) === 1 && homeButtons.filter((cls) => !cls.includes('button--secondary')).length === 1, 'home: expected exactly one main button, the search');
+check(homeButtons.filter((cls) => cls.includes('button--secondary card__cta')).length === 3 && homeButtons.length === 4, 'home: expected the three secondary buttons of the «Per chi è» cards and nothing else (D70)');
 check(mapBox.includes('href="/ricerca-ombrellone"') && home.html.indexOf('class="portal-search"') < home.html.indexOf('class="portal-map'), 'home: the map box has no invitation to Explore after the search form');
 // The list fallback (D69): the server renders the clubs with their links inside the map box,
 // and the old "map not available" notice is gone for good.

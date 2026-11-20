@@ -209,6 +209,46 @@ for (const file of ['costa-1400.jpg', 'costa-1400.webp', 'costa-1400.avif', 'cos
   check(picture.status === 200 && (picture.headers.get('content-type') ?? '').startsWith('image/'), `home: /img/${file} is not served as an image`);
 }
 
+// La home è dell'Ospite (D70): the three role buttons leave the hero — the portal-roles
+// block and the buttons' exact wordings are gone in both languages (the «Gestore
+// stabilimento» card and the «Gestore: come funziona» menu entry legitimately keep the
+// role's name, so only the old buttons' full texts are banished); the hero keeps its h1
+// and the search form; the «Per chi è» cards become the entrance of the roles, each with
+// a secondary button towards its guide (matched on class and href: JSX may slip a
+// <!-- --> into the text); the Manager still reaches the sign-in in two touches.
+const heroOldButtons = {
+  it: ['Cerco un ombrellone', 'Affitto il mio ombrellone', 'Gestisco uno stabilimento'],
+  en: ["I'm looking for an umbrella", 'I rent out my umbrella', 'I manage a beach club'],
+} as const;
+const audienceCtas = {
+  it: ['/come-funziona', '/stagionale', '/gestore-stabilimento'],
+  en: ['/en/how-it-works', '/en/season-holder', '/en/beach-manager'],
+} as const;
+const enHomeHtml = await (await fetch(`${base}/en`)).text();
+for (const [lang, html] of [['it', homeHtml], ['en', enHomeHtml]] as const) {
+  check(!html.includes('portal-roles'), `home ${lang}: the portal-roles block is still in the page (D70)`);
+  for (const text of heroOldButtons[lang]) {
+    // The server may escape the apostrophe: every rendering of the old wording counts.
+    const variants = [text, text.replace("'", '&#x27;'), text.replace("'", '&apos;'), text.replace("'", '’')];
+    check(variants.every((variant) => !html.includes(variant)), `home ${lang}: the old role button «${text}» is still in the page (D70)`);
+  }
+  const hero = /<section class="portal-hero">[^]*?<\/section>/.exec(html)?.[0] ?? '';
+  check(/<h1[^>]*>/.test(hero), `home ${lang}: the hero lost its h1 (D70)`);
+  check(hero.includes('class="portal-search"'), `home ${lang}: the hero lost the search form (D70)`);
+  const ctas = tags(html, 'a')
+    .filter((tag) => attribute(tag, 'class') === 'button button--secondary card__cta')
+    .map((tag) => attribute(tag, 'href'));
+  check(ctas.length === 3, `home ${lang}: expected exactly three «Per chi è» buttons, found ${ctas.length}`);
+  audienceCtas[lang].forEach((href, index) => {
+    check(ctas[index] === href, `home ${lang}: the «Per chi è» button ${index + 1} points to ${ctas[index]}, expected ${href}`);
+  });
+}
+// The Manager's two touches (D70): the guide page keeps its link to the sign-in.
+for (const [guidePath, signInPath] of [['/gestore-stabilimento', '/area/accesso'], ['/en/beach-manager', '/en/account/sign-in']] as const) {
+  const guideHtml = await (await fetch(base + guidePath)).text();
+  check(guideHtml.includes(`href="${signInPath}"`), `${guidePath}: no link to ${signInPath} — the Manager lost the second touch (D70)`);
+}
+
 // The two-row header (D67): the menu bar is a band of its own — nav.site-nav is a
 // sibling of .site-header__inner, never inside it — with its entries in a container,
 // in the D41 order, same in both languages. The rainbow of D68 lives in the CSS and is
