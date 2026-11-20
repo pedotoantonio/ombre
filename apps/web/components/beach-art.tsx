@@ -386,7 +386,7 @@ export function SpotSymbol({ sign, state, umbrellas = 1, sunbeds = 0, size = 48,
   const labelWidth = label ? Math.min(58, 11 + label.length * 6.9) : 0;
   return (
     <svg
-      className={`beach-art beach-spot beach-art--st-${state}`}
+      className={`beach-art beach-spot${key === 'umbrella' ? ' beach-spot--ombrellone' : ''} beach-art--st-${state}`}
       viewBox="0 0 64 64"
       width={size}
       height={size}

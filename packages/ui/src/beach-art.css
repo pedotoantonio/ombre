@@ -1,5 +1,7 @@
 /* Stili del linguaggio grafico «beach-art» (D55/D56): la spiaggia illustrata.
-   Tinte: solo i gettoni Solar & Fresh di tokens.css più le derivate dichiarate qui. */
+   Tinte: solo i gettoni di tokens.css più le derivate dichiarate qui; gli stati
+   seguono la tavola del tema arcobaleno (docs/tema-arcobaleno.md, D65 §5; D66:
+   terreni e scenografia restano quelli pastello di D55). */
 
 :root {
   /* Terreni e materiali, derivati dalla palette */
@@ -15,26 +17,27 @@
   --arte-contorno: color-mix(in srgb, var(--abisso) 55%, transparent); /* contorno morbido dei simboli */
   --arte-neve: #ffffff; /* il bianco pieno della tela e della schiuma */
 
-  /* Stati (D56): tinta piena per distintivo e contorno, velo pastello per la tela.
-     I glifi sono grafica: contrasto AA (3:1) sempre, 4,5:1 quasi ovunque. */
-  --stato-disponibile: #2e7d5b; /* verde salvia scuro: bianco sopra 4,9:1 */
-  --stato-disponibile-velo: #d3e8db;
-  --stato-prenotato: var(--condiviso-testo); /* azzurro: bianco sopra 4,5:1 */
+  /* Stati (D56, ricolorati dalla tavola arcobaleno D65 §5): tinta piena per
+     distintivo e contorno, velo pastello per la tela. I glifi sono grafica:
+     contrasto AA (3:1) sempre, 4,5:1 quasi ovunque. */
+  --stato-disponibile: var(--libero-testo); /* verde acqua scurito #1b6f65: glifo bianco 5,99:1; tratto sul velo 4,99:1 */
+  --stato-disponibile-velo: #d9efec;
+  --stato-prenotato: var(--condiviso-testo); /* azzurro: glifo bianco 5,89:1; tratto sul velo 4,67:1 */
   --stato-prenotato-velo: #d9e6fa;
-  --stato-occupato: var(--occupato-testo); /* corallo: bianco sopra 4,5:1 */
-  --stato-occupato-velo: #f8ddd4;
-  --stato-stagionale: #4f46b8; /* indaco: bianco sopra 6:1 */
-  --stato-stagionale-velo: #e1dff6;
-  --stato-manutenzione: var(--ambra); /* ambra: mai bianco sopra, glifo abisso */
-  --stato-manutenzione-velo: #fbe7c2;
-  --stato-non-disponibile: #5d6b7a; /* grigio ardesia: bianco sopra 4,8:1 */
+  --stato-occupato: var(--occupato-testo); /* rosso corallo scurito #b3202c: glifo bianco 6,65:1; tratto sul velo 5,22:1 */
+  --stato-occupato-velo: #fadde0;
+  --stato-stagionale: #7b2cbf; /* viola della palette: glifo bianco 7,11:1; tratto sul velo 5,61:1 */
+  --stato-stagionale-velo: #ece0f7;
+  --stato-manutenzione: var(--ambra); /* arancio: mai bianco sopra, glifo abisso (10,29:1 sul velo) */
+  --stato-manutenzione-velo: #fde7cd;
+  --stato-non-disponibile: #5d6b7a; /* grigio ardesia: glifo bianco 5,46:1 */
   --stato-non-disponibile-velo: #e4e8ec;
-  --stato-condivisa: var(--condiviso); /* giornata condivisa: glifo bianco, 3,6:1 (grafica) */
+  --stato-condivisa: var(--condiviso); /* giornata condivisa: glifo bianco 3,48:1 (grafica) */
   --stato-condivisa-velo: #dbe9ff;
-  --stato-scelta: var(--oceano); /* scelta da te: bianco sopra 6,7:1 */
-  --stato-scelta-velo: #cfe6ea;
+  --stato-scelta: var(--oceano); /* scelta da te, blu mare: glifo bianco 4,87:1; tratto sul velo 3,99:1 */
+  --stato-scelta-velo: #d6ecf8;
   --stato-proposta: var(--ambra); /* proposta: glifo abisso come la manutenzione */
-  --stato-proposta-velo: #fbe7c2;
+  --stato-proposta-velo: #fde7cd;
 }
 
 /* ---- Radici comuni dei simboli ---- */
@@ -54,6 +57,21 @@
 .beach-art--st-shared { --arte-stato: var(--stato-condivisa); --arte-velo: var(--stato-condivisa-velo); --arte-glifo: var(--arte-neve); }
 .beach-art--st-selected { --arte-stato: var(--stato-scelta); --arte-velo: var(--stato-scelta-velo); --arte-glifo: var(--arte-neve); }
 .beach-art--st-suggested { --arte-stato: var(--stato-proposta); --arte-velo: var(--stato-proposta-velo); --arte-glifo: var(--abisso); }
+
+/* Accento arcobaleno (D66, tavola D65 §5, elenco chiuso): le tele dei soli
+   ombrelloni «disponibile» alternano quattro veli della palette secondo la
+   posizione della postazione (stabile: non cambia quando cambiano gli stati
+   vicini). Tratto, spicchi e distintivo restano in --stato-disponibile
+   (#1b6f65), che sui quattro veli misura 4,99 / 4,91 / 5,37 / 4,72:1: lo stato
+   resta leggibile dal distintivo colore+glifo e dall'etichetta. Le due forme
+   del selettore coprono il simbolo appoggiato fra i fratelli e quello avvolto
+   in una cella (.plan-spot, .draw-cell). */
+.beach-spot--ombrellone.beach-art--st-available:nth-child(4n + 2),
+:nth-child(4n + 2) > .beach-spot--ombrellone.beach-art--st-available { --arte-velo: #d6ecf8; } /* velo blu */
+.beach-spot--ombrellone.beach-art--st-available:nth-child(4n + 3),
+:nth-child(4n + 3) > .beach-spot--ombrellone.beach-art--st-available { --arte-velo: #fef2d2; } /* velo giallo */
+.beach-spot--ombrellone.beach-art--st-available:nth-child(4n),
+:nth-child(4n) > .beach-spot--ombrellone.beach-art--st-available { --arte-velo: #ece0f7; } /* velo viola */
 
 /* La postazione: la tela prende il velo dello stato, i contorni la tinta piena. */
 .beach-spot__tela { fill: var(--arte-velo); stroke: var(--arte-stato); }
@@ -103,17 +121,21 @@
   background-position: 0 0, 11px 17px;
 }
 
-/* ---- La legenda compatta (D56): righe distintivo+etichetta, pronta per un <details>. ---- */
+/* ---- La legenda compatta (D56): righe distintivo+etichetta, pronta per un <details>. ----
+   Cornice e titolo sono l'accento ammesso dalla tavola D65 §5: bordo --bordo e
+   titolo --oceano-scuro; righe e contenuti restano quelli di D56. */
 .beach-legend {
   margin: 0;
-  padding: 0;
+  padding: var(--spazio-2) var(--spazio-3);
+  border: 1px solid var(--bordo);
+  border-radius: var(--raggio-piccolo);
 }
 
 .beach-legend__title {
   margin: 0 0 var(--spazio-2);
   font-size: var(--testo-piccolo);
   font-weight: var(--peso-medio);
-  color: var(--testo);
+  color: var(--oceano-scuro);
 }
 
 .beach-legend__list {
