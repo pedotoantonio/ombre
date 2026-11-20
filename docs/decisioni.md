@@ -653,3 +653,46 @@ La planimetria illustrata conserva il carattere pastello di D55: la
 palette entra negli accenti (tele, legenda, cornici) per mano
 dell'illustratore; stati sempre colore + glifo, legenda invariata nei
 contenuti.
+
+## D67 — L'intestazione su due righe (20/11/2026)
+
+Il logo sta su una riga sua (marchio a sinistra, cambio lingua e «Area
+riservata» a destra); sotto, la barra dei menu **da bordo a bordo della
+pagina**, con un fondo proprio e le voci dentro il contenitore. Le voci
+non si tagliano mai: vanno a capo quando non ci stanno, a ogni
+larghezza; lo scorrimento orizzontale con le sfumature sparisce. La
+griglia a una riga degli schermi larghi si ritira. Ordine e testi delle
+voci restano quelli di D41.
+
+## D68 — I pulsanti del menu nei colori dell'arcobaleno (20/11/2026)
+
+Ogni voce del menu è un pulsante colorato, nell'ordine dell'arcobaleno
+dei gettoni (D65): Ricerca ombrellone rosso corallo, Ospite arancio,
+Stagionale giallo sole, Gestore verde acqua, Assistenza blu mare;
+«Area riservata», nella riga del marchio, prende il viola e completa
+l'arco. Il cambio lingua resta neutro. Il direttore artistico mette a
+verbale nei gettoni la tavola dei sei pulsanti (fondo, testo, bordo,
+voce corrente, fuoco) con i contrasti **misurati**: nessuna coppia
+sotto WCAG AA, varianti scurite dove il colore pieno non regge, giallo
+sole solo come fondo con testo scuro. La voce corrente conserva un
+segno oltre il colore, leggibile anche in bianco e nero.
+
+## D69 — La mappa dei lidi e il ripiego a elenco (20/11/2026)
+
+La rotta dei segnaposto (`apps/web/app/dati/mappa/route.ts`) esisteva
+ma non fu mai committata: la regola `dati/` del `.gitignore` alla
+radice del repository ingoiava anche `apps/web/app/dati/`, perciò la
+demo rispondeva 404 e il riquadro ripiegava su «Mappa non disponibile».
+Rimedio: regola `!apps/web/app/dati/` nel `.gitignore` di `ombre/` (il
+file alla radice serve ad altri progetti e non si tocca) e rotta
+committata. La via resta Leaflet + OpenStreetMap: libreria e CSS
+serviti da noi, solo le tessere da OpenStreetMap con attribuzione
+visibile, visitatore mai localizzato. Le coordinate dei tre lidi
+dimostrativi esistono già (punti costieri plausibili di stabilimenti
+inventati). Il ripiego diventa utile: il server rende nel riquadro
+l'elenco dei lidi (nome, località, collegamento) oltre all'invito alla
+ricerca; senza JavaScript si vede l'elenco, con JavaScript la mappa lo
+sostituisce, se mappa o tessere falliscono l'elenco resta; «Mappa non
+disponibile» sparisce. Se l'API non risponde, la home mostra il solo
+invito e non si rompe. La mappa della ricerca eredita lo stesso
+ripiego.
