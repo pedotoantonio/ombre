@@ -188,6 +188,22 @@ indicizzato.
   del gestionale «Postazioni» con anteprima identica al pubblico e
   ripristino alla predefinita in un tocco (migrazione 025, contratto a
   135 rotte).
+- Iterazione «Il tema arcobaleno» (20/11/2026), rifacimento puramente
+  visivo dal logo approvato dal committente, specifica in
+  [specifica-tema-arcobaleno.md](specifica-tema-arcobaleno.md)
+  ([prompt](prompt-tema-arcobaleno.md)), decisioni D64–D66: logo
+  arcobaleno (gradiente a sei fermate, sole e onda arancio #ee9b00)
+  attivo nel portale, nel gestionale, nella reception e nel favicon,
+  fedele byte per byte ai file del committente in
+  [marchio](marchio/marchio.md); tavola dei gettoni del direttore
+  artistico in [tema-arcobaleno.md](tema-arcobaleno.md) (gradiente solo
+  su logo e superfici decorative; blu mare azioni, verde acqua conferme,
+  rosso corallo errori, arancio avvisi, giallo mai testo su chiaro) con
+  contrasti WCAG AA calcolati e verbale d'accessibilità: 5.456 nodi
+  misurati su 19 pagine, sette regole scurite, zero coppie sotto soglia;
+  planimetria illustrata rimasta pastello con gli accenti della palette
+  (stati sempre colore + glifo); nessuna funzione, rotta, modulo o testo
+  cambiato.
 - Prenotazione dell'ospite: scelta della postazione, riepilogo con codice promozionale,
   riserva, dati, pagamento di prova, pass con codice QR e codice breve.
 - Reception: verifica del pass con ingresso, uscita e rientro, prenotazione al banco,
@@ -360,6 +376,24 @@ memoria di un solo processo dell'API; il preventivo non è salvato con una scade
 propria; il segreto della verifica in due passaggi è salvato in chiaro nel database; la
 pagina «non trovata» di un indirizzo ben formato ma senza dati (per esempio uno
 stabilimento inesistente) ha il codice 404 giusto, ma senza script appare vuota.
+
+## Backup e ripristino del tema originale
+
+Prima del tema arcobaleno (20/11/2026) il tema «Solar & Fresh» è stato
+messo al sicuro due volte, dal committente:
+
+- **Tag git** `ombre-tema-originale-20261120` sul commit `3bcd7e9`
+  (l'ultimo commit prima del tema nuovo). Ripristino mirato dei file del
+  tema: `git checkout ombre-tema-originale-20261120 -- <file del tema>`
+  — i file del tema sono `packages/ui/src/tokens.css`, `portal.css`,
+  `base.css`, `beach-art.css`, `packages/ui/src/index.tsx` (logo),
+  `apps/web/app/icon.svg` (favicon); per il marchio, i file storici di
+  `docs/marchio/` non sono mai stati toccati (vedi
+  [marchio.md](marchio/marchio.md)).
+- **Archivio completo**
+  `/home/sysadmin/backup-ombre/ombre-tema-originale-20261120.tar.gz`
+  (sorgenti senza node_modules), per il ripristino d'emergenza fuori da
+  git.
 
 ## Ambiente dimostrativo
 
