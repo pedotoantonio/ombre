@@ -1,6 +1,6 @@
 # Stato del progetto
 
-Aggiornato al 19/11/2026.
+Aggiornato al 20/11/2026.
 
 ## Dove siamo
 
@@ -204,6 +204,21 @@ indicizzato.
   planimetria illustrata rimasta pastello con gli accenti della palette
   (stati sempre colore + glifo); nessuna funzione, rotta, modulo o testo
   cambiato.
+- Iterazione «La home arcobaleno» (20/11/2026), specifica in
+  [specifica-home-arcobaleno.md](specifica-home-arcobaleno.md)
+  ([prompt](prompt-home-arcobaleno.md)), decisioni D67–D69:
+  intestazione su due righe (logo su una riga sua, barra dei menu da
+  bordo a bordo su fondo spuma, voci che vanno a capo e non si tagliano
+  mai, a nessuna larghezza); ogni voce del menu è un pulsante colorato
+  nell'ordine dell'arcobaleno (corallo, arancio, giallo con testo
+  abisso e bordo, verde, blu, e «Area riservata» viola), tavola D68 nei
+  gettoni con contrasti misurati sul DOM reso (195 rapporti, zero
+  coppie sotto AA); la mappa dei lidi della home funziona davvero: la
+  rotta dei segnaposto, scritta ma mai committata perché la regola
+  `dati/` del `.gitignore` alla radice la ingoiava, è ora tracciata, e
+  il riquadro senza JavaScript (o a mappa non pronta) mostra l'elenco
+  degli stabilimenti coi collegamenti invece di «Mappa non
+  disponibile»; la home legge i lidi dal server e non si rompe mai.
 - Prenotazione dell'ospite: scelta della postazione, riepilogo con codice promozionale,
   riserva, dati, pagamento di prova, pass con codice QR e codice breve.
 - Reception: verifica del pass con ingresso, uscita e rientro, prenotazione al banco,
@@ -274,6 +289,18 @@ indicizzato.
 ## Collaudo
 
 Esito completo in [collaudo.md](collaudo.md).
+
+Il 20/11/2026, iterazione «La home arcobaleno»: 287 test con database
+(contratto fermo a 135 rotte) e **1214 controlli fumo** tutti verdi su
+pila vergine (+25 in `smoke` su intestazione, rotta dei segnaposto ed
+elenco di ripiego; +3 in `smoke:flow` sul ripiego di home e ricerca);
+vaglio d'accessibilità indipendente a verbale (195 rapporti misurati
+sui sei pulsanti nei due stati, it/en, più fuoco, voce corrente, prova
+in scala di grigi e ripiego; una coppia corretta da 4,23 a 7,00);
+nessun difetto del prodotto, quattro difetti del giro di collaudo
+corretti in `scripts/collaudo.sh` (tra cui l'esito delle suite
+inghiottito da un `tail`). Ambiente di collaudo ricostruito e lasciato
+acceso.
 
 Il 20/11/2026, iterazione «Il tema arcobaleno» (rifacimento puramente
 visivo): 287 test con database (contratto fermo a 135 rotte) e 1186
