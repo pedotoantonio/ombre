@@ -966,6 +966,9 @@ html:has(.plan-bar) {
 }
 
 .portal-map__list a {
+  /* Il riquadro posa sulla spuma: il blu pieno sta a 4,23 (< 4,5), quindi il
+     collegamento usa il blu scurito (7,00) — stessa famiglia del verbale del 20/11. */
+  color: var(--oceano-scuro);
   font-weight: 700;
 }
 

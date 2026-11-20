@@ -503,3 +503,101 @@ Corrispondenza voce → gettone: 1 Ricerca ombrellone `corallo`, 2 Ospite
 non vanno riusati altrove senza tornare a questa tavola. Il gradiente
 `--arcobaleno` resta **vietato** sui pulsanti (§4): l'arcobaleno qui lo fa
 la fila dei sei colori, non il gradiente.
+
+## Verbale d'accessibilità della home arcobaleno (20/11/2026)
+
+Verifica **indipendente** dell'esperto di accessibilità sulla commessa
+«home arcobaleno» (D67–D69), **sulle pagine rese**, non sulla carta.
+
+### Metodo
+
+- Dev server del sito (`pnpm --filter @ombre/web dev`, porta 3210) con le
+  variabili di `.env.collaudo` e l'API di collaudo su 127.0.0.1:3231
+  (`OMBRE_API_URL` puntata lì); Playwright 1.49.1 nel contenitore ufficiale
+  (`--network host`), script usa-e-getta nello scratchpad, non nel repo.
+- Colori **calcolati dal DOM** (`getComputedStyle`, fondi composti risalendo
+  i genitori con gli alfa) e rapporti WCAG **calcolati via script** (luminanza
+  relativa sRGB, due decimali). Soglie: 4,5:1 testo normale, 3:1 componenti.
+- Pagine: home e una pagina interna (Assistenza/Help) **in italiano e in
+  inglese** — 6 pulsanti × 4 pagine × 2 stati (riposo e passaggio), più
+  bordi, fuoco, voce corrente e ripiego della mappa: **195 rapporti
+  calcolati in tutto**.
+
+### La tabella dei sei pulsanti (misure sul reso; identiche su it/en, home e interna)
+
+Barra dei menu su fondo **spuma `#e3f1fa`** (una delle tre basi della tavola
+del DA); «Area riservata» sulla riga del marchio (bianco all'82% sopra
+avorio ≈ `#fefefe`).
+
+| # | Voce | Riposo (testo/fondo) | Testo | Passaggio (fondo) | Testo | Componente su barra (riposo/passaggio) |
+|---|---|---|---|---|---|---|
+| 1 | Ricerca ombrellone | bianco su `#b3202c` | **6,65** | `#811720` | **10,11** | 5,77 / 8,78 |
+| 2 | Ospite: come funziona | bianco su `#a85600` | **5,26** | `#793e00` | **8,39** | 4,56 / 7,29 |
+| 3 | Stagionale: come funziona | **abisso** su `#fcbf49` | **7,47** | `#ee9b00` | **5,49** | il confine è il **bordo** (sotto) |
+| 4 | Gestore: come funziona | bianco su `#1b6f65` | **5,99** | `#135049` | **9,25** | 5,20 / 8,03 |
+| 5 | Assistenza | bianco su `#0077b6` | **4,87** | `#00557f` | **8,06** | 4,23 / 7,00 |
+| 6 | Area riservata | bianco su `#7b2cbf` | **7,11** | `#59208a` | **10,51** | 7,05 / 10,42 |
+
+Il testo **non cambia mai al passaggio** (misurato). Tutti i valori di fondo,
+testo e passaggio coincidono **al centesimo** con la tavola del DA; nessuno
+scarto. Il 7,05 del viola (contro il 7,11 «su carta» della tavola) non è uno
+scarto: è la stessa coppia misurata sul fondo reale della riga del marchio
+(`#fefefe`), sopra soglia con largo margine.
+
+### L'esito del giallo
+
+- Testo **abisso** `#1d3557` sul fondo `#fcbf49`: **7,47** a riposo, **5,49**
+  al passaggio su `--sole` `#ee9b00` — mai testo bianco, mai giallo come
+  testo ✓.
+- **Bordo `#a85600`** presente e misurato: **4,56** sulla barra spuma (è lui
+  il confine del componente: il fondo giallo da solo sta a 1,44 a riposo e
+  1,96 al passaggio) e **3,18** sul proprio fondo a riposo. Al passaggio il
+  bordo sul fondo sole scende a 2,33, ma il requisito del confine è verso
+  l'esterno e lì il bordo resta a 4,56 ≥ 3 ✓ (come da tavola del DA: «il
+  confine è il bordo, mai il fondo»).
+
+### Voce corrente, fuoco, barra a 390
+
+- **Voce corrente** (`aria-current="page"`, misurata su Assistenza/Help):
+  peso **800** + **sottolineatura 3px** in `currentColor` — il segno non è
+  di solo colore, identico in italiano e in inglese ✓.
+- **Fuoco** (tabbing reale da tastiera): outline **3px solid abisso** con
+  scarto 2px su tutti e sei i pulsanti (10,73 sulla spuma, ≥ 3) e anche su
+  marchio e cambio lingua (scarto 3px) ✓.
+- **Barra a 390** (it e en): `scrollWidth` = `clientWidth` = 390 sul
+  documento e sulla barra; nessuna voce tagliata (verificato voce per
+  voce); le voci vanno a capo su più righe ✓.
+
+### Prova senza colore (schermata in scala di grigi, pagina Assistenza)
+
+I sei pulsanti restano **distinguibili come pillole** dai grigi diversi e
+dai confini; il giallo si riconosce dal bordo scuro; la voce corrente
+(Assistenza) resta riconoscibile da **sottolineatura + grassetto** ✓.
+
+### Il ripiego a elenco della mappa (pagina senza JavaScript)
+
+Contesto Playwright con `javaScriptEnabled: false`, home e ricerca, it/en:
+l'elenco dei lidi c'è (tre stabilimenti con nome, località e collegamento),
+niente più «Mappa non disponibile». Misure sul fondo spuma del riquadro:
+etichetta **10,73**, località **6,07**, bottone dell'invito 4,87 sul proprio
+fondo (bordo 4,23 ≥ 3 sulla spuma). I **collegamenti dell'elenco** stavano a
+`--oceano` pieno su spuma: **4,23 < 4,5** — l'ottava comparsa della famiglia
+già a verbale il 20/11.
+
+### Correzione fatta (una, minima, coerente con la tavola)
+
+| Regola | Prima | Dopo | Rapporto |
+|---|---|---|---|
+| `.portal-map__list a` (portal.css) | ereditava `--oceano` sul fondo spuma del riquadro mappa | `color: var(--oceano-scuro)` | 4,23 → **7,00** |
+
+Dopo la correzione la misura è stata **ripetuta su home e ricerca, it e en:
+7,00 su tutti i collegamenti**, sottolineatura conservata. Nessun altro
+file toccato, nessun gettone cambiato, nessun markup toccato.
+
+### Esito
+
+**195 rapporti calcolati, una sola coppia sotto soglia, corretta e
+rimisurata: zero coppie sotto soglia.** Il rapporto vincolato più basso a
+regime è **3,18** (bordo del giallo sul proprio fondo, soglia 3); il testo
+più basso **4,87** (bianco su blu mare, soglia 4,5). Nessuno scarto dalla
+tavola del DA.
