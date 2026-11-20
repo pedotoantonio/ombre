@@ -209,6 +209,84 @@ for (const file of ['costa-1400.jpg', 'costa-1400.webp', 'costa-1400.avif', 'cos
   check(picture.status === 200 && (picture.headers.get('content-type') ?? '').startsWith('image/'), `home: /img/${file} is not served as an image`);
 }
 
+// The two-row header (D67): the menu bar is a band of its own — nav.site-nav is a
+// sibling of .site-header__inner, never inside it — with its entries in a container,
+// in the D41 order, same in both languages. The rainbow of D68 lives in the CSS and is
+// measured by the accessibility report; here the structure that carries it.
+const navItems = {
+  it: [
+    ['/ricerca-ombrellone', 'Ricerca ombrellone'],
+    ['/come-funziona', 'Ospite: come funziona'],
+    ['/stagionale', 'Stagionale: come funziona'],
+    ['/gestore-stabilimento', 'Gestore: come funziona'],
+    ['/assistenza', 'Assistenza'],
+  ],
+  en: [
+    ['/en/umbrella-search', 'Umbrella search'],
+    ['/en/how-it-works', 'Guest: how it works'],
+    ['/en/season-holder', 'Season holder: how it works'],
+    ['/en/beach-manager', 'Beach manager: how it works'],
+    ['/en/help', 'Help'],
+  ],
+} as const;
+for (const [path, lang] of [['/', 'it'], ['/en', 'en']] as const) {
+  const html = await (await fetch(base + path)).text();
+  const header = /<header class="site-header">[^]*?<\/header>/.exec(html)?.[0] ?? '';
+  const nav = /<nav class="site-nav"[^>]*>[^]*?<\/nav>/.exec(header)?.[0] ?? '';
+  check((html.match(/class="site-nav"/g) ?? []).length === 1 && nav !== '', `${path}: expected exactly one site-nav, inside the header`);
+  check(/<\/div><nav class="site-nav"/.test(header), `${path}: the menu bar is not its own band after the brand row (site-nav must not sit inside site-header__inner)`);
+  check(/<nav class="site-nav"[^>]*><ul class="container">/.test(nav), `${path}: the menu entries are not inside a container`);
+  const entries = [...nav.matchAll(/<a [^>]*href="([^"]+)"[^>]*>(?:<span class="site-nav__mark"[^>]*>[^<]*<\/span>)?(?:<!-- -->)?([^<]*)<\/a>/g)].map((entry) => [entry[1], (entry[2] ?? '').trim()]);
+  check(JSON.stringify(entries) === JSON.stringify(navItems[lang].map((item) => [...item])), `${path}: the menu entries are not the five of D41 in order (found ${JSON.stringify(entries)})`);
+}
+
+// The pins of the home map (D69): /dati/mappa serves the three demonstration clubs with
+// slug, name, locality, coordinates and the page already localized; an unknown language
+// falls back to Italian.
+const demoClubs = [
+  ['bagno-delle-dune', 'Bagno delle Dune', 'Lido di Pomposa'],
+  ['lido-aurora', 'Lido Aurora', 'Marina Azzurra'],
+  ['cala-del-moro', 'Cala del Moro', 'Porto Selvaggio'],
+] as const;
+const clubPath = (lang: 'it' | 'en', slug: string) => (lang === 'it' ? `/bagni/${slug}` : `/en/beach-clubs/${slug}`);
+interface Marker {
+  slug?: string;
+  name?: string;
+  locality?: string;
+  latitude?: unknown;
+  longitude?: unknown;
+  href?: string;
+}
+async function markersOf(query: string): Promise<Marker[]> {
+  const response = await fetch(`${base}/dati/mappa${query}`, { headers: { Accept: 'application/json' } });
+  if (response.status !== 200) return [];
+  const body = (await response.json()) as { markers?: Marker[] };
+  return Array.isArray(body.markers) ? body.markers : [];
+}
+for (const lang of ['it', 'en'] as const) {
+  const markers = await markersOf(`?lang=${lang}`);
+  check(markers.length === 3, `/dati/mappa?lang=${lang}: expected the three demonstration clubs, found ${markers.length}`);
+  for (const [slug, name, locality] of demoClubs) {
+    const marker = markers.find((candidate) => candidate.slug === slug);
+    check(
+      marker !== undefined && marker.name === name && marker.locality === locality && typeof marker.latitude === 'number' && typeof marker.longitude === 'number' && marker.href === clubPath(lang, slug),
+      `/dati/mappa?lang=${lang}: the pin of ${slug} is missing, or without name, locality, coordinates and its localized page`,
+    );
+  }
+}
+check((await markersOf('?lang=de')).every((marker) => (marker.href ?? '').startsWith('/bagni/')) && (await markersOf('?lang=de')).length === 3, '/dati/mappa: an unknown language does not fall back to Italian');
+
+// The list fallback inside the map box (D69): the server renders the three clubs with
+// name, locality and the right link; without JavaScript this is what a visitor reads.
+for (const lang of ['it', 'en'] as const) {
+  const html = await (await fetch(base + (lang === 'it' ? '/' : '/en'))).text();
+  const list = /<ul class="portal-map__list">[^]*?<\/ul>/.exec(html)?.[0] ?? '';
+  check((list.match(/<li\b/g) ?? []).length === 3, `home ${lang}: the list fallback does not show the three clubs`);
+  for (const [slug, name, locality] of demoClubs) {
+    check(new RegExp(`<a href="${clubPath(lang, slug)}">(?:<!-- -->)?${name}</a>`).test(list) && list.includes(locality), `home ${lang}: ${slug} is not in the list fallback with its link and locality`);
+  }
+}
+
 const robots = await fetch(`${base}/robots.txt`);
 const robotsText = await robots.text();
 check(robots.status === 200 && robotsText.includes(`Sitemap: ${siteUrl}/sitemap.xml`), 'robots.txt: missing or without sitemap');

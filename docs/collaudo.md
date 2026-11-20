@@ -1,5 +1,144 @@
 # Collaudo
 
+## Collaudo della home arcobaleno (20/11/2026)
+
+Collaudo della commessa «la home arcobaleno»
+([specifica](specifica-home-arcobaleno.md), D67–D69, criteri §6 1–6):
+intestazione su due righe con la barra dei menu da bordo a bordo e le voci
+mai tagliate (D67), sei pulsanti del menu nei colori dell'arcobaleno con la
+tavola misurata del direttore artistico (D68), mappa della home con i
+segnaposto dalla rotta `/dati/mappa` finalmente committata e ripiego a
+elenco senza JavaScript (D69).
+
+Eseguito su **pila vergine usa-e-getta** con `bash scripts/collaudo.sh`:
+progetto compose dedicato `ombre-collaudo-pila` (web `127.0.0.1:3250`, API
+`127.0.0.1:3251` — il 3210 era occupato da un `next dev` di lavorazione),
+PostgreSQL dei test usa-e-getta sulla porta predefinita **54329**, `build`
+→ `up -d db migrate api worker web` → health → undici suite fumo
+nell'ordine → backup **ripristinato davvero** → `down -v` della sola pila
+del giro. L'ambiente fisso `ombre-collaudo` (`:3232`) e `ombre-demo`
+(`:3220`) **mai toccati**. Due giri completi: al primo, quattro rossi in
+`smoke:spiaggia` diagnosticati come **difetto della suite** (sotto);
+corretta la suite, **secondo giro da pila vergine tutto verde**.
+
+### Controlli estesi (mai ridotti): +28 fumo
+
+- **`scripts/smoke.ts` +25 (il collaudatore)**, da 453 a 478: **8** per
+  l'intestazione D67 (su `/` e `/en`: un solo `nav.site-nav`, **fuori** da
+  `.site-header__inner` come fascia propria dopo la riga del marchio, voci
+  dentro `ul.container`, e le **cinque voci nell'ordine D41** con testo e
+  collegamento esatti nelle due lingue); **9** per la rotta `/dati/mappa`
+  D69 (per `lang=it` e `lang=en`: esattamente **tre segnaposto** e, per
+  ciascun lido demo, slug, nome, località, coordinate numeriche e `href`
+  localizzato; una lingua ignota ripiega sull'italiano); **8** per
+  l'elenco di ripiego D69 (home it e en: tre voci in
+  `.portal-map__list`, ciascuna col collegamento giusto e la località).
+- **`scripts/smoke-flow.ts` +3 (il collega della mappa)**, da 73 a 76:
+  elenco di ripiego reso dal server su home e ricerca, e «Mappa non
+  disponibile» sparita per sempre.
+
+### Correzioni alle suite (nessuna al prodotto), in `scripts/collaudo.sh`
+
+1. **Progetto compose parametrico** (`OMBRE_COLLAUDO_PROJECT`, predefinito
+   nuovo `ombre-collaudo-pila`): prima era cablato `ombre-collaudo`, lo
+   stesso nome dell'**ambiente fisso** acceso su `:3232`; un giro l'avrebbe
+   ricreato su porte diverse e la trappola EXIT l'avrebbe **spento con
+   `down -v`**.
+2. **Porte parametriche** (`OMBRE_WEB_PORT`/`OMBRE_API_PORT`, predefinite
+   3210/3211) passate anche alle suite: ogni script fumo riceve
+   l'indirizzo giusto (sito, API o entrambi).
+3. **`OMBRE_COLLAUDO_PSQL` puntato alla pila sotto prova**: la scia di
+   audit di `smoke:spiaggia` era letta col progetto cablato
+   `ombre-collaudo` (riga 22 della suite), cioè dal database
+   dell'ambiente fisso — da qui i quattro rossi del primo giro
+   (`layout.saved` 0 → 0): **difetto di ambiente della suite, non del
+   prodotto**. Al secondo giro, scia letta dalla pila giusta: 7
+   salvataggi, 7 voci, generi e conteggi esatti, tutto verde.
+4. **Un rosso ferma il collaudo**: `pnpm -s suite | tail -1` inghiottiva
+   l'esito (quello della pipeline è di `tail`), tanto che il primo giro ha
+   chiuso «Collaudo completato senza errori» **con quattro controlli
+   rossi**; ora l'uscita di ogni suite si conserva e un fallimento
+   interrompe il giro.
+5. **`OMBRE_DEMO_MODE=true`** come nell'ambiente fisso (`.env.collaudo`):
+   la pila mostra l'avviso dimostrativo e `smoke.ts` lo pretende (il
+   controllo condizionale non resta più muto).
+
+### Test e collaudi fumo (secondo giro, pila vergine)
+
+| Parte | Controlli | Esito |
+|---|---|---|
+| Lint e tipi (`pnpm lint`, `pnpm typecheck`) | tutto il codice | Superati |
+| Test con PostgreSQL vero (`OMBRE_TEST_DB_PORT` predefinita 54329) | **287** (47 shared, 11 comms, 61 db, 161 api, 7 worker), contratto OpenAPI a **135 rotte** (invariato) | Superati |
+| Pagine pubbliche (`smoke`) | 478 (**+25**) | Superati |
+| Ricerca, planimetria e riserva (`smoke:flow`) | 76 (**+3**) | Superati |
+| Aree riservate (`smoke:areas`) | 85 | Superati |
+| Sito dello stabilimento (`smoke:site`) | 25 | Superati |
+| Conto, Google e carrello (`smoke:conto`) | 139 | Superati |
+| Al passo col mercato (`smoke:mercato`) | 110 | Superati |
+| La spiaggia illustrata (`smoke:spiaggia`) | 121 | Superati |
+| La scheda della postazione (`smoke:schede`) | 141 | Superati |
+| Prenotazione end-to-end (`smoke:booking`) | 15 | Superati |
+| Presa simultanea (`smoke:api`) | 13 | Superati |
+| Due passaggi (`smoke:2fa`, per ultima) | 11 | Superati |
+| Backup e prova di ripristino | quadratura | Superati |
+
+In totale **1214 controlli fumo** (1186 + 3 del collega + 25 del
+collaudatore), tutti verdi al secondo giro; **nessuna asserzione esistente
+cambiata né tolta**.
+
+### Criteri di accettazione (specifica §6)
+
+1. **Intestazione su due righe — superato (struttura).** Il logo sta nella
+   riga del marchio col cambio lingua e «Area riservata»; `nav.site-nav` è
+   reso **fuori** da `.site-header__inner` come fascia a tutta pagina
+   (fondo spuma, uno dei tre fondi su cui la tavola D68 è misurata) con le
+   voci in `ul.container` che **vanno a capo** (`flex-wrap`), niente
+   scorrimento né sfumature; verificato dai controlli nuovi su `/` e
+   `/en`. La prova a vista alle quattro larghezze sta nelle schermate del
+   criterio 6 (aperto).
+2. **Sei colori nell'ordine dell'arcobaleno — superato.** La tavola D68 è
+   nei gettoni ([tema-arcobaleno.md](tema-arcobaleno.md)) con **tutti i
+   rapporti misurati** (vincolato minimo 3,18 ≥ 3, testo minimo 4,87 ≥
+   4,5); giallo sole solo come fondo con testo abisso e bordo `#a85600`;
+   voce corrente con sottolineatura 3px + peso 800 (mai solo colore); i
+   gettoni `--menu-*` sono applicati per `nth-child` sull'ordine D41,
+   identico nelle due lingue (controllato in it e en). L'esperto
+   d'accessibilità ha misurato le pagine rese (195 rapporti): l'unica
+   coppia sotto soglia (collegamenti dell'elenco di ripiego, 4,23) è
+   corretta a 7,00 in `portal.css` — correzione committata dal collega
+   (`7ca1251`) ed esercitata da questo collaudo.
+3. **Mappa con i tre segnaposto — superato** per quanto si collauda senza
+   browser: `/dati/mappa` risponde con i tre lidi demo completi e l'`href`
+   localizzato (stessi collegamenti che il segnaposto apre), Leaflet e il
+   suo CSS sono serviti dal sito (bundle npm), le tessere vengono da
+   OpenStreetMap **con attribuzione** e collegamento al copyright, il
+   visitatore non è mai localizzato e non c'è tracciamento. La mappa resa
+   a vista è nelle prove del criterio 6.
+4. **Rotta committata e ripiego senza JavaScript — superato sul codice,
+   aperto sulla demo.** La rotta è nel repository (commit `904d581`, regola
+   `!apps/web/app/dati/` nel `.gitignore` di `ombre/`) e la pila di
+   collaudo la serve; senza JavaScript il riquadro mostra l'elenco dei tre
+   lidi coi collegamenti giusti e «Mappa non disponibile» è sparita (11
+   controlli fra collaudatore e collega). **Ma l'ambiente `ombre-demo`
+   (`:3220`) risponde ancora 404 su `/dati/mappa`**: è stato costruito
+   prima del commit e va ricostruito e ridistribuito (compito di
+   distribuzione, non difetto del codice).
+5. **Nessuna regressione — superato.** 287 test, contratto fermo a 135
+   rotte, 1214 controlli fumo tutti verdi su pila vergine, nelle due
+   lingue e senza JavaScript; controlli **estesi** (+28), mai ridotti.
+6. **Schermate, stato.md e demo — aperto.** In `docs/schermate` non ci
+   sono ancora le schermate nuove di intestazione e mappa (1366 e 390),
+   `stato.md` non registra ancora l'iterazione e la demo non è stata
+   ridistribuita sul tunnel (vedi criterio 4): restano alla squadra.
+
+### Difetti
+
+**Nessun difetto di prodotto.** Difetti **delle suite** trovati e corretti
+dal collaudatore (le cinque correzioni a `collaudo.sh` qui sopra; le prime
+quattro erano latenti da prima della commessa). Nota aperta per la squadra:
+la demo va ricostruita perché serva `/dati/mappa`, con le schermate e
+`stato.md` del criterio 6.
+
 ## Collaudo del 20/11/2026 — Il tema arcobaleno
 
 Collaudo della commessa «il tema arcobaleno»
