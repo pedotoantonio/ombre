@@ -219,6 +219,16 @@ indicizzato.
   il riquadro senza JavaScript (o a mappa non pronta) mostra l'elenco
   degli stabilimenti coi collegamenti invece di «Mappa non
   disponibile»; la home legge i lidi dal server e non si rompe mai.
+- Iterazione «La home è dell'Ospite» (20/11/2026, pomeriggio),
+  specifica in [specifica-home-ospite.md](specifica-home-ospite.md)
+  ([prompt](prompt-home-ospite.md)), decisione D70 che supera la sola
+  parte di D41 sui «tre tasti di pari peso»: l'eroe della home resta
+  con titolo, sottotitolo e modulo di ricerca; i tre pulsanti dei
+  ruoli sono spariti col loro CSS e le loro chiavi di dizionario;
+  Stagionale e Gestore entrano dalle carte «Per chi è», il cui
+  collegamento è diventato un pulsante secondario (classi già
+  esistenti e misurate); menu a cinque voci e ogni altra pagina
+  invariati; la via dei due tocchi del Gestore resta quella del menu.
 - Prenotazione dell'ospite: scelta della postazione, riepilogo con codice promozionale,
   riserva, dati, pagamento di prova, pass con codice QR e codice breve.
 - Reception: verifica del pass con ingresso, uscita e rientro, prenotazione al banco,
@@ -289,6 +299,14 @@ indicizzato.
 ## Collaudo
 
 Esito completo in [collaudo.md](collaudo.md).
+
+Il 20/11/2026 (pomeriggio), iterazione «La home è dell'Ospite»: 287
+test con database (contratto fermo a 135 rotte) e **1237 controlli
+fumo** tutti verdi su pila vergine (+22 in `smoke` sull'eroe senza i
+tre tasti nelle due lingue, sui tre pulsanti delle carte «Per chi è» e
+sui due tocchi del Gestore; +1 in `smoke:flow`, dove il conteggio dei
+pulsanti della home, scritto per la forma pre-D70, è stato esteso alla
+nuova); nessun difetto del prodotto.
 
 Il 20/11/2026, iterazione «La home arcobaleno»: 287 test con database
 (contratto fermo a 135 rotte) e **1214 controlli fumo** tutti verdi su
