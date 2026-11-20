@@ -1,12 +1,39 @@
+import { useId } from 'react';
 import type { ReactElement } from 'react';
 
-// Brand palette (docs/progetto-grafico.md). The artwork below uses these colours only, plus white.
+// Brand palette (docs/progetto-grafico.md). The scenes below use these colours only, plus white.
+// The logo instead carries the client's rainbow gradient (docs/marchio, D64) plus AMBER and SEAFOAM.
 const OCEAN = '#005f73';
 const SEAFOAM = '#e0f2f1';
 const AMBER = '#ee9b00';
 const ABYSS = '#1d3557';
 const IVORY = '#f8f9fa';
 const WHITE = '#fff';
+
+// The client's rainbow gradient (id `arc` in his files, D64): six horizontal stops, spread over each
+// shape's own bounding box (objectBoundingBox, as in his SVGs). Stops copied verbatim.
+const ARC_STOPS: ReadonlyArray<readonly [offset: string, color: string]> = [
+  ['0', '#e63946'],
+  ['0.2', '#f77f00'],
+  ['0.4', '#fcbf49'],
+  ['0.6', '#2a9d8f'],
+  ['0.8', '#0077b6'],
+  ['1', '#7b2cbf'],
+];
+
+// The gradient definition, once per rendered logo. The id comes from `useId` so that several logos on
+// the same page (header and footer, say) never share or shadow each other's gradient reference.
+function ArcDefs({ id }: { id: string }): ReactElement {
+  return (
+    <defs>
+      <linearGradient id={id} x1="0" y1="0" x2="1" y2="0">
+        {ARC_STOPS.map(([offset, color]) => (
+          <stop key={offset} offset={offset} stopColor={color} />
+        ))}
+      </linearGradient>
+    </defs>
+  );
+}
 
 interface LogoProps {
   /** `onDark` when the logo sits on a dark surface. */
@@ -19,8 +46,8 @@ interface LogoLockupProps extends LogoProps {
 }
 
 // The client's emblem on a 240 grid: a tilted beach umbrella, a smiling face beside its pole, a wave with a small
-// highlight and the sand closing the circle. Traced from the client's brand sheet and cleaned up; master files and
-// usage rules are in docs/marchio.
+// highlight and the sand closing the circle. Paths identical to the client's approved rainbow files
+// (docs/marchio/logo-arcobaleno-*.svg); master files and usage rules are in docs/marchio.
 const EMBLEM_MAIN =
   'M73.6 3.5c-3.9 1-4.7 4.1-2.7 9.4 3 7.7 3 6.6.3 11.6-11.6 22.2-15 39.8-11.8 61.1 1.6 10.4 5.3 23.3 9.1 31.5 1.9 4.1 2.2 4.2 4.9 1.1 4.1-4.8 5.3-6.1 7.3-8.1 6-5.8 12.9-10.7 18.2-13 1.9-.9 1.5-1.8 6.5 13.1 8.7 26 10.3 30.6 12.7 37 2.1 5.7 2.1 5.7-2.4 3.5-11.6-5.6-26-8.5-36.1-7.2-.8.2-2 .3-2.7.4-12.9 1.7-26.9 8.7-35.8 18.1-10.2 10.7-16.3 21.1-14.7 25.1 1.1 2.7 3.9 2.2 8.3-1.4 8.5-7.1 17.4-11.1 28.1-12.5 10.6-1.3 25.6 1.5 36.1 7 3.9 2.1 7.7 4.5 14.5 9.4 11.7 8.5 16.4 11.2 24.1 14.4 37.8 15.2 81.2-6 94.9-46.2 3.5-10.4 5.6-20.5 4.7-22.8-.9-2.3-4-3-5.8-1.3-1.1 1-1.3 1.5-2.2 6.3-6.6 32.9-41.1 50-72.7 35.9-4.8-2.1-7.8-3.9-16.5-9.7-5.5-3.8-4.8-2.8-6.7-8.8-1.9-5.7-4-11.9-5.9-17.5-.9-2.4-2.8-7.8-4.3-12.2-1.5-4.3-3.6-10.3-4.7-13.3-3.7-10.6-7-20.4-7-20.9 0-.6 1.3-1.1 4.5-1.6 .5-.1 1.5-.3 2.1-.5 7.6-1.6 17.6-1.8 24.7-.4 5.2 1.1 7.4.7 7.4-1.2 0-.8-1.1-4.3-2.5-7.9-.6-1.5-1.5-3.9-2.1-5.5-7.4-20.1-21-37.2-37.7-47.5-5.2-3.2-12.5-6.6-18-8.5-5.8-2-6.4-2.5-7.6-6.8-.9-3.2-2-6.7-2.6-7.6-1.1-1.9-3.8-3.1-5.9-2.5zM113.1 8.5c-6.1.3-13.8 1.4-19.7 2.8-4 1-4 1 .2 2.4 6 2 13.8 5.8 20.6 10 16.4 10.2 31.6 30.6 39.9 53.5 3.3 9.3 3.4 9.6 3.9 9.8 .7.4 1.3-.1 3.9-3.1 10-11.2 24.3-16.3 39.3-14.1 6.8 1.1 9.4.3 11.1-3.5 1.5-3.1.9-5.2-3-10.9-17.2-24.5-42.5-40.6-71.9-45.5-7.2-1.3-17.1-1.8-24.3-1.4zM61.4 22.7c-10.3 5.1-19.2 11.8-28.5 21.8-20.8 22.1-30.9 51.5-28.7 83.4 .8 11.1 1.7 13.5 5.7 14.8 3 1 5.4-.2 8.7-4.1 9.3-11.3 22.5-16.7 38.1-15.7 5.9.4 5.7 1.1 2.3-8-3.8-10.1-5.5-15.9-6.8-22.2-4.1-21.7-2.3-40 5.8-58.3 1.7-3.8 3.8-8.1 4.8-10.1 1.6-3 1.5-3.1-1.4-1.6zM203.7 101c-5.8.9-10.5 4.7-12.3 9.8-2.8 8 5.1 12.1 8.1 4.1 1.1-2.9 1.5-3.5 3.5-4.6 1-.5 1-.5 3.1-.5 2.9 0 4 .4 6.4 2.6 1.6 1.5 2.9 1.9 5.1 1.4 3.5-.7 2.1-6.9-2.1-10-3-2.2-8-3.4-11.8-2.8zM151.8 112c-7.3 1-12.6 6.2-13.2 13-.4 5.8 5.4 7.3 7.5 2 2.6-6.5 8.8-8.2 13.7-3.7 3.4 3.1 7.7 2.3 8-1.4 .4-5.4-8.4-10.8-16-9.9zM204 137.8c-.6.3-1.4 1.2-2.9 3.3-5.4 7.1-11.6 10.7-19.5 11.1-6.2.4-10.1-.4-15.1-3.2-3.4-1.8-3.3-1.8-4.6-1.8-2.2 0-4.2 1.4-4.3 3.3-.3 3.2 6.8 8.1 14 9.5 13.5 2.7 26-1.5 33.5-11.4 3.2-4.3 4.1-7 3-9.2-.7-1.4-2.7-2.2-4.1-1.6z';
 const EMBLEM_SAND =
@@ -34,32 +61,40 @@ const LOCKUP_WORDMARK =
 const LOCKUP_SUN =
   'M726.6 77.5A25.9 25.9 0 1 1 777.3 77.5A46.3 46.3 0 0 0 726.6 77.5zM755.2 34.6L755.2 26.2A3.2 3.2 0 0 0 748.7 26.2L748.7 34.6A3.2 3.2 0 0 0 755.2 34.6zM728.9 43.1L722.9 37.2A3.2 3.2 0 0 0 718.4 41.8L724.3 47.7A3.2 3.2 0 0 0 728.9 43.1zM779.6 47.7L785.5 41.8A3.2 3.2 0 0 0 781 37.2L775 43.1A3.2 3.2 0 0 0 779.6 47.7zM715.4 66.6L707 66.6A3.2 3.2 0 0 0 707 73L715.4 73A3.2 3.2 0 0 0 715.4 66.6zM788.5 73L796.9 73A3.2 3.2 0 0 0 796.9 66.6L788.5 66.6A3.2 3.2 0 0 0 788.5 73z';
 
-function Emblem({ tone }: Required<LogoProps>): ReactElement {
-  const onDark = tone === 'onDark';
+// The emblem keeps the client's colours in both tones (D64: on dark only the wordmark changes, the
+// symbol stays in colour): rainbow umbrella/face/wave, amber sand, seafoam highlight at 30 %.
+function Emblem({ arc }: { arc: string }): ReactElement {
   return (
     <>
-      <path fill={onDark ? IVORY : OCEAN} d={EMBLEM_MAIN} />
+      <path fill={arc} d={EMBLEM_MAIN} />
       <path fill={AMBER} d={EMBLEM_SAND} />
-      <path fill={SEAFOAM} fillOpacity={onDark ? undefined : '.3'} d={EMBLEM_HIGHLIGHT} />
+      <path fill={SEAFOAM} fillOpacity=".3" d={EMBLEM_HIGHLIGHT} />
     </>
   );
 }
 
 /** Brand emblem alone. Decorative: use it where the brand name is written next to it. */
 export function Logo({ tone = 'color' }: LogoProps): ReactElement {
+  void tone; // kept for API compatibility: the rainbow emblem is the same on light and on dark
+  const arcId = useId();
   return (
     <svg viewBox="0 0 240 240" aria-hidden="true" focusable="false">
-      <Emblem tone={tone} />
+      <ArcDefs id={arcId} />
+      <Emblem arc={`url(#${arcId})`} />
     </svg>
   );
 }
 
 /** Emblem and wordmark side by side, as one image named by `label`. Its height is set by CSS. */
 export function LogoLockup({ tone = 'color', label }: LogoLockupProps): ReactElement {
+  const arcId = useId();
+  const arc = `url(#${arcId})`;
   return (
     <svg viewBox="0 0 803 240" role="img" aria-label={label} focusable="false">
-      <Emblem tone={tone} />
-      <path fill={tone === 'onDark' ? IVORY : OCEAN} d={LOCKUP_WORDMARK} />
+      <ArcDefs id={arcId} />
+      <Emblem arc={arc} />
+      {/* On dark the wordmark switches to white (`--su-scuro`); the sun keeps the client's amber. */}
+      <path fill={tone === 'onDark' ? WHITE : arc} d={LOCKUP_WORDMARK} />
       <path fill={AMBER} d={LOCKUP_SUN} />
     </svg>
   );
