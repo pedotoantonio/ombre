@@ -75,22 +75,6 @@ export function PageShell({ locale, page, highlight = true, alternatePath, crumb
               </>
             )}
           </Link>
-          <nav className="site-nav" aria-label={t.nav.label}>
-            <ul>
-              {navPages.map((id) => (
-                <li key={id}>
-                  <Link href={pathFor(id, locale)} aria-current={highlight && id === page ? 'page' : undefined}>
-                    {id === 'search' ? (
-                      <span className="site-nav__mark" aria-hidden="true">
-                        ⛱️
-                      </span>
-                    ) : null}
-                    {t.nav[id]}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </nav>
           <div className="site-header__tools">
             <Link className="lang-switch" href={alternatePath ?? pathFor(page, otherLocale)} hrefLang={otherLocale} lang={otherLocale}>
               <span className="visually-hidden">{t.nav.languageLabel}: </span>
@@ -105,6 +89,24 @@ export function PageShell({ locale, page, highlight = true, alternatePath, crumb
             </Link>
           </div>
         </div>
+        {/* Second row (D67): the menu bar runs edge to edge; the entries sit in a container.
+            Same aria-label and D41 order as before. */}
+        <nav className="site-nav" aria-label={t.nav.label}>
+          <ul className="container">
+            {navPages.map((id) => (
+              <li key={id}>
+                <Link href={pathFor(id, locale)} aria-current={highlight && id === page ? 'page' : undefined}>
+                  {id === 'search' ? (
+                    <span className="site-nav__mark" aria-hidden="true">
+                      ⛱️
+                    </span>
+                  ) : null}
+                  {t.nav[id]}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </nav>
       </header>
       {signedInAs ? <AccountBar locale={locale} name={signedInAs} /> : null}
       <main id="contenuto">

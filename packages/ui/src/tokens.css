@@ -101,4 +101,29 @@
   --arcobaleno: linear-gradient(90deg,
     #e63946 0%, #f77f00 20%, #fcbf49 40%,
     #2a9d8f 60%, #0077b6 80%, #7b2cbf 100%);
+
+  /* I pulsanti del menu (D68): fondo pieno, testo bianco (giallo: abisso).
+     Passaggio = fondo scurito di un passo; i rapporti sono nella tavola del
+     direttore artistico («I pulsanti del menu (D68)», docs/tema-arcobaleno.md).
+     I quattro scuriti nuovi (#811720, #793e00, #135049, #59208a) esistono solo
+     per il passaggio di questi pulsanti. */
+  --menu-corallo-fondo: #b3202c;          /* = il rosso di --errore: bianco sopra 6,65 */
+  --menu-corallo-passaggio: #811720;      /* nuovo scurito: bianco sopra 10,11 */
+  --menu-corallo-testo: var(--su-scuro);
+  --menu-arancio-fondo: #a85600;          /* = --ambra-testo: bianco sopra 5,26 */
+  --menu-arancio-passaggio: #793e00;      /* nuovo scurito: bianco sopra 8,39 */
+  --menu-arancio-testo: var(--su-scuro);
+  --menu-giallo-fondo: var(--giallo);     /* #fcbf49: abisso sopra 7,47; mai testo bianco (§6) */
+  --menu-giallo-passaggio: var(--sole);   /* #ee9b00: abisso sopra 5,49 */
+  --menu-giallo-testo: var(--abisso);
+  --menu-giallo-bordo: var(--ambra-testo);/* #a85600, obbligatorio: il confine del pulsante (≥ 4,56 sui chiari) */
+  --menu-verde-fondo: #1b6f65;            /* = --libero-testo: bianco sopra 5,99 */
+  --menu-verde-passaggio: #135049;        /* nuovo scurito: bianco sopra 9,25 */
+  --menu-verde-testo: var(--su-scuro);
+  --menu-blu-fondo: var(--oceano);        /* #0077b6: bianco sopra 4,87 */
+  --menu-blu-passaggio: var(--oceano-scuro); /* #00557f: bianco sopra 8,06 */
+  --menu-blu-testo: var(--su-scuro);
+  --menu-viola-fondo: var(--viola);       /* #7b2cbf: bianco sopra 7,11 */
+  --menu-viola-passaggio: #59208a;        /* nuovo scurito: bianco sopra 10,51 */
+  --menu-viola-testo: var(--su-scuro);
 }

@@ -10,15 +10,9 @@ html {
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
   /* The public bar is fixed on every width: anchors and focused fields land below it.
-     Narrow screens carry the two-row header, wide ones the single row. */
-  scroll-padding-top: 7.5rem;
+     The header carries two rows (brand row + menu bar) at every width (D67). */
+  scroll-padding-top: 8.5rem;
   background: var(--avorio);
-}
-
-@media (min-width: 72rem) {
-  html {
-    scroll-padding-top: 5.5rem;
-  }
 }
 
 body {
@@ -174,10 +168,10 @@ svg {
   background: var(--ambra);
 }
 
-/* Header: brand and tools on the first row, links on a second row that scrolls sideways.
-   From 72rem everything sits on one row. The bar stays put while the page scrolls (D41),
-   on phones and computers alike; the pages of the management area put it back in the
-   flow, because they carry their own fixed bar (D36). */
+/* Header on two rows at every width (D67): brand and tools on the first row, inside the
+   container; the menu bar below, edge to edge, with its own background. The bar stays put
+   while the page scrolls (D41), on phones and computers alike; the pages of the management
+   area put it back in the flow, because they carry their own fixed bar (D36). */
 .site-header {
   position: sticky;
   top: 0;
@@ -188,18 +182,15 @@ svg {
   border-bottom: 1px solid var(--bordo);
 }
 
+/* Brand row: brand on the left, tools on the right, always one row. */
 .site-header__inner {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  grid-template-areas:
-    'brand tools'
-    'nav nav';
+  display: flex;
   align-items: center;
-  column-gap: var(--spazio-4);
+  justify-content: space-between;
+  gap: var(--spazio-4);
 }
 
 .brand {
-  grid-area: brand;
   display: inline-flex;
   align-items: center;
   gap: var(--spazio-2);
@@ -235,65 +226,45 @@ svg {
 }
 
 .site-header__tools {
-  grid-area: tools;
-  justify-self: end;
   display: flex;
   align-items: center;
   gap: var(--spazio-2);
 }
 
+/* Menu bar (D67): a full-bleed band of its own under the brand row. Foam is one of
+   the three light grounds the D68 table was measured on, and it tells the bar apart
+   from the translucent white of the brand row. */
 .site-nav {
-  grid-area: nav;
-  position: relative;
-  min-width: 0;
-  margin-inline: calc(var(--margine) * -1);
+  background: var(--spuma);
   border-top: 1px solid var(--bordo);
 }
 
-/* Fades the right edge to show that the row continues. */
-.site-nav::after {
-  content: '';
-  position: absolute;
-  inset-block: 0;
-  inset-inline-end: 0;
-  width: 2.5rem;
-  background: linear-gradient(to right, rgb(255 255 255 / 0), var(--carta));
-  pointer-events: none;
-}
-
+/* Entries wrap instead of scrolling: never cut, no horizontal scroll, no edge fades. */
 .site-nav ul {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--spazio-2);
-  overflow-x: auto;
-  overscroll-behavior-x: contain;
   padding-block: var(--spazio-2);
-  padding-inline: var(--margine) 2.5rem;
-  scrollbar-width: none;
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .site-nav ul {
-    scrollbar-width: thin;
-  }
 }
 
 .site-nav li {
   flex: none;
 }
 
-/* Each entry is little more than a button (D41): compact, a light border, all equal.
-   The current page is told apart by the filled background AND the heavier weight. */
+/* Each entry is a coloured button (D68): full ground, white text (yellow: abyss),
+   pill radius. Grounds, hovers and the yellow border come from the art director's
+   table in docs/tema-arcobaleno.md; per-entry values are set below with nth-child. */
 .site-nav a {
   display: inline-flex;
   align-items: center;
   gap: var(--spazio-1);
   min-height: 2.5rem;
   padding-inline: var(--spazio-3);
-  border: 1.5px solid var(--bordo-campo);
+  border: 1px solid var(--voce-bordo, var(--voce-fondo));
   border-radius: var(--raggio-pillola);
-  background: var(--carta);
-  color: var(--testo-secondario);
+  background: var(--voce-fondo);
+  color: var(--voce-testo);
   font-size: var(--testo-piccolo);
   font-weight: var(--peso-medio);
   letter-spacing: var(--lettere-piccolo);
@@ -301,26 +272,64 @@ svg {
   white-space: nowrap;
 }
 
-/* The row scrolls, so the focus ring is drawn inside the link. */
-.site-nav a:focus-visible {
-  outline-offset: -3px;
+/* Rainbow order (D68). The entry order is fixed in PageShell (D41) and identical in
+   both languages, so nth-child is a safe hook: 1 coral, 2 orange, 3 yellow, 4 green,
+   5 blue; «Area riservata» on the brand row takes the violet. */
+.site-nav li:nth-child(1) a {
+  --voce-fondo: var(--menu-corallo-fondo);
+  --voce-passaggio: var(--menu-corallo-passaggio);
+  --voce-testo: var(--menu-corallo-testo);
 }
 
+.site-nav li:nth-child(2) a {
+  --voce-fondo: var(--menu-arancio-fondo);
+  --voce-passaggio: var(--menu-arancio-passaggio);
+  --voce-testo: var(--menu-arancio-testo);
+}
+
+/* Yellow keeps its own border: the ground alone cannot be the component's boundary. */
+.site-nav li:nth-child(3) a {
+  --voce-fondo: var(--menu-giallo-fondo);
+  --voce-passaggio: var(--menu-giallo-passaggio);
+  --voce-testo: var(--menu-giallo-testo);
+  --voce-bordo: var(--menu-giallo-bordo);
+}
+
+.site-nav li:nth-child(4) a {
+  --voce-fondo: var(--menu-verde-fondo);
+  --voce-passaggio: var(--menu-verde-passaggio);
+  --voce-testo: var(--menu-verde-testo);
+}
+
+.site-nav li:nth-child(5) a {
+  --voce-fondo: var(--menu-blu-fondo);
+  --voce-passaggio: var(--menu-blu-passaggio);
+  --voce-testo: var(--menu-blu-testo);
+}
+
+.site-nav a:focus-visible {
+  outline: 3px solid var(--fuoco);
+  outline-offset: 2px;
+}
+
+/* Hover darkens the ground one step; the text never changes (yellow keeps abyss). */
 .site-nav a:hover {
-  border-color: var(--oceano);
-  background: var(--spuma);
-  color: var(--abisso);
+  background: var(--voce-passaggio);
+  color: var(--voce-testo);
 }
 
 .site-nav a:active {
   opacity: 0.7;
 }
 
+/* Current page: resting ground plus a mark that is not colour alone —
+   a thick underline in the text colour and the heavy weight. */
 .site-nav a[aria-current='page'] {
-  border-color: var(--oceano);
-  background: var(--oceano);
-  color: var(--su-scuro);
   font-weight: var(--peso-forte);
+  text-decoration: underline;
+  text-decoration-color: currentColor;
+  text-decoration-thickness: 3px;
+  text-underline-offset: 0.25em;
 }
 
 /* The umbrella sign of «Ricerca ombrellone». Decorative: the label says it all. */
@@ -357,7 +366,7 @@ svg {
 }
 
 /* Link to the reserved area: a round mark on small screens, with its label from 30rem.
-   Outlined, so that the filled button of each page stays the one main action. */
+   Violet button (D68): it completes the rainbow arc started by the menu bar. */
 .account-link {
   display: inline-flex;
   align-items: center;
@@ -365,10 +374,10 @@ svg {
   gap: var(--spazio-2);
   min-width: var(--tocco);
   min-height: var(--tocco);
-  border: 1.5px solid var(--oceano);
+  border: 1px solid var(--menu-viola-fondo);
   border-radius: var(--raggio-pillola);
-  background: var(--carta);
-  color: var(--oceano);
+  background: var(--menu-viola-fondo);
+  color: var(--menu-viola-testo);
   font-size: var(--testo-piccolo);
   font-weight: var(--peso-medio);
   text-decoration: none;
@@ -376,10 +385,16 @@ svg {
   transition: transform var(--rapido) ease-out;
 }
 
+/* Hover darkens the ground one step, like the menu buttons; the text stays white. */
 .account-link:hover {
-  background: var(--spuma);
-  /* Verbale d'accessibilità 20/11/2026: blu scurito sul velo (7,00:1; il pieno sta a 4,23). */
-  color: var(--oceano-scuro);
+  border-color: var(--menu-viola-passaggio);
+  background: var(--menu-viola-passaggio);
+  color: var(--menu-viola-testo);
+}
+
+.account-link:focus-visible {
+  outline: 3px solid var(--fuoco);
+  outline-offset: 2px;
 }
 
 .account-link:active {
@@ -421,34 +436,15 @@ svg {
   }
 }
 
+/* Wide screens keep the same two rows (D67); only the brand grows a little. */
 @media (min-width: 72rem) {
   .site-header__inner {
-    grid-template-columns: auto 1fr auto;
-    grid-template-areas: 'brand nav tools';
-    column-gap: var(--spazio-6);
+    gap: var(--spazio-6);
     min-height: var(--testata);
   }
 
   .brand svg[role='img'] {
     height: 3rem;
-  }
-
-  .site-nav {
-    margin-inline: 0;
-    border-top: 0;
-  }
-
-  .site-nav::after {
-    content: none;
-  }
-
-  /* Centered while it fits, scrollable from the first item when it does not:
-     centering with auto margins never cuts the edges like justify-content would. */
-  .site-nav ul {
-    width: max-content;
-    max-width: 100%;
-    margin-inline: auto;
-    padding-inline: var(--spazio-1);
   }
 }
 
@@ -2017,7 +2013,6 @@ input[type='radio'] {
     opacity: 0.8;
   }
 
-  .site-nav a::after,
   .card__link:hover::after {
     transition: none;
   }
