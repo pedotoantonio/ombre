@@ -1,34 +1,36 @@
 :root {
-  /* Palette del progetto grafico «Solar & Fresh» (docs/progetto-grafico.md) */
-  --oceano: #005f73; /* Deep Ocean Teal: colore primario, pulsanti, collegamenti */
-  --spuma: #e0f2f1; /* Seafoam Tint: superfici tenui, sezioni alternate */
-  --ambra: #ee9b00; /* Sand Amber: accento. Mai testo bianco sopra */
-  --abisso: #1d3557; /* Slate Abyss: testi e superfici scure */
-  --avorio: #f8f9fa; /* Ivory Sand: fondo delle pagine */
-  /* Mare della fotografia di apertura: fa da fondo mentre l'immagine si carica. */
+  /* Palette del tema arcobaleno (docs/tema-arcobaleno.md, D65): i nomi restano
+     quelli di «Solar & Fresh», cambiano solo i valori. Contrasti misurati. */
+  --oceano: #0077b6; /* Blu mare: azioni e collegamenti. Bianco sopra 4,87:1; come testo 4,87 su bianco, 4,62 su avorio; sui fondi velati si usa --oceano-scuro */
+  --spuma: #e3f1fa; /* Velo di blu mare: superfici tenui, sezioni alternate. Abisso sopra 10,73:1 */
+  --ambra: #f77f00; /* Arancio: avvisi e accento caldo. Abisso sopra 4,70:1; mai testo bianco sopra (2,63) */
+  --abisso: #1d3557; /* Slate Abyss: testi e superfici scure (invariato) */
+  --avorio: #f8f9fa; /* Ivory Sand: fondo delle pagine (invariato) */
+  /* Mare della fotografia di apertura: fa da fondo mentre l'immagine si carica (D66). */
   --mare-foto: #0d89b2;
   --carta: #ffffff;
-  --bordo: #cfdedd;
+  --bordo: #ccdeeb; /* Bordi decorativi, intonati al velo blu (nessuna soglia) */
   --testo: var(--abisso);
   --testo-secondario: #4a5a73;
-  --errore: #b42318;
+  --errore: #b3202c; /* Rosso corallo scurito: 6,65 / 6,30 / 5,77:1 su bianco / avorio / spuma; 5,66 su --errore-tenue */
 
   /* Tones derived from the palette, with their WCAG contrast */
-  --oceano-scuro: #004a5a; /* primary on hover: white on it 9.87:1 */
-  --ambra-chiara: #f5ae2e; /* accent on hover: abisso on it 6.46:1 */
-  --bordo-campo: #71839a; /* edge of fields and controls: 3.35 to 3.88:1 on spuma, avorio, white */
-  --errore-tenue: #fdeeec; /* surface of error alerts: abisso on it 10.96:1 */
-  --su-scuro: #ffffff; /* text on abisso and on oceano */
-  --su-scuro-secondario: #d3deea; /* secondary text on abisso: 9.07:1 */
+  --oceano-scuro: #00557f; /* primario al passaggio; testo/link blu sui fondi velati: bianco sopra 8,06:1; come testo 8,06 / 7,65 / 7,00 su bianco / avorio / spuma */
+  --ambra-chiara: #ff8f1f; /* accento al passaggio: abisso sopra 5,42:1 */
+  --bordo-campo: #71839a; /* bordo dei campi e dei controlli: 3,88 / 3,68 / 3,37:1 su bianco / avorio / spuma */
+  --errore-tenue: #fce8ea; /* fondo degli avvisi d'errore: abisso sopra 10,52:1; --errore sopra 5,66:1 */
+  --su-scuro: #ffffff; /* testo su abisso (12,36) e su oceano (4,87) */
+  --su-scuro-secondario: #d3deea; /* testo secondario su abisso: 9,07:1 */
 
-  /* Stati della planimetria: riempimenti per segni grafici, non per testo (contrasto 3:1) */
+  /* Stati della planimetria: riempimenti per segni grafici, non per testo (contrasto 3:1).
+     --libero vale solo su carta (3,32) e avorio (3,15): su spuma (2,89) si usa --libero-testo. */
   --libero: #2a9d8f;
   --condiviso: #3a86ff;
-  --occupato: #e76f51;
+  --occupato: #e63946; /* rosso corallo pieno: 4,17 / 3,95 / 3,62:1 su bianco / avorio / spuma (grafica, non testo) */
   /* Gli stessi stati quando servono come colore del testo (contrasto 4,5:1 su fondi chiari) */
   --libero-testo: #1b6f65;
   --condiviso-testo: #1f5fcc;
-  --occupato-testo: #b5432a;
+  --occupato-testo: #b3202c; /* = --errore: un solo rosso per ruolo */
 
   /* Focus ring: abisso on light surfaces, ambra on dark ones */
   --fuoco: var(--abisso);
@@ -84,4 +86,19 @@
 
   --rapido: 100ms;
   --normale: 200ms;
+
+  /* I gettoni nuovi del tema arcobaleno (docs/tema-arcobaleno.md §3). */
+  --ambra-testo: #a85600; /* arancio come testo su fondi chiari: 5,26 / 4,99 / 4,56:1 su bianco / avorio / spuma; 4,72 su --giallo-velo */
+  --giallo: #fcbf49; /* solo fondi con testo abisso (7,47:1) e decorazione; mai come testo su chiaro (1,66 su bianco) */
+  --giallo-velo: #fef2d2; /* fondo di avviso leggero: abisso sopra 11,09:1; --ambra-testo sopra 4,72:1 */
+  --viola: #7b2cbf; /* stagionale; decorazione: bianco sopra 7,11:1; come testo 7,11 / 6,74 / 6,17 */
+  --viola-velo: #ece0f7; /* tela/fondo del viola: abisso sopra 9,75:1; --viola sopra 5,61:1 */
+  --sole: #ee9b00; /* il sole sulla «è» e l'onda del logo; accenti d'illustrazione. Mai testo, mai componenti */
+
+  /* Il gradiente arcobaleno (§4): definito qui una sola volta, ammesso SOLO nel logo,
+     nella fascia dell'eroe della prima pagina, nel bordo del piè di pagina e nelle
+     sottolineature dei titoli della home. Vietato ovunque altro; non si anima. */
+  --arcobaleno: linear-gradient(90deg,
+    #e63946 0%, #f77f00 20%, #fcbf49 40%,
+    #2a9d8f 60%, #0077b6 80%, #7b2cbf 100%);
 }
