@@ -84,12 +84,32 @@ function mapLabels(locale: Locale, where: 'home' | 'search'): MapLabels {
     invite: where === 'home' ? t.inviteSearch : t.inviteList,
     inviteCta: where === 'home' ? t.goSearch : t.goList,
     inviteHref: where === 'home' ? pathFor('search', locale) : `#${resultsAnchor}`,
-    unavailable: t.unavailable,
     region: t.region,
     open: t.open,
     zoomIn: t.zoomIn,
     zoomOut: t.zoomOut,
   };
+}
+
+/** The server-rendered stand-in for the map (D69): the same clubs as the pins, name in
+ * sight, locality and link. Without JavaScript this is what the box shows; with JavaScript
+ * the Leaflet map replaces it once ready, and if map or tiles fail the list stays. */
+function MapFallback({ locale, markers }: { locale: Locale; markers: MapMarker[] }) {
+  if (markers.length === 0) return null;
+  const t = getDictionary(locale, config.brandName).map;
+  return (
+    <div className="portal-map__fallback">
+      <p className="portal-map__list-label">{t.list}</p>
+      <ul className="portal-map__list">
+        {markers.map((marker) => (
+          <li key={marker.slug}>
+            <Link href={marker.href}>{marker.name}</Link>
+            <span className="portal-map__list-place">, {marker.locality}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
 }
 
 /** Plain form that opens the explore page with the search in the address. It works without scripts. */
@@ -145,10 +165,36 @@ function SearchForm({ locale, search, minDay }: { locale: Locale; search: Explor
   );
 }
 
-export function HomePage({ locale }: PageProps) {
+export async function HomePage({ locale }: PageProps) {
   const t = getDictionary(locale, config.brandName);
   const copy = t.pages.home;
   const audienceLinks: readonly InnerPageId[] = ['guestGuide', 'seasonGuide', 'managerGuide'];
+
+  // The clubs of the map, read from the API at request time (D69): they feed both the pins
+  // and the server-rendered list fallback. If the API does not answer, the box falls back
+  // to the invitation alone — exactly as before — and the home never breaks.
+  let markers: MapMarker[] | null = null;
+  try {
+    const result = await api.beaches();
+    if (result.ok) {
+      markers = result.data.beaches.flatMap((beach) =>
+        beach.latitude === null || beach.longitude === null
+          ? []
+          : [
+              {
+                slug: beach.slug,
+                name: beach.name,
+                locality: beach.locality,
+                latitude: beach.latitude,
+                longitude: beach.longitude,
+                href: beachPath(locale, beach.slug),
+              },
+            ],
+      );
+    }
+  } catch {
+    markers = null;
+  }
 
   return (
     <>
@@ -214,8 +260,12 @@ export function HomePage({ locale }: PageProps) {
         <div className="container">
           <h2 id="mappa-titolo">{t.map.homeTitle}</h2>
           <p className="portal-map-lead">{t.map.homeLead}</p>
-          {/* The page is prerendered: the pins arrive later, from an internal route of this site. */}
-          <MapPanel sourceUrl={`/dati/mappa?lang=${locale}`} labels={mapLabels(locale, 'home')} />
+          {/* The pins come with the page; the internal route stays as the fallback source. */}
+          {markers ? (
+            <MapPanel markers={markers} labels={mapLabels(locale, 'home')} fallback={<MapFallback locale={locale} markers={markers} />} />
+          ) : (
+            <MapPanel sourceUrl={`/dati/mappa?lang=${locale}`} labels={mapLabels(locale, 'home')} />
+          )}
         </div>
       </section>
       <section className="section section--tinted">
@@ -408,7 +458,7 @@ async function SearchPage({ locale, query = {} }: PageProps & { query?: Query })
                   <div className="portal-map-block" aria-labelledby="mappa-risultati">
                     <h2 id="mappa-risultati">{t.map.searchTitle}</h2>
                     <p className="portal-map-lead">{t.map.searchLead}</p>
-                    <MapPanel markers={markers} labels={mapLabels(locale, 'search')} />
+                    <MapPanel markers={markers} labels={mapLabels(locale, 'search')} fallback={<MapFallback locale={locale} markers={markers} />} />
                   </div>
                 ) : null}
                 <div className="portal-results__head">

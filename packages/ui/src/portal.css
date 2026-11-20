@@ -915,24 +915,62 @@ html:has(.plan-bar) {
   background: var(--spuma);
 }
 
-.portal-map__invite {
-  display: grid;
-  place-content: center;
-  justify-items: center;
-  gap: var(--spazio-3);
+/* Il contenuto reso dal server (invito + elenco di ripiego, D69): centrato quando è corto,
+   scorrevole dall'alto quando l'elenco cresce (i margini automatici cedono per primi). */
+.portal-map__static {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spazio-4);
   height: 100%;
   padding: var(--spazio-6);
+  overflow-y: auto;
   color: var(--abisso);
   text-align: center;
+}
+
+.portal-map__static > :first-child {
+  margin-top: auto;
+}
+
+.portal-map__static > :last-child {
+  margin-bottom: auto;
+}
+
+.portal-map__invite {
+  display: grid;
+  justify-items: center;
+  gap: var(--spazio-3);
 }
 
 .portal-map__invite p {
   max-width: 48ch;
 }
 
-.portal-map__status {
-  color: var(--testo-secondario);
+/* Il ripiego a elenco (D69): gli stabilimenti resi dal server finché la mappa non è pronta. */
+.portal-map__fallback {
+  width: 100%;
+  max-width: 52ch;
+}
+
+.portal-map__list-label {
   font-weight: 700;
+}
+
+.portal-map__list {
+  display: grid;
+  gap: var(--spazio-2);
+  margin: var(--spazio-2) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.portal-map__list a {
+  font-weight: 700;
+}
+
+.portal-map__list-place {
+  color: var(--testo-secondario);
 }
 
 .portal-map__canvas {

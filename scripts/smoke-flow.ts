@@ -37,7 +37,7 @@ const home = await page('/');
 const form = /<form class="portal-search"[^>]*>[^]*?<\/form>/.exec(home.html)?.[0] ?? '';
 check(/method="get"/.test(form) && /action="\/ricerca-ombrellone#risultati"/.test(form) && /role="search"/.test(form), 'home: no search form that opens the explore page at its results');
 for (const name of ['place', 'day', 'to', 'guests', 'shared']) check(form.includes(`name="${name}"`), `home: the search has no "${name}" field`);
-// The home page is prerendered, so its form carries no date limit; the explore page, rendered per request, does.
+// The home search form carries no date limit; the explore page, rendered per request, starts from today.
 const exploreForm = /<form class="portal-search"[^>]*>[^]*?<\/form>/.exec((await page('/ricerca-ombrellone')).html)?.[0] ?? '';
 const firstDay = /name="day"[^>]*min="(\d{4}-\d{2}-\d{2})"|min="(\d{4}-\d{2}-\d{2})"[^>]*name="day"/.exec(exploreForm);
 const romeToday = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome' }).format(new Date());
@@ -46,6 +46,10 @@ check((firstDay?.[1] ?? firstDay?.[2]) === romeToday, `explore: the search does 
 const mapBox = /<div class="portal-map__invite">[^]*?<\/div>/.exec(home.html)?.[0] ?? '';
 check(count(form, /type="submit"/g) === 1 && count(home.html.replace(mapBox, ''), /class="button[ "]/g) === 1, 'home: expected exactly one main button, the search');
 check(mapBox.includes('href="/ricerca-ombrellone"') && home.html.indexOf('class="portal-search"') < home.html.indexOf('class="portal-map'), 'home: the map box has no invitation to Explore after the search form');
+// The list fallback (D69): the server renders the clubs with their links inside the map box,
+// and the old "map not available" notice is gone for good.
+check(new RegExp(`class="portal-map__list"[^]*?href="${beach}"`).test(home.html), 'home: the map box has no server-rendered list of the beach clubs');
+check(!home.html.includes('Mappa non disponibile'), 'home: the "map not available" notice is back');
 check(/action="\/en\/umbrella-search#risultati"/.test((await page('/en')).html), 'english home: the search does not open the English search page');
 check(/action="\/ricerca-ombrellone#risultati"/.test(exploreForm), 'explore: a new search does not land on the results');
 
@@ -53,6 +57,7 @@ check(/action="\/ricerca-ombrellone#risultati"/.test(exploreForm), 'explore: a n
 const explore = await page('/ricerca-ombrellone');
 check(explore.status === 200 && explore.html.includes('Bagno delle Dune'), 'explore: the demo beach club is not listed');
 check(explore.html.includes(`href="${beach}"`), 'explore: no link to the beach club page');
+check(new RegExp(`class="portal-map__list"[^]*?href="${beach}"`).test(explore.html), 'explore: the map block has no server-rendered list of the results');
 check(!explore.html.includes('postazioni libere</span>') && explore.html.includes('Indica un giorno'), 'explore: free spots shown without a day, or no hint to choose one');
 
 const searched = await page(`/ricerca-ombrellone?day=${demoDay}&guests=2`);

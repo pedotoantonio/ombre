@@ -70,7 +70,7 @@ export function makeEn(brand: string): Dictionary {
       inviteList: 'The full list of results is just below.',
       goSearch: 'Open the umbrella search',
       goList: 'Go to the list',
-      unavailable: 'Map not available.',
+      list: 'The beach clubs on the map',
       region: 'Map of the beach clubs',
       open: 'Go to the club page',
       zoomIn: 'Zoom in',

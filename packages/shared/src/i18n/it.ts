@@ -82,7 +82,7 @@ export function makeIt(brand: string) {
       inviteList: "L'elenco completo dei risultati è qui sotto.",
       goSearch: 'Apri la ricerca ombrellone',
       goList: "Vai all'elenco",
-      unavailable: 'Mappa non disponibile.',
+      list: 'Gli stabilimenti sulla mappa',
       region: 'Mappa degli stabilimenti',
       open: 'Vai alla pagina del lido',
       zoomIn: 'Avvicina',

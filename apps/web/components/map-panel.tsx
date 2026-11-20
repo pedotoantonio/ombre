@@ -1,11 +1,12 @@
 'use client';
 
-import { useEffect, useRef, useState, type ComponentType } from 'react';
+import { useEffect, useRef, useState, type ComponentType, type ReactNode } from 'react';
 
-// The map box and its three states. The server renders the static invitation, which is all
-// a visitor without JavaScript ever sees. With JavaScript, the box shows "map not available"
-// while Leaflet and the pins are not there yet, and loads them only when the box appears in
-// the viewport or is touched first: the map is an enrichment, never a requirement.
+// The map box. The server renders the invitation and, when it knows the clubs, the list
+// fallback: that is all a visitor without JavaScript ever sees. With JavaScript the box
+// loads Leaflet and the pins only when it appears in the viewport or is touched first,
+// and the map replaces the list once ready; while the map is loading, or when the map or
+// its tiles fail, the list stays: the map is an enrichment, never a requirement.
 
 /** One beach club on the map. Only what the pin and its card need. */
 export interface MapMarker {
@@ -25,7 +26,6 @@ export interface MapLabels {
   invite: string;
   inviteCta: string;
   inviteHref: string;
-  unavailable: string;
   region: string;
   open: string;
   zoomIn: string;
@@ -37,14 +37,21 @@ interface MapView {
   markers: MapMarker[];
 }
 
-export function MapPanel({ markers, sourceUrl, labels }: { markers?: MapMarker[]; sourceUrl?: string; labels: MapLabels }) {
+export function MapPanel({
+  markers,
+  sourceUrl,
+  labels,
+  fallback,
+}: {
+  markers?: MapMarker[];
+  sourceUrl?: string;
+  labels: MapLabels;
+  /** Server-rendered stand-in for the map (the list of the clubs), kept until the map is ready. */
+  fallback?: ReactNode;
+}) {
   const boxRef = useRef<HTMLDivElement>(null);
-  // True only after hydration: without JavaScript the box never mentions the map.
-  const [scripted, setScripted] = useState(false);
   const [wanted, setWanted] = useState(false);
   const [view, setView] = useState<MapView | 'error' | null>(null);
-
-  useEffect(() => setScripted(true), []);
 
   // The box asks for the map when it comes into view. Without the observer, right away.
   useEffect(() => {
@@ -99,18 +106,16 @@ export function MapPanel({ markers, sourceUrl, labels }: { markers?: MapMarker[]
       {ready ? (
         <view.Map markers={view.markers} labels={labels} onError={() => setView('error')} />
       ) : (
-        <div className="portal-map__invite">
-          <p>{labels.invite}</p>
-          <p>
-            <a className="button button--secondary" href={labels.inviteHref}>
-              {labels.inviteCta}
-            </a>
-          </p>
-          {scripted ? (
-            <p className="portal-map__status" role="status">
-              {labels.unavailable}
+        <div className="portal-map__static">
+          <div className="portal-map__invite">
+            <p>{labels.invite}</p>
+            <p>
+              <a className="button button--secondary" href={labels.inviteHref}>
+                {labels.inviteCta}
+              </a>
             </p>
-          ) : null}
+          </div>
+          {fallback}
         </div>
       )}
     </div>
