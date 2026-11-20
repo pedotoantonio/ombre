@@ -232,26 +232,6 @@ export async function HomePage({ locale }: PageProps) {
           <div className="portal-hero__panel">
             <h1>{copy.h1}</h1>
             <p className="lead">{copy.lead}</p>
-            {/* The three role doors, equal in weight, before the search (spec §3, D41). */}
-            <nav className="portal-roles" aria-label={copy.rolesLabel}>
-              <ul>
-                <li>
-                  <Link className="portal-role" href={pathFor('search', locale)}>
-                    {copy.roles.search}
-                  </Link>
-                </li>
-                <li>
-                  <Link className="portal-role" href={pathFor('seasonGuide', locale)}>
-                    {copy.roles.season}
-                  </Link>
-                </li>
-                <li>
-                  <Link className="portal-role" href={pathFor('managerGuide', locale)}>
-                    {copy.roles.manager}
-                  </Link>
-                </li>
-              </ul>
-            </nav>
             <SearchForm locale={locale} search={{ place: '', day: null, to: null, guests: defaultGuests, sharedOnly: false, amenities: [] }} />
           </div>
         </div>
@@ -290,7 +270,7 @@ export async function HomePage({ locale }: PageProps) {
               <li className="card" key={audience.title}>
                 <h3>{audience.title}</h3>
                 <p>{audience.text}</p>
-                <Link className="card__link" href={pathFor(audienceLinks[index] ?? 'guestGuide', locale)}>
+                <Link className="button button--secondary card__cta" href={pathFor(audienceLinks[index] ?? 'guestGuide', locale)}>
                   {audience.link}
                 </Link>
               </li>

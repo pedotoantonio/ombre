@@ -827,6 +827,16 @@ button.button {
   box-shadow: var(--ombra-1);
 }
 
+/* Il pulsante in fondo alla carta (D70): spinto al piede, allineato a sinistra, con un respiro sopra. */
+.card__cta {
+  margin-top: auto;
+  align-self: flex-start;
+}
+
+.card > :has(+ .card__cta) {
+  margin-bottom: var(--spazio-3);
+}
+
 .card__link {
   display: inline-flex;
   align-items: center;

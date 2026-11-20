@@ -63,48 +63,6 @@
   margin-top: var(--spazio-4);
 }
 
-/* ---- I tre tasti di ruolo, pari peso, sopra la ricerca (D41) ---- */
-.portal-roles {
-  margin-top: var(--spazio-5);
-}
-
-.portal-roles ul {
-  display: grid;
-  gap: var(--spazio-3);
-}
-
-.portal-role {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 3.25rem;
-  padding: var(--spazio-3) var(--spazio-4);
-  border: 2px solid var(--oceano);
-  border-radius: var(--raggio);
-  background: var(--carta);
-  color: var(--oceano);
-  font-weight: var(--peso-forte);
-  text-align: center;
-  text-decoration: none;
-  transition: transform var(--rapido) ease-out;
-}
-
-/* Sul fondo velato il blu pieno sta a 4,23:1: qui il testo passa allo scurito (7,00). */
-.portal-role:hover {
-  background: var(--spuma);
-  color: var(--oceano-scuro);
-}
-
-.portal-role:active {
-  transform: scale(0.98);
-}
-
-@media (min-width: 48rem) {
-  .portal-roles ul {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-
 /* ---- Schermate vere del gestionale, nella pagina del Gestore stabilimento (D41) ---- */
 .portal-tour {
   display: grid;

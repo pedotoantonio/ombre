@@ -1540,12 +1540,6 @@ export function makeIt(brand: string) {
         description: `Con ${brand} prenoti online una giornata in uno stabilimento balneare: postazione precisa, prezzo finale prima di pagare, pass da mostrare all'arrivo.`,
         h1: 'Il tuo posto al sole, anche per un giorno solo',
         lead: `Con ${brand} prenoti online una giornata in uno stabilimento balneare. Scegli la postazione, vedi il prezzo finale prima di pagare e ricevi un pass da mostrare all'arrivo.`,
-        rolesLabel: 'I tre percorsi',
-        roles: {
-          search: 'Cerco un ombrellone',
-          season: 'Affitto il mio ombrellone',
-          manager: 'Gestisco uno stabilimento',
-        },
         stepsTitle: 'Tre passi, dal telefono',
         steps: [
           {
