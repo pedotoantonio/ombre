@@ -1,5 +1,122 @@
 # Collaudo
 
+## Collaudo del 20/11/2026 — Il tema arcobaleno
+
+Collaudo della commessa «il tema arcobaleno»
+([specifica](specifica-tema-arcobaleno.md), D64–D66, criteri §6 1–7):
+rifacimento **puramente visivo** — logo arcobaleno, gettoni del tema
+([tavola del direttore artistico](tema-arcobaleno.md)), gradiente confinato
+all'elenco chiuso, planimetria pastello con accenti — già vagliato
+dall'accessibilità (verbale del 20/11 in coda alla tavola: 5.456 nodi
+misurati, 0 coppie sotto soglia). Il collaudo è la **regressione completa**
+più le prove visive dei criteri: nessuna suite nuova, nessuna asserzione
+cambiata.
+
+Eseguito sullo stack **fisso** `ombre-collaudo` (web `127.0.0.1:3232`, API
+`127.0.0.1:3231`, variabili di `.env.collaudo`) **ricostruito dal codice
+corrente con volume nuovo** (`build` → `down -v` → `up -d db migrate api
+worker web` → health): migrazioni 001–**025**, seed demo e vetrina, OIDC di
+prova, posta a log, avviso dimostrativo. Gate statici (`pnpm lint`,
+`pnpm -r typecheck`, `pnpm -r build`), la suite dei test completa su un
+PostgreSQL usa-e-getta (`OMBRE_TEST_DB_PORT=54333`), poi le **undici** suite
+fumo nell'ordine di `collaudo.sh` (`smoke:2fa` per ultima), col verde letto
+suite per suite in un giro solo. **L'ambiente resta acceso** alla fine.
+
+### Test e collaudi fumo
+
+| Parte | Controlli | Esito |
+|---|---|---|
+| Lint, tipi e build (`pnpm lint`, `pnpm -r typecheck`, `pnpm -r build`) | tutto il codice | Superati |
+| Test con PostgreSQL vero (`OMBRE_TEST_DB_PORT=54333 pnpm test:db`) | **287** (47 shared, 11 comms, 61 db, 161 api, 7 worker), contratto OpenAPI a **135 rotte** | Superati |
+| Pagine pubbliche (`smoke`) | 453 | Superati |
+| Ricerca, planimetria e riserva (`smoke:flow`) | 73 | Superati |
+| Aree riservate (`smoke:areas`) | 85 | Superati |
+| Sito dello stabilimento (`smoke:site`) | 25 | Superati |
+| Conto, Google e carrello (`smoke:conto`) | 139 | Superati |
+| Al passo col mercato (`smoke:mercato`) | 110 | Superati |
+| La spiaggia illustrata (`smoke:spiaggia`) | 121 | Superati |
+| La scheda della postazione (`smoke:schede`) | 141 | Superati |
+| Prenotazione end-to-end (`smoke:booking`) | 15 | Superati |
+| Presa simultanea (`smoke:api`) | 13 | Superati |
+| Due passaggi (`smoke:2fa`, per ultima) | 11 | Superati |
+
+In totale **1186 controlli fumo**, tutti superati al primo giro: il
+rifacimento visivo non ha toccato un solo controllo funzionale —
+**nessuna asserzione aggiornata**, né nei test né nelle suite fumo.
+
+### Prove visive (Playwright 1.49.1 nel contenitore ufficiale, `--network host`)
+
+Schermate riprese sullo stack di collaudo ed **esaminate una per una**
+(home intera e testata, piè di pagina, campionario del favicon a
+16/32/64/160 px su bianco e su abisso, accesso con errore, console «Oggi»
+dell'Aurora, testate di gestionale e reception, planimetria pubblica
+dell'Aurora a colori e in grigio, legenda). In più un censimento a
+`getComputedStyle` di **ogni elemento e pseudo-elemento** di home e console
+per contare le comparse del gradiente.
+
+### Criteri di accettazione (specifica §6)
+
+1. **Logo arcobaleno attivo dappertutto — superato.** In testata della home
+   l'SVG del marchio porta il `linearGradient` con le sei fermate esatte del
+   committente (`#e63946 → #f77f00 → #fcbf49 → #2a9d8f → #0077b6 →
+   #7b2cbf`) e il sole arancio sulla «è»; stessa testata, verificata viva,
+   nel gestionale (console «Oggi») e nella reception (banco della Dune,
+   accesso da `reception@…`). Nel piè di pagina la scritta è bianca e il
+   simbolo resta a colori. `/icon.svg` (1268 byte) è il ventaglio a sei
+   spicchi piatti nei sei colori pieni con l'onda `#ee9b00`: guardato nel
+   campionario, leggibile a 16 px, su abisso dentro il disco bianco. I file
+   storici del marchio sono ancora tutti in `docs/marchio/` e
+   [marchio.md](marchio/marchio.md) dice quali file sono in uso e come
+   ripristinare i precedenti col tag.
+2. **Tavola dei gettoni con i contrasti — superato.**
+   [tema-arcobaleno.md](tema-arcobaleno.md) esiste e porta la tabella
+   completa (nome, valore, ruolo, contrasto misurato sui fondi previsti),
+   le coppie sotto soglia coi rimedi, e in coda il verbale d'accessibilità
+   del 20/11: 5.456 nodi di testo misurati sulle pagine rese, **0 coppie
+   sotto WCAG AA** dopo le sette correzioni blu-su-spuma.
+3. **Coerenza della palette — superato.** Il censimento del gradiente sulla
+   home trova **esattamente** le comparse dell'elenco chiuso:
+   `.portal-hero::before` (fascia dell'eroe), le sottolineature `h2::after`
+   dei tre titoli di sezione, `.site-footer::before` (bordo del piè di
+   pagina) — e nient'altro; nella console l'unica comparsa è il bordo del
+   piè di pagina. Il bottone primario è blu pieno (`rgb(0, 119, 182)` =
+   `#0077b6`, fondo senza immagine). Il modulo d'accesso con credenziali
+   sbagliate mostra l'esito rosso da tavola: icona «!», bordo `#b3202c`,
+   fondo `#fce8ea`, testo abisso — fotografato.
+4. **Planimetria leggibile con gli accenti — superato.** La planimetria
+   pubblica dell'Aurora conserva mare, sabbia e scenografia pastello; gli
+   stati sono colore **+ glifo** (spunta = libera, mezzaluna = condivisa,
+   × = non disponibile, scudo = scelta) e la legenda ha i contenuti di
+   prima: «Libera», «Libera, giornata condivisa», «Non disponibile»,
+   «Scelta da te» più i tipi (Lettino singolo, Gazebo, Tenda). La console
+   «Oggi» dell'Aurora ha la sua legenda completa (Disponibile, Prenotato,
+   Occupato, Stagionale, In manutenzione, Non in vendita o bloccata,
+   riservata, condivisione stagionale, bloccata) e lo stato **in parole**
+   su ogni riga della tabella. Entrambe fotografate.
+5. **Giallo mai testo su chiaro; leggibile in bianco e nero — superato.**
+   A verbale del direttore (§6 della tavola) e dell'esperto
+   d'accessibilità: il giallo `#fcbf49` compare solo come fermata del
+   gradiente, spicchio del favicon e velo di tela «disponibile» — mai come
+   testo. Prova senza colore ripetuta dal collaudatore: la planimetria
+   dell'Aurora fotografata col filtro grigio resta leggibile dai glifi,
+   dai codici e dalla legenda, come al vaglio.
+6. **Nessuna regressione — superato.** I numeri sopra: 287 test (contratto
+   a 135 rotte) e 1186 controlli fumo verdi al primo giro su stack appena
+   ricostruito, prenotazione rapida, carrello, caparra, pianificatore e
+   schede comprese, nelle due lingue e senza JavaScript.
+7. **Backup e ripristino documentati — superato.** `stato.md` ha la sezione
+   «Backup e ripristino del tema originale»: tag git
+   `ombre-tema-originale-20261120` (commit `3bcd7e9`) con il comando di
+   ripristino mirato e l'elenco dei file del tema, più l'archivio
+   `/home/sysadmin/backup-ombre/ombre-tema-originale-20261120.tar.gz`.
+
+### Difetti
+
+Nessun difetto trovato: niente da aggiustare, nessuna suite da rilanciare.
+(Unica nota di collaudo, non del prodotto: sulla pagina del banco la
+condizione `networkidle` di Playwright non arriva mai per i tasselli della
+mappa; le prove usano `load`.)
+
 ## Collaudo del 19/11/2026 (notte) — La scheda della postazione
 
 Collaudo della commessa «la scheda della postazione»
