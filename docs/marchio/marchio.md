@@ -5,6 +5,38 @@ vettoriale dalla sua scheda d'identità (`docs/grafica/identita-riferimento.jpg`
 principale del progetto). Non è un disegno nostro e non va reinterpretato. Sostituisce
 tutti i simboli usati prima nel progetto.
 
+## In uso oggi: il logo arcobaleno (D64, 20/11/2026)
+
+Dal tema arcobaleno **i file attivi sono quelli approvati dal committente**:
+
+- `logo-arcobaleno-verticale.svg` — emblema, logotipo e motto, gradiente arcobaleno;
+- `logo-arcobaleno-orizzontale.svg` — emblema e logotipo affiancati; è la fonte dei
+  tracciati dei componenti `Logo`/`LogoLockup` di `packages/ui` (copiati tali e quali,
+  non ridisegnati);
+- `logo-arcobaleno-anteprima.png` — anteprima raster, da non usare come originale.
+
+Il gradiente (id `arc` nei file del committente) è orizzontale, steso per forma sul
+proprio riquadro: `#e63946` 0% → `#f77f00` 20% → `#fcbf49` 40% → `#2a9d8f` 60% →
+`#0077b6` 80% → `#7b2cbf` 100%. Restano **arancio `#ee9b00`** il sole sulla «è» e
+l'onda sotto l'ombrello; il riflesso sull'onda resta `#e0f2f1` al 30%. Sui fondi
+scuri (piè di pagina) la scritta passa al bianco (`--su-scuro`) e **il simbolo resta
+a colori**, come da tavola del direttore artistico (`docs/tema-arcobaleno.md`).
+
+I file del marchio precedente (`logo-verticale.svg`, `logo-orizzontale.svg`,
+`simbolo*.svg` e le altre versioni della tabella più sotto) **restano nel
+repository** e non vanno cancellati: documentano il tema originale. Per
+ripristinare il tema precedente esiste il tag git `ombre-tema-originale-20261120`
+(più l'archivio in `/home/sysadmin/backup-ombre/`):
+
+```sh
+git checkout ombre-tema-originale-20261120 -- <file>   # per esempio:
+git checkout ombre-tema-originale-20261120 -- packages/ui/src/index.tsx apps/web/app/icon.svg
+```
+
+Le sezioni che seguono descrivono la riproduzione del marchio originale e le regole
+d'uso generali (aree di rispetto, misure minime), che valgono anche per la versione
+arcobaleno.
+
 > **Stato legale: non verificato.** La disponibilità del marchio «Ombrè» e dei domini è
 > ancora una dipendenza aperta ([../stato.md](../stato.md)). Non è stata fatta alcuna
 > ricerca di anteriorità, né sul nome né sul segno grafico.
@@ -83,12 +115,19 @@ non si vedono.
 - `LogoLockup`: emblema e logotipo in orizzontale come un'unica immagine; il nome
   accessibile si passa con `label` e viene dalla configurazione. Non contiene il motto.
 
+Dal tema arcobaleno i tracciati sono quelli di `logo-arcobaleno-orizzontale.svg` e il
+gradiente è definito dentro ogni istanza con un id univoco (`useId`), così più loghi
+sulla stessa pagina non si rubano il riferimento. Con `tone="onDark"` cambia solo il
+logotipo (bianco); l'emblema resta a colori su ogni fondo.
+
 ### Icona e misure piccole
 
-Nell'icona l'emblema è semplificato: niente riflesso sull'onda, occhi e sorriso
-ingrossati, e un disco bianco dietro perché si legga anche sulle schede scure del
-browser. A 32 px il viso si riconosce; **a 16 px no**: restano la sagoma dell'ombrellone,
-l'onda e la sabbia.
+Dal tema arcobaleno l'icona (`apps/web/app/icon.svg`) è un **ombrellone a sei spicchi
+piatti** nei colori pieni della palette (`#e63946`, `#f77f00`, `#fcbf49`, `#2a9d8f`,
+`#0077b6`, `#7b2cbf`) con l'onda `#ee9b00`, su disco bianco perché si legga anche
+sulle schede scure del browser. Niente gradiente e niente viso: a 16 px si
+impasterebbero; a quella misura restano il ventaglio dei sei colori e l'onda.
+(L'icona precedente — emblema teal semplificato — si ripristina col tag, vedi sopra.)
 
 ## Colori
 
