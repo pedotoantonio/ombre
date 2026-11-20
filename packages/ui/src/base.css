@@ -602,7 +602,7 @@ svg {
 .hero {
   padding-block: clamp(2rem, 6vw, 4.5rem);
   background:
-    radial-gradient(60rem 28rem at 88% 0%, var(--spuma), rgb(224 242 241 / 0) 70%),
+    radial-gradient(60rem 28rem at 88% 0%, var(--spuma), transparent 70%),
     var(--carta);
 }
 
@@ -1033,7 +1033,7 @@ ol.list > li::before {
   display: inline-block;
   max-width: 100%;
   padding: 0.1875rem 0.75rem;
-  border: 1px solid rgb(0 95 115 / 0.28);
+  border: 1px solid color-mix(in srgb, var(--oceano) 28%, transparent);
   border-radius: 0.875rem;
   background: var(--spuma);
   color: var(--oceano);
