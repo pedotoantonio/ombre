@@ -144,7 +144,7 @@ Sul piè di pagina scuro (`--abisso`) restano ammessi: bianco (12,36),
 
 | Coppia | Misura | Rimedio |
 |---|---|---|
-| `#0077b6` su spuma `#e3f1fa` | 4,23 | testo blu sui fondi velati sempre `--oceano-scuro` (7,00); nel CSS odierno il caso è `.portal-role:hover` e l'etichetta `.plan__sea` |
+| `#0077b6` su spuma `#e3f1fa` | 4,23 | testo blu sui fondi velati sempre `--oceano-scuro` (7,00); nel CSS odierno il caso è `.portal-role:hover` e l'etichetta `.plan__sea`; il verbale del 20/11 ne ha trovati altri sette (v. in fondo) |
 | `#e63946` su bianco | 4,17 | testo rosso sempre `#b3202c` |
 | `#f77f00` su bianco | 2,63 | mai testo arancio pieno, mai bianco su arancio: testo `#a85600` o abisso sul velo |
 | `#2a9d8f` su spuma | 2,89 | il pallino «libero» vive su carta (3,32 ✓); su spuma si usa `--libero-testo` |
@@ -288,3 +288,119 @@ hsl pastello, D59/D66); non ridefinire i gettoni di stato dentro portal.css
 `--fuoco-su-scuro`, `--stato-occupato`, `--stato-manutenzione`,
 `--stato-scelta`, `--stato-proposta`, `--stato-prenotato`, `--stato-condivisa`
 sono riferimenti `var()`: **non** vanno riscritti in esadecimale.
+
+## Verbale d'accessibilità (20/11/2026)
+
+Verifica **indipendente** dell'esperto di accessibilità sul tema arcobaleno
+consegnato (tokens.css, portal.css, base.css, beach-art.css, logo, favicon).
+
+### Metodo
+
+- Ambiente usa-e-getta `ombre-a11y-dev` (compose del progetto, porte
+  3310/3311, seed demo + vetrina), **buttato con `down -v` a fine verifica**.
+- Playwright 1.49.1 nel contenitore ufficiale (`--network host`): per **ogni
+  nodo di testo visibile** delle pagine sotto, colore effettivo e fondo
+  effettivo risalendo i genitori con `getComputedStyle` (composizione degli
+  alfa; i fondi con immagine o gradiente sono segnalati a parte), poi il
+  rapporto WCAG. Soglie: 4,5:1 testo normale, 3:1 testo grande (≥ 24 px, o
+  ≥ 18,7 px in grassetto) e componenti grafici. Script usa-e-getta nello
+  scratchpad, non nel repo.
+- Tutti i rapporti dichiarati nella tavola del direttore sono stati
+  **ricalcolati con uno script proprio**: confermati al centesimo, nessuna
+  discrepanza.
+
+### Pagine misurate (italiano; l'inglese usa gli stessi gettoni)
+
+A 1280 px, e a 390 px dove indicato «(+tel)»: prima pagina (+tel), «Ricerca
+ombrellone» con filtri attivi, le tre guide «come funziona», scheda di Lido
+Aurora con planimetria e recensioni (+tel), scheda di Cala del Moro — modello
+Boutique — (+tel), riepilogo con caparra di Cala del Moro (+tel), carrello con
+una voce, accesso con errore, conto dell'ospite, console «Oggi» (anche con
+ricerca attiva e con la scheda di postazione aperta), pianificatore (anche con
+ricerca), console della reception, pagina «Incassi» del banco, scheda pubblica
+di un tipo di postazione, pagina di pagamento `/paga/{token}`, Assistenza.
+**5.456 nodi di testo misurati in tutto.**
+
+### Coppie sotto soglia e correzioni
+
+Una sola famiglia sotto soglia: **blu pieno `#0077b6` su spuma `#e3f1fa`
+(4,23:1)**, la coppia già a verbale del direttore, in sette regole. Correzione
+unica e minima: il testo passa a `--oceano-scuro` `#00557f` (**7,00:1** sulla
+spuma). Prima/dopo:
+
+| Regola | Prima | Dopo | Rapporto |
+|---|---|---|---|
+| `.button--secondary:hover` (base.css) | `--oceano` | `--oceano-scuro` | 4,23 → 7,00 |
+| `.button--secondary[aria-pressed='true']` / `[aria-current]` (base.css) | ereditava `--oceano` sul fondo spuma dello stato selezionato (misurato vivo sul bottone «Oggi» della console) | `color: var(--oceano-scuro)` aggiunto | 4,23 → 7,00 |
+| `.account-link:hover` (base.css) | `--oceano` | `--oceano-scuro` | 4,23 → 7,00 |
+| `.badge` (base.css) | `--oceano` | `--oceano-scuro` | 4,23 → 7,00 |
+| `.tpl-boutique .site-tagline` (base.css) | `--oceano` | `--oceano-scuro` | 4,23 → 7,00 |
+| `.alert--info a` (base.css, regola nuova) | il collegamento «togli la ricerca» di console e planner ereditava `--oceano` sul velo spuma dell'avviso | `--oceano-scuro` | 4,23 → 7,00 |
+| `.is-hit a` (portal.css, regola nuova) | i collegamenti «scheda» e «sposta al banco» della riga evidenziata ereditavano `--oceano` sul fondo spuma della riga | `--oceano-scuro` | 4,23 → 7,00 |
+
+Dopo le correzioni la misura è stata **ripetuta su tutte le pagine: zero
+coppie sotto soglia**. Unico «falso positivo» a verbale: il bianco dell'eroe
+del modello Riviera sta su un gradiente (`--abisso` → `--oceano`), che lo
+strumento non compone; la fermata peggiore è `#0077b6`, bianco sopra
+**4,87 ≥ 4,5** ✓.
+
+### Le quattro segnalazioni del frontend
+
+1. **`.button--secondary:hover`** — testo di bottone a 16 px/600: testo
+   normale, 4,23 < 4,5 → **corretto** a `--oceano-scuro`. Stessa sorte per lo
+   stato selezionato (`aria-pressed`/`aria-current`), trovato vivo in console.
+2. **`.account-link:hover`** — 15 px/600: testo normale → **corretto**.
+3. **`.badge`** — 14 px/600: testo da distintivo ma sotto i 18,7 px in
+   grassetto, quindi soglia 4,5 → **corretto** a `--oceano-scuro` sul proprio
+   velo spuma. Il bordo (`--oceano` al 28%) è decorativo e resta.
+4. **`.tpl-boutique .site-tagline`** — il `clamp` va da 22 a 32 px a peso
+   normale: sopra ~460 px di viewport è testo grande (4,23 ≥ 3 basterebbe),
+   ma **sugli schermi stretti scende sotto i 24 px** a peso 400 → testo
+   normale → **corretto** a `--oceano-scuro` (misurato a 4,23 su telefono
+   prima della correzione, su Cala del Moro). Il filetto `::after` resta blu
+   pieno: è grafica, 4,23 ≥ 3 ✓.
+
+### Giallo `#fcbf49` e gradiente
+
+- **Giallo**: censiti tutti i CSS e gli SVG — compare solo come fermata del
+  gradiente (tokens.css, logo), spicchio del favicon e velo di tela «disponibile»
+  in beach-art; i gettoni `--giallo`/`--giallo-velo` non sono ancora usati da
+  nessuna regola. **Mai colore di testo su fondo chiaro** ✓.
+- **Gradiente `--arcobaleno`**: definito una volta in tokens.css e usato solo
+  nei posti dell'elenco chiuso del §4 — logo (SVG, id `arc`), fascia dell'eroe
+  (`.portal-hero::before`), bordo del piè di pagina (`.site-footer`),
+  sottolineature dei titoli della home. Nessun'altra comparsa ✓.
+
+### Prova senza colore (filtro grayscale sugli screenshot)
+
+- **Planimetria pubblica** (Lido Aurora): gli stati restano leggibili dai
+  glifi D56 dei distintivi (spunta = libera, mezzaluna = condivisa, × = non
+  disponibile, scudo = scelta), dai codici e dalla legenda; tipi distinti
+  dalla forma del simbolo ✓.
+- **Console «Oggi»**: lo stato è sempre **in parole** accanto al distintivo
+  colore+glifo, nella scena e nella tabella; il riepilogo del giorno è in
+  parole e numeri ✓.
+- **Modulo con errore** (accesso): l'avviso ha l'icona «!», il bordo pieno e
+  il testo «Email o password non valide.» — comprensibile senza colore ✓.
+
+### Favicon e logo (giudizio motivato, guardando i campionari)
+
+- **Favicon** (`apps/web/app/icon.svg`), guardato a 16/32/64/160 px su bianco
+  e su abisso: su **abisso** il disco bianco di fondo (12,36:1) stacca il
+  segno nettamente ✓. Su **bianco** il disco si fonde col fondo e il segno è
+  il solo ventaglio + onda: lo spicchio giallo (1,66) e l'onda `#ee9b00`
+  (2,25) da soli sarebbero deboli, ma stanno **adiacenti a spicchi che
+  passano** (rosso 4,17, verde 3,32, blu 4,87, viola 7,11) e la sagoma del
+  ventaglio resta riconoscibile anche a 16 px. Giudizio: **accettabile** come
+  contrasto non testuale sull'insieme del segno; nessun intervento.
+- **Logo** (componenti `Logo`/`LogoLockup`): su fondo chiaro la scritta è
+  abisso (12,36:1) e il simbolo arcobaleno è decorativo; sul piè di pagina la
+  scritta passa a `--su-scuro` (12,36:1 su abisso) e il simbolo a colori si
+  stacca bene dal blu scuro. Giudizio: **a posto su entrambi i fondi**;
+  nessun intervento.
+
+### Esito
+
+Sette correzioni, tutte della stessa famiglia (blu pieno → blu scurito sui
+fondi spuma), nessun gettone cambiato, nessun markup toccato. Dopo le
+correzioni: **0 coppie sotto soglia su 5.456 nodi misurati**.
