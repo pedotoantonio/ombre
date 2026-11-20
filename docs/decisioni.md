@@ -623,3 +623,33 @@ planimetria, barra di selezione, elenco, riepilogo, carrello e riquadro
 ripristino alla predefinita; permesso `site.edit`. Rotte nuove: pubblica
 `GET /v1/beaches/{slug}/spot-types`; di gestione GET/PUT/DELETE
 `…/type-cards[/{typeId}]`. Contratto da 131 a 135.
+
+## D64 — Il logo arcobaleno e il ripristino — accettata (20/11/2026)
+
+I file approvati dal committente entrano in docs/marchio accanto a
+quelli attuali, che non si cancellano; marchio.md dice quali sono in uso
+e come tornare indietro. L'illustratore porta il logo nel componente di
+packages/ui fedele al file del committente e rifà il favicon leggibile a
+16 px. Backup già fatto e intoccabile: tag `ombre-tema-originale-20261120`
+(3bcd7e9) e archivio in /home/sysadmin/backup-ombre/; la procedura di
+ripristino è documentata in stato.md. Restano arancio #ee9b00 il sole e
+l'onda del logo.
+
+## D65 — I gettoni del tema arcobaleno — accettata (20/11/2026)
+
+Prima del CSS, il direttore artistico scrive docs/tema-arcobaleno.md:
+gettoni con nome, valore, ruolo e contrasto misurato. Gerarchia ferrea:
+gradiente intero solo su logo e grandi superfici decorative, mai su
+testo o componenti piccoli; colori funzionali uno per ruolo (blu mare
+azioni, verde acqua conferme, rosso corallo errori, arancio avvisi) con
+varianti scurite documentate dove l'AA lo chiede; giallo #fcbf49 mai
+come testo su chiaro; il colore mai unico segnale. Il frontend applica i
+gettoni nelle variabili CSS esistenti senza duplicare regole né toccare
+markup; l'esperto di accessibilità misura e mette a verbale.
+
+## D66 — La planimetria resta serena — accettata (20/11/2026)
+
+La planimetria illustrata conserva il carattere pastello di D55: la
+palette entra negli accenti (tele, legenda, cornici) per mano
+dell'illustratore; stati sempre colore + glifo, legenda invariata nei
+contenuti.
