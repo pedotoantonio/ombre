@@ -1830,6 +1830,12 @@ a.ops-tile:active {
   background: var(--spuma);
 }
 
+/* I collegamenti della riga evidenziata («scheda», «sposta al banco») stanno sul velo
+   spuma: blu scurito, 7,00:1 (verbale d'accessibilità 20/11/2026; il pieno sta a 4,23). */
+.is-hit a {
+  color: var(--oceano-scuro);
+}
+
 /* ---- Modalità selezione: l'intera tessera è il controllo ---- */
 .ops-tile--check {
   position: relative;
