@@ -696,3 +696,17 @@ sostituisce, se mappa o tessere falliscono l'elenco resta; «Mappa non
 disponibile» sparisce. Se l'API non risponde, la home mostra il solo
 invito e non si rompe. La mappa della ricerca eredita lo stesso
 ripiego.
+
+## D70 — La home è dell'Ospite — accettata (20/11/2026)
+
+Il committente revoca la parte di D41 che prescriveva i «tre tasti di
+pari peso sopra la ricerca»: la home ripeteva i tre ruoli tre volte e i
+portali a due pubblici tengono l'ingresso di chi offre in disparte.
+L'eroe resta con titolo, sottotitolo e modulo di ricerca; il blocco
+`portal-roles` sparisce con il suo CSS e le sue chiavi di dizionario.
+Stagionale e Gestore entrano dalle carte «Per chi è», il cui collegamento
+diventa un pulsante secondario (classi esistenti, solo nella home); la
+via dei due tocchi del Gestore resta quella del menu. Il resto di D41 —
+barra fissa, cinque voci nell'ordine committed, tre guide per ruolo —
+resta valido. I collaudi dell'eroe si aggiornano alla nuova forma: l'eroe
+non contiene i tre tasti, le carte portano alle tre guide.
