@@ -80,9 +80,10 @@
   transition: transform var(--rapido) ease-out;
 }
 
+/* Sul fondo velato il blu pieno sta a 4,23:1: qui il testo passa allo scurito (7,00). */
 .portal-role:hover {
   background: var(--spuma);
-  color: var(--oceano);
+  color: var(--oceano-scuro);
 }
 
 .portal-role:active {
@@ -483,7 +484,8 @@
   border-radius: var(--raggio-piccolo);
   overflow: hidden;
   background: transparent;
-  color: var(--oceano);
+  /* L'etichetta galleggia sul velo chiaro: blu scurito, non il blu pieno (4,23 sul velo). */
+  color: var(--oceano-scuro);
   font-size: 0.9375rem;
   font-weight: 700;
 }
