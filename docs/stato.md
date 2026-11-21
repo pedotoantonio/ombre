@@ -1,6 +1,6 @@
 # Stato del progetto
 
-Aggiornato al 20/11/2026.
+Aggiornato al 21/11/2026.
 
 ## Dove siamo
 
@@ -229,6 +229,22 @@ indicizzato.
   collegamento è diventato un pulsante secondario (classi già
   esistenti e misurate); menu a cinque voci e ogni altra pagina
   invariati; la via dei due tocchi del Gestore resta quella del menu.
+- Iterazione «La vetrina del Gestore» (21/11/2026), specifica in
+  [specifica-vetrina-gestore.md](specifica-vetrina-gestore.md)
+  ([prompt](prompt-vetrina-gestore.md)), decisione D71: la pagina del
+  Gestore è la vetrina commerciale del gestionale — eroe con claim e
+  due azioni, modulo di richiamata «Ti chiamiamo noi» (nome, telefono,
+  stabilimento facoltativo, consenso esplicito; POST senza JavaScript,
+  campo trappola, limite di cinque invii al minuto per indirizzo),
+  cinque schede-funzionalità con le schermate vere (compresa la
+  condivisione degli stagionali), quattro vantaggi reali, trasparenza
+  conservata verso il fondo, chiusura che rimanda al modulo; le
+  richieste si archiviano nella tabella `callback_request` (migrazione
+  026) e si consultano in `/area/richieste`, riservata al ruolo di
+  piattaforma `admin` (nasce con `OMBRE_ADMIN_EMAIL/PASSWORD` del
+  servizio di migrazione), con la marcatura «richiamato»; tre rotte
+  nuove nel contratto (135 → 138); nessun numero, testimonianza o logo
+  inventato; home (D70), menu (D41) e le altre pagine invariati.
 - Prenotazione dell'ospite: scelta della postazione, riepilogo con codice promozionale,
   riserva, dati, pagamento di prova, pass con codice QR e codice breve.
 - Reception: verifica del pass con ingresso, uscita e rientro, prenotazione al banco,
@@ -299,6 +315,16 @@ indicizzato.
 ## Collaudo
 
 Esito completo in [collaudo.md](collaudo.md).
+
+Il 21/11/2026, iterazione «La vetrina del Gestore»: **297 test** con
+database (contratto a **138 rotte**: le tre della richiamata) e
+**1342 controlli fumo** tutti verdi su pila vergine al primo giro
+(+53 in `smoke` sulla vetrina nelle due lingue; +52 della suite nuova
+`smoke:richiamata`: invio, convalide coi valori ricompilati, trappola
+con archivio pulito, limite al sesto invio, pagina riservata con
+marcatura e idempotenza, non-admin respinto); 72 politiche di
+sicurezza nel ripristino del backup (una in più per
+`callback_request`); nessun difetto.
 
 Il 20/11/2026 (pomeriggio), iterazione «La home è dell'Ospite»: 287
 test con database (contratto fermo a 135 rotte) e **1237 controlli
