@@ -1,4 +1,4 @@
-import { accountPath, beachLayoutPath, beachPath, bookingPath, bookPath, allDecorationSigns, cartPath, holdPath, isLocale, manageCabinsPath, manageCollectPath, manageDealsPath, manageExtrasPath, manageReviewsPath, manageSpotTypesPath, manageTodayPath, orderPath, parseEuro, payPath, type Locale } from '@ombre/shared';
+import { accountPath, beachLayoutPath, beachPath, bookingPath, bookPath, allDecorationSigns, cartPath, holdPath, isLocale, manageCabinsPath, manageCollectPath, manageDealsPath, manageExtrasPath, manageReviewsPath, manageSpotTypesPath, manageTodayPath, orderPath, parseEuro, pathFor, payPath, type Locale } from '@ombre/shared';
 import { api, apiCall, dayPattern, formatPeriod, periodDays, sandboxNotify, slugPattern, uuidPattern } from '@/lib/api';
 import { cartCookie, cartCookieHeader, clearCartCookieHeader, clearSessionCookieHeader, parseCartTicket, sessionCookie, sessionCookieHeader, type CartTicket } from '@/lib/session';
 
@@ -498,6 +498,44 @@ const actions: Record<string, (request: Request, form: Form, lang: Locale) => Pr
     if (result.ok) return { to: accountPath(lang, 'signIn'), ok: getDictionary(lang, config.brandName).account.registerNotice };
     const code = result.status === 0 ? 'unavailable' : result.status === 429 ? 'rate_limited' : result.code;
     return { to: accountPath(lang, 'register'), err: code };
+  },
+
+  // ---- Il modulo «Ti chiamiamo noi» (D71) ----
+
+  // Convalida nel server; sul rifiuto si torna al modulo con gli errori accanto ai campi
+  // e i valori ricompilati nella query. L'esito atterra sempre sull'àncora del modulo.
+  async richiamata(_request, form, lang) {
+    const back = pathFor('managerGuide', lang);
+    const sent = `${back}?inviata=1#richiamata`;
+    // Il campo trappola: compilato, si risponde come a un invio riuscito senza registrare nulla.
+    if (form('sito').trim() !== '') return { to: sent };
+    const name = form('name').trim();
+    const phone = form('phone').trim();
+    const beach = form('beach').trim();
+    const errors = {
+      enome: name.length >= 1 && name.length <= 80 ? undefined : '1',
+      etel: /^[0-9 +()./-]{6,20}$/.test(phone) ? undefined : '1',
+      estab: beach.length <= 80 ? undefined : '1',
+      econsenso: form('consent') === '1' ? undefined : '1',
+    };
+    // I valori tornano nella query, accorciati a una misura da indirizzo.
+    const values = { name: name.slice(0, 120), phone: phone.slice(0, 40), beach: beach.slice(0, 120) };
+    if (Object.values(errors).some(Boolean)) return { to: `${withQuery(back, { ...errors, ...values })}#richiamata` };
+    const result = await apiCall('POST', '/v1/callback-requests', { body: { name, phone, ...(beach ? { beachName: beach } : {}), locale: lang } });
+    if (result.ok) return { to: sent };
+    // Il limite di invii torna in parole; ogni altro rifiuto resta un errore generico accanto al modulo.
+    return { to: `${withQuery(back, { emodulo: result.status === 429 ? 'limite' : 'servizio', ...values })}#richiamata` };
+  },
+
+  // «Segna come richiamato» dalla pagina riservata (D71): idempotente, torna all'elenco.
+  async 'richiamata-fatta'(request, form, lang) {
+    const requestId = form('id');
+    if (!uuidPattern.test(requestId)) return bad();
+    const result = await apiCall('POST', `/v1/platform/callback-requests/${encodeURIComponent(requestId)}/called`, { token: cookieToken(request) });
+    const back = accountPath(lang, 'requests');
+    if (result.ok) return { to: back, ok: '1' };
+    if (result.status === 401) return { to: accountPath(lang, 'signIn') };
+    return { to: back, err: result.status === 0 ? 'unavailable' : result.code };
   },
 
   // The password change (D44): forced after the first sign-in, voluntary later.

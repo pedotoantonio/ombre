@@ -39,7 +39,7 @@ import {
   type Locale,
   type SpotZone,
 } from '@ombre/shared';
-import { api, apiCall, dayPattern, formatDate, formatDay, formatPeriod, localName, periodDays, slugPattern, uuidPattern, type ApiExtraService, type ApiLocalName } from '@/lib/api';
+import { api, apiCall, dayPattern, formatDate, formatDay, formatInstant, formatPeriod, localName, periodDays, slugPattern, uuidPattern, type ApiExtraService, type ApiLocalName } from '@/lib/api';
 import { StateBadge, type SpotArtState } from './beach-art';
 import { ExtraQuantityFields } from './beach';
 import { BeachLayoutView } from './beach-layout';
@@ -148,7 +148,9 @@ export async function accountMetadata(locale: Locale, segments: string[]): Promi
                   ? t.account.passwordTitle
                   : page === 'oidcConsent'
                     ? t.account.consentTitle
-                    : null;
+                    : page === 'requests'
+                      ? t.callback.listTitle
+                      : null;
     return privateMetadata(locale, title ?? t.nav.reservedArea);
   }
   if (segments.length === 3 && page === 'manage') {
@@ -1168,6 +1170,79 @@ async function SeasonView({ locale, contractId, query }: { locale: Locale; contr
   );
 }
 
+interface CallbackRequestRow {
+  requestId: string;
+  createdAt: string;
+  name: string;
+  phone: string;
+  beachName: string | null;
+  locale: Locale;
+  status: 'new' | 'called';
+  calledAt: string | null;
+}
+
+/**
+ * Le richieste del modulo «Ti chiamiamo noi» (D71): elenco di sola consultazione per
+ * l'amministratore di piattaforma, con la marcatura «richiamato». Nessun CRM: niente
+ * ricerca, niente esportazione, niente modifica.
+ */
+async function CallbackRequestsView({ locale, query }: { locale: Locale; query: Query }) {
+  const all = getDictionary(locale, config.brandName);
+  const t = all.callback;
+  const { me, token } = await requireMe(locale);
+  const result = await apiCall<{ requests: CallbackRequestRow[] }>('GET', '/v1/platform/callback-requests', { token });
+  if (!result.ok && result.status === 401) redirect(accountPath(locale, 'signIn'));
+  // Senza il ruolo di piattaforma la pagina non esiste: la stessa risposta neutra
+  // delle altre pagine riservate fuori dal proprio perimetro.
+  if (!result.ok && result.status === 403) notFound();
+  return (
+    <PageShell
+      locale={locale}
+      page="help"
+      highlight={false}
+      alternatePath={accountPath(other(locale), 'requests')}
+      crumbs={[{ label: all.account.overviewTitle, href: accountPath(locale, 'overview') }, { label: t.listTitle }]}
+      signedInAs={me.user.name}
+    >
+      <PageHead title={t.listTitle} lead={t.listLead} />
+      <section className="section">
+        <div className="container stack">
+          <Notice locale={locale} query={query} />
+          {!result.ok ? (
+            <p className="alert" role="alert">
+              {(all.account.errors as Record<string, string>)[result.status === 0 ? 'unavailable' : result.code] ?? all.account.errors.unavailable}
+            </p>
+          ) : result.data.requests.length === 0 ? (
+            <p className="prose">{t.empty}</p>
+          ) : (
+            <DataTable label={t.listTitle} columns={[t.colDate, t.colName, t.colPhone, t.colBeach, t.colStatus, all.account.actions].map((label) => ({ label }))}>
+              {result.data.requests.map((row) => (
+                <Row key={row.requestId}>
+                  <Cell label={t.colDate}>{formatInstant(row.createdAt, locale, 'Europe/Rome')}</Cell>
+                  <Cell label={t.colName}>{row.name}</Cell>
+                  <Cell label={t.colPhone}>{row.phone}</Cell>
+                  <Cell label={t.colBeach}>{row.beachName}</Cell>
+                  <Cell label={t.colStatus}>{row.status === 'called' ? t.statusCalled : t.statusNew}</Cell>
+                  <Cell label={all.account.actions}>
+                    {row.status === 'new' ? (
+                      <form method="post" action="/azioni/richiamata-fatta" className="inline-form">
+                        <Hidden values={{ lang: locale, id: row.requestId }} />
+                        <button className="button button--secondary button--small" type="submit">
+                          {t.markCalled} <span className="visually-hidden">{row.name}</span>
+                        </button>
+                      </form>
+                    ) : null}
+                  </Cell>
+                </Row>
+              ))}
+            </DataTable>
+          )}
+        </div>
+      </section>
+    </PageShell>
+  );
+}
+
 /** Pages of the reserved area: sign-in, overview, and one level deeper management and season pass. */
 export async function AccountRoute({ locale, segments, query }: { locale: Locale; segments: string[]; query: Query }) {
   const page = pageFromSegment(locale, segments[0] ?? '');
@@ -1178,6 +1253,7 @@ export async function AccountRoute({ locale, segments, query }: { locale: Locale
   if (segments.length === 1 && page === 'register') return <RegisterView locale={locale} query={query} />;
   if (segments.length === 1 && page === 'password') return <PasswordView locale={locale} query={query} />;
   if (segments.length === 1 && page === 'oidcConsent') return <OidcConsentView locale={locale} query={query} />;
+  if (segments.length === 1 && page === 'requests') return <CallbackRequestsView locale={locale} query={query} />;
   if (segments.length === 2 && page === 'manage') return <ManageView locale={locale} beachSlug={segments[1]!} query={query} />;
   if (segments.length === 3 && page === 'manage' && segments[2] === beachLayoutSegment[locale])
     return <BeachLayoutView locale={locale} beachSlug={segments[1]!} query={query} />;

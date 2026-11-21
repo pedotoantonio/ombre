@@ -29,15 +29,17 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
   if (!found) return {};
   const metadata = buildMetadata(found.page, found.locale);
   // A search is one view of the same list: it is not indexed, and its canonical stays the plain address.
-  if (found.page === 'search' && Object.keys(await searchParams).length > 0) return { ...metadata, robots: { index: false, follow: true } };
+  // The manager page with a query is a form outcome (D71): same rule, the plain address stays canonical.
+  if ((found.page === 'search' || found.page === 'managerGuide') && Object.keys(await searchParams).length > 0) return { ...metadata, robots: { index: false, follow: true } };
   return metadata;
 }
 
 export default async function Page({ params, searchParams }: Props) {
   const found = await resolve(params);
   if (!found) notFound();
-  // Only the search page reads the address: the others stay prerendered.
-  const query = found.page === 'search' ? await searchParams : {};
+  // Only the search and the manager page read the address (errors e conferma del
+  // modulo di richiamata, D71): the others stay prerendered.
+  const query = found.page === 'search' || found.page === 'managerGuide' ? await searchParams : {};
   const search = searchQuery(readSearch(query));
 
   return (

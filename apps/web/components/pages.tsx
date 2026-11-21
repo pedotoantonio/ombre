@@ -545,80 +545,229 @@ function RoleAccess({ locale, copy }: { locale: Locale; copy: { title: string; t
   );
 }
 
-function ManagerGuidePage({ locale }: PageProps) {
+/** La riga discreta di chi è già cliente (D71): un collegamento testuale, non un'azione. */
+function AlreadyCustomer({ locale }: PageProps) {
   const copy = getDictionary(locale, config.brandName).pages.managerGuide;
-  const screens = ['console-filtri-it-desktop.png', 'planner-it-desktop.png', 'scheda-postazione-it-desktop.png', 'economia-it-desktop.png'];
+  return (
+    <p className="manager-already">
+      {copy.already} <Link href={accountPath(locale, 'signIn')}>{copy.alreadyCta}</Link>
+    </p>
+  );
+}
+
+/**
+ * Il modulo «Ti chiamiamo noi» (D71): POST senza script, errori accanto ai campi e
+ * valori ricompilati dalla query. Con ?inviata=1 al posto del modulo c'è la conferma.
+ */
+function CallbackSection({ locale, query }: PageProps & { query: Query }) {
+  const t = getDictionary(locale, config.brandName).callback;
+  const sent = first(query.inviata) === '1';
+  const errName = first(query.enome) === '1';
+  const errPhone = first(query.etel) === '1';
+  const errBeach = first(query.estab) === '1';
+  const errConsent = first(query.econsenso) === '1';
+  const moduleError = first(query.emodulo);
+  return (
+    <section className="section section--tinted" id="richiamata" aria-labelledby="richiamata-titolo">
+      <div className="container">
+        <h2 id="richiamata-titolo">{t.title}</h2>
+        {sent ? (
+          <p className="alert alert--info" role="status">
+            <strong>{t.sentTitle}.</strong> {t.sentText}
+          </p>
+        ) : (
+          <>
+            <p className="prose">{t.lead}</p>
+            {moduleError ? (
+              <p className="alert" role="alert">
+                {moduleError === 'limite' ? t.errRate : t.errGeneric}
+              </p>
+            ) : null}
+            <form method="post" action="/azioni/richiamata" className="stack callback-form">
+              <input type="hidden" name="lang" value={locale} />
+              {/* Il campo trappola: fuori dalla vista e dal tabulatore; chi lo compila non registra nulla. */}
+              <div className="visually-hidden" aria-hidden="true">
+                <label htmlFor="richiamata-sito">{t.trap}</label>
+                <input id="richiamata-sito" name="sito" type="text" tabIndex={-1} autoComplete="off" />
+              </div>
+              <div className="field">
+                <label htmlFor="richiamata-nome">{t.name}</label>
+                <input
+                  id="richiamata-nome"
+                  name="name"
+                  type="text"
+                  maxLength={80}
+                  required
+                  autoComplete="name"
+                  defaultValue={first(query.name) ?? ''}
+                  aria-invalid={errName || undefined}
+                  aria-describedby={errName ? 'richiamata-nome-errore' : undefined}
+                />
+                {errName ? (
+                  <p className="field__error" id="richiamata-nome-errore">{t.errName}</p>
+                ) : null}
+              </div>
+              <div className="field">
+                <label htmlFor="richiamata-telefono">{t.phone}</label>
+                <input
+                  id="richiamata-telefono"
+                  name="phone"
+                  type="tel"
+                  maxLength={20}
+                  required
+                  autoComplete="tel"
+                  defaultValue={first(query.phone) ?? ''}
+                  aria-invalid={errPhone || undefined}
+                  aria-describedby={errPhone ? 'richiamata-telefono-errore' : undefined}
+                />
+                {errPhone ? (
+                  <p className="field__error" id="richiamata-telefono-errore">{t.errPhone}</p>
+                ) : null}
+              </div>
+              <div className="field">
+                <label htmlFor="richiamata-stabilimento">{t.beach}</label>
+                <input
+                  id="richiamata-stabilimento"
+                  name="beach"
+                  type="text"
+                  maxLength={80}
+                  autoComplete="organization"
+                  defaultValue={first(query.beach) ?? ''}
+                  aria-invalid={errBeach || undefined}
+                  aria-describedby={errBeach ? 'richiamata-stabilimento-errore' : undefined}
+                />
+                {errBeach ? (
+                  <p className="field__error" id="richiamata-stabilimento-errore">{t.errBeach}</p>
+                ) : null}
+              </div>
+              <div className="field">
+                <label className="portal-check" htmlFor="richiamata-consenso">
+                  <input
+                    id="richiamata-consenso"
+                    name="consent"
+                    type="checkbox"
+                    value="1"
+                    aria-invalid={errConsent || undefined}
+                    aria-describedby={errConsent ? 'richiamata-consenso-errore' : undefined}
+                  />
+                  <span>{t.consent}</span>
+                </label>
+                {errConsent ? (
+                  <p className="field__error" id="richiamata-consenso-errore">{t.errConsent}</p>
+                ) : null}
+              </div>
+              <button className="button" type="submit">
+                {t.submit}
+              </button>
+            </form>
+          </>
+        )}
+      </div>
+    </section>
+  );
+}
+
+/** La vetrina del gestionale (D71): eroe, modulo di richiamata, schede, vantaggi e trasparenza. */
+function ManagerGuidePage({ locale, query = {} }: PageProps & { query?: Query }) {
+  const copy = getDictionary(locale, config.brandName).pages.managerGuide;
+  // Le schermate vere del gestionale dimostrativo, nell'ordine delle cinque schede.
+  const screens = ['console-filtri-it-desktop.png', 'planner-it-desktop.png', 'scheda-postazione-it-desktop.png', 'economia-it-desktop.png', 'condivisione-it-desktop.png'];
   return (
     <>
-      <PageHead title={copy.h1} lead={copy.lead} />
-      <RoleAccess locale={locale} copy={copy.access} />
-      <section className="section section--tinted">
+      {/* L'eroe da vetrina: claim, le due azioni e la riga discreta di chi è già cliente. */}
+      <PageHead title={copy.h1} lead={copy.lead}>
+        <p className="actions">
+          <a className="button" href="#richiamata">
+            {copy.callCta}
+          </a>
+          <a className="button button--secondary" href="#funzionalita">
+            {copy.seeCta}
+          </a>
+        </p>
+        <AlreadyCustomer locale={locale} />
+      </PageHead>
+      <CallbackSection locale={locale} query={query} />
+      <section className="section" id="funzionalita" aria-labelledby="funzionalita-titolo">
         <div className="container">
-          <h2>{copy.tourTitle}</h2>
-          <p className="prose">{copy.tourLead}</p>
-          <ul className="portal-tour">
-            {copy.tour.map((screen, index) => (
-              <li key={screen.caption}>
-                <figure>
-                  <img src={`/img/gestionale/${screens[index]}`} alt="" width={1366} height={900} loading="lazy" decoding="async" />
-                  <figcaption>{screen.caption}</figcaption>
-                </figure>
+          <h2 id="funzionalita-titolo">{copy.featuresTitle}</h2>
+          <p className="prose">{copy.featuresLead}</p>
+          <ul className="manager-features">
+            {copy.features.map((feature, index) => (
+              <li key={feature.title}>
+                <h3>{feature.title}</h3>
+                <img src={`/img/gestionale/${screens[index]}`} alt="" width={1366} height={900} loading="lazy" decoding="async" />
+                <p>{feature.text}</p>
               </li>
             ))}
           </ul>
         </div>
       </section>
+      <section className="section section--tinted">
+        <div className="container">
+          <h2>{copy.whyTitle}</h2>
+          <ul className="cards">
+            {copy.why.map((reason) => (
+              <li className="card" key={reason.title}>
+                <h3>{reason.title}</h3>
+                <p>{reason.text}</p>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </section>
+      {/* La trasparenza di sempre, compattata verso il fondo: comprende, non comprende,
+          attivazione e costi con la formula della fase pilota. */}
       <section className="section">
         <div className="container">
-          <div className="callout">
-            <h2>{copy.controlTitle}</h2>
-            <p>{copy.controlText}</p>
+          <h2>{copy.transparencyTitle}</h2>
+          <div className="manager-transparency">
+            <div>
+              <h3>{copy.includesTitle}</h3>
+              <ul className="list">
+                {copy.includes.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <h3>{copy.limitsTitle}</h3>
+              <ul className="list">
+                {copy.limits.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <h3>{copy.activationTitle}</h3>
+              <ol className="list">
+                {copy.activation.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ol>
+            </div>
+            <div>
+              <h3>{copy.pricingTitle}</h3>
+              <p className="prose">{copy.pricingText}</p>
+            </div>
           </div>
         </div>
       </section>
-      <section className="section section--tinted">
-        <div className="container">
-          <h2>{copy.includesTitle}</h2>
-          <ul className="list">
-            {copy.includes.map((item) => (
-              <li key={item}>{item}</li>
-            ))}
-          </ul>
-        </div>
-      </section>
-      <section className="section">
-        <div className="container">
-          <h2>{copy.limitsTitle}</h2>
-          <ul className="list">
-            {copy.limits.map((item) => (
-              <li key={item}>{item}</li>
-            ))}
-          </ul>
-        </div>
-      </section>
-      <section className="section section--tinted">
-        <div className="container">
-          <h2>{copy.activationTitle}</h2>
-          <ol className="list">
-            {copy.activation.map((item) => (
-              <li key={item}>{item}</li>
-            ))}
-          </ol>
-        </div>
-      </section>
-      <section className="section">
-        <div className="container">
-          <h2>{copy.pricingTitle}</h2>
-          <p className="prose">{copy.pricingText}</p>
-        </div>
-      </section>
       <Contact locale={locale} />
-      <NextStep
-        title={copy.nextTitle}
-        text={copy.nextText}
-        action={{ label: copy.nextAction, href: pathFor('search', locale) }}
-        secondary={{ label: copy.nextSecondary, href: pathFor('guestGuide', locale) }}
-      />
+      {/* La chiusura ripete le azioni dell'eroe: il modulo via àncora e la via discreta. */}
+      <section className="section section--tinted">
+        <div className="container">
+          <div className="next-step">
+            <h2>{copy.closeTitle}</h2>
+            <p>{copy.closeText}</p>
+            <p className="actions">
+              <a className="button" href="#richiamata">
+                {copy.callCta}
+              </a>
+            </p>
+            <AlreadyCustomer locale={locale} />
+          </div>
+        </div>
+      </section>
     </>
   );
 }

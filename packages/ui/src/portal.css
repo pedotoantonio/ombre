@@ -2807,3 +2807,80 @@ dd .beach-badge,
   width: 1.875rem;
   height: 1.875rem;
 }
+
+/* ---- La vetrina del Gestore (D71) ---- */
+
+/* La riga discreta di chi è già cliente, sotto le azioni dell'eroe e della chiusura. */
+.manager-already {
+  margin-top: var(--spazio-3);
+  color: var(--testo-secondario);
+  font-size: 0.9375rem;
+}
+
+/* Le cinque schede-funzionalità: titolo da beneficio, schermata vera, testo. */
+.manager-features {
+  display: grid;
+  gap: var(--spazio-6);
+  margin: var(--spazio-6) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.manager-features li {
+  background: var(--carta);
+  border: 1px solid var(--bordo);
+  border-radius: var(--raggio);
+  padding: var(--spazio-4);
+  box-shadow: var(--ombra-1);
+}
+
+.manager-features h3 {
+  margin: 0 0 var(--spazio-3);
+}
+
+.manager-features img {
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--bordo);
+  border-radius: var(--raggio-piccolo);
+  background: var(--carta);
+}
+
+.manager-features p {
+  margin: var(--spazio-3) 0 0;
+  color: var(--testo-secondario);
+}
+
+@media (min-width: 48rem) {
+  .manager-features {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  /* La quinta scheda, il distintivo della condivisione, prende la riga intera. */
+  .manager-features li:last-child {
+    grid-column: 1 / -1;
+  }
+}
+
+/* La trasparenza, compattata verso il fondo: i blocchi affiancati dove c'è spazio. */
+.manager-transparency {
+  display: grid;
+  gap: var(--spazio-6);
+  margin-top: var(--spazio-6);
+}
+
+.manager-transparency h3 {
+  margin-top: 0;
+}
+
+@media (min-width: 48rem) {
+  .manager-transparency {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Il modulo di richiamata: una colonna di lettura, mai più largo del suo testo. */
+.callback-form {
+  max-width: 30rem;
+  margin-top: var(--spazio-6);
+}
