@@ -316,7 +316,7 @@ describe.skipIf(!testAdminUrl)('cart, order and owner services', () => {
     expect(await stateOf(beach.spotIds[13]!, d1)).toBe('occupied');
     expect(await stateOf(beach.spotIds[12]!, d2)).toBe('occupied');
 
-    // One pass, one confirmation mail and the full sale per group, extras included.
+    // One pass and one confirmation mail per group; the shares per group, extras included.
     const passes = await database.admin.query<{ n: string }>('SELECT count(*) AS n FROM pass p JOIN booking_group g ON g.id = p.group_id WHERE g.order_id = $1', [orderId]);
     expect(passes.rows[0]!.n).toBe('2');
     const confirmations = await database.admin.query<{ n: string }>(
@@ -328,7 +328,9 @@ describe.skipIf(!testAdminUrl)('cart, order and owner services', () => {
       "SELECT e.amount_cents FROM ledger_entry e JOIN booking b ON b.id = e.booking_id JOIN booking_group g ON g.id = b.group_id WHERE g.order_id = $1 AND e.kind = 'payment_received' ORDER BY e.amount_cents",
       [orderId],
     );
-    expect(sales.rows.map((row) => Number(row.amount_cents))).toEqual([3000, 4000]);
+    // D72: una riga per pagamento, per l'incassato — the single order payment
+    // writes one inflow for its whole amount, no longer one row per group.
+    expect(sales.rows.map((row) => Number(row.amount_cents))).toEqual([7000]);
     const extras = await database.admin.query<{ amount_cents: number }>(
       "SELECT e.amount_cents FROM ledger_entry e JOIN booking b ON b.id = e.booking_id JOIN booking_group g ON g.id = b.group_id WHERE g.order_id = $1 AND e.kind = 'extras_revenue'",
       [orderId],

@@ -13,18 +13,25 @@ per l'intero totale a ogni conferma, anche per le prenotazioni al banco
 «da incassare» (`deskBooking` con `collect: 'later'`), che non hanno
 nessuna riga in `payment`. Correzione:
 
-- `recordSale` riceve due informazioni nuove nell'oggetto `sale`:
-  `channel: 'online' | 'desk'` (per il §2) e `collected: boolean`.
-  Con `collected: false` NON scrive `payment_received`; tutto il resto
-  (riga `extras_revenue`, `allocation`, `allocation_expected`) resta
-  identico, perché descrive il dovuto e non l'incassato.
+- `recordSale` NON scrive più `payment_received`: la riga appartiene al
+  pagamento, non alla conferma. Riceve nell'oggetto `sale` la sola
+  informazione nuova `channel: 'online' | 'desk'` (per il §2); tutto il
+  resto (riga `extras_revenue`, `allocation`, `allocation_expected`)
+  resta identico, perché descrive il dovuto e non l'incassato.
+- `payment_received` nasce dove il denaro arriva, per l'importo del
+  pagamento riuscito (`paid.amountCents`), una riga per pagamento sulla
+  prenotazione capofila. In modalità caparra (D52) la conferma scrive
+  quindi la sola caparra, mai il totale: senza questa generalizzazione
+  l'incasso del saldo (sotto) produrrebbe un doppio conteggio.
 - Chiamanti (`packages/db/src/bookings.ts`):
-  - conferma da pagamento riuscito (riga ~309 e ~439): `collected: true`,
+  - conferma da pagamento riuscito (gruppo singolo ~309 e ordine ~439):
     `channel` dal fornitore del pagamento (`paid.provider === 'desk'`
-    → `'desk'`, altrimenti `'online'`);
-  - `deskBooking` con `collect: 'later'` (riga ~807): `collected: false`,
-    `channel: 'desk'`.
-- La riga `payment_received` nasce all'incasso, per l'importo incassato:
+    → `'desk'`, altrimenti `'online'`) e UNA riga `payment_received`
+    di `paid.amountCents` sulla capofila (del gruppo; per l'ordine, la
+    capofila del primo gruppo), al posto delle righe per giornata;
+  - `deskBooking` con `collect: 'later'` (riga ~807): `channel: 'desk'`
+    e nessuna riga (non c'è nessun pagamento).
+- La riga `payment_received` nasce poi a ogni incasso successivo:
   - `collectAtDesk`: dopo l'inserimento del pagamento `desk`, una riga
     `payment_received` di `amountCents` sulla prenotazione capofila;
   - `settleRequestPayment`, ramo `collectable`: una riga

@@ -188,7 +188,8 @@ describe.skipIf(!testAdminUrl)('reviews, deposit and owner cancellation on a rea
       expect(booked.payment.amountCents).toBe(900);
       expect(await applyPaymentOutcome(db(), { provider: 'sandbox', eventId: randomUUID(), reference: booked.payment.reference, outcome: 'succeeded' })).toBe('confirmed');
 
-      // The confirmation is full: sale recorded on the whole total, pass issued, state partial.
+      // The confirmation is full: shares on the whole total, pass issued, state
+      // partial (D72: the inflow row says the deposit alone, what really arrived).
       const group = await database.admin.query<{ id: string }>('SELECT id FROM booking_group WHERE code = $1', [booked.code]);
       const pass = await database.admin.query('SELECT 1 FROM pass WHERE group_id = $1 AND NOT revoked', [group.rows[0]!.id]);
       expect(pass.rowCount).toBe(1);

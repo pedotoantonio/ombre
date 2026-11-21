@@ -306,8 +306,17 @@ export async function applyPaymentOutcome(db: Database, notice: ProviderNotice):
         await tx.update(hold).set({ status: 'converted' }).where(eq(hold.id, pair.reserved.holdId));
         await tx.update(inventoryDay).set({ state: 'occupied', activeHoldId: null, updatedAt: sql`now()` }).where(eq(inventoryDay.id, pair.day!.id));
         await tx.update(booking).set({ status: 'confirmed', confirmedAt: sql`now()` }).where(eq(booking.id, pair.reserved.id));
-        await recordSale(tx, beachId, { bookingId: pair.reserved.id, inventoryDayId: pair.day!.id, totalCents: pair.reserved.totalCents, extrasCents: pair.reserved.extrasCents });
+        await recordSale(tx, beachId, {
+          bookingId: pair.reserved.id,
+          inventoryDayId: pair.day!.id,
+          totalCents: pair.reserved.totalCents,
+          extrasCents: pair.reserved.extrasCents,
+          channel: paid.provider === 'desk' ? 'desk' : 'online',
+        });
       }
+      // The inflow belongs to the payment (D72): one row for what really arrived
+      // — the deposit alone in deposit mode (D52) — on the lead booking.
+      await tx.insert(ledgerEntry).values({ beachId, bookingId: lead.reserved.id, kind: 'payment_received', amountCents: paid.amountCents });
       await tx.insert(pass).values({ beachId, bookingId: lead.reserved.id, groupId: found.groupId! });
       await enqueue(tx, beachId, 'booking.confirmed', { bookingId: lead.reserved.id });
       return 'confirmed';
@@ -358,8 +367,10 @@ async function settleRequestPayment(tx: Transaction, beachId: string, outcome: '
   if (collectable) {
     await settle('succeeded');
     await tx.update(paymentRequest).set({ status: 'paid', closedAt: sql`now()` }).where(eq(paymentRequest.id, request.id));
-    // No ledger entry here: the sale was recorded in full at confirmation
-    // (`payment_received` of each day); the collection lives in `payment`.
+    // The money really arrived now: the inflow lands in the ledger for the
+    // collected amount (D72); the shares were recorded at confirmation and the
+    // collection also lives in `payment`.
+    await tx.insert(ledgerEntry).values({ beachId, bookingId, kind: 'payment_received', amountCents: paid.amountCents });
     return 'collected';
   }
 
@@ -436,11 +447,21 @@ async function settleOrderPayment(tx: Transaction, beachId: string, outcome: 'su
         await tx.update(hold).set({ status: 'converted' }).where(eq(hold.id, member.booking.holdId));
         await tx.update(inventoryDay).set({ state: 'occupied', activeHoldId: null, updatedAt: sql`now()` }).where(eq(inventoryDay.id, day.id));
         await tx.update(booking).set({ status: 'confirmed', confirmedAt: sql`now()` }).where(eq(booking.id, member.booking.id));
-        await recordSale(tx, beachId, { bookingId: member.booking.id, inventoryDayId: day.id, totalCents: member.booking.totalCents, extrasCents: member.booking.extrasCents });
+        await recordSale(tx, beachId, {
+          bookingId: member.booking.id,
+          inventoryDayId: day.id,
+          totalCents: member.booking.totalCents,
+          extrasCents: member.booking.extrasCents,
+          channel: paid.provider === 'desk' ? 'desk' : 'online',
+        });
       }
       await tx.insert(pass).values({ beachId, bookingId: entry.members[0]!.booking.id, groupId: entry.group.id });
       await enqueue(tx, beachId, 'booking.confirmed', { bookingId: entry.members[0]!.booking.id });
     }
+    // The inflow belongs to the single payment of the order (D72): one row for
+    // what really arrived — the sum of the deposits in deposit mode (D52) — on
+    // the lead booking of the first group.
+    await tx.insert(ledgerEntry).values({ beachId, bookingId: perGroup[0]!.members[0]!.booking.id, kind: 'payment_received', amountCents: paid.amountCents });
     return 'confirmed';
   }
 
@@ -794,9 +815,10 @@ export async function deskBooking(
   let code: string;
   let totalCents: number;
   if (input.collect === 'later') {
-    // «Da incassare» (D31): confirmed at once, pass at once (D5: paying is not
-    // entering), the sale recorded at confirmation exactly as today — but NO
-    // payment row: the residual equals the group total until the desk collects it.
+    // «Da incassare» (D31, D72): confirmed at once, pass at once (D5: paying is
+    // not entering), the shares recorded at confirmation — but NO payment row and
+    // NO `payment_received`: the residual equals the group total and the inflow
+    // is written only when the desk really collects.
     const confirmed = await withBeach(db, actor.beachId, async (tx) => {
       const members = await lockedHoldFamily(tx, held.holdId);
       const { group, created } = await createGroupFromHolds(tx, actor.beachId, members, { holdId: held.holdId, ...guest, source: 'desk' });
@@ -804,7 +826,13 @@ export async function deskBooking(
         await tx.update(hold).set({ status: 'converted' }).where(eq(hold.id, member.held.id));
         await tx.update(inventoryDay).set({ state: 'occupied', activeHoldId: null, updatedAt: sql`now()` }).where(eq(inventoryDay.id, member.day.id));
         await tx.update(booking).set({ status: 'confirmed', confirmedAt: sql`now()` }).where(eq(booking.id, created[index]!.id));
-        await recordSale(tx, actor.beachId, { bookingId: created[index]!.id, inventoryDayId: member.day.id, totalCents: created[index]!.totalCents, extrasCents: created[index]!.extrasCents });
+        await recordSale(tx, actor.beachId, {
+          bookingId: created[index]!.id,
+          inventoryDayId: member.day.id,
+          totalCents: created[index]!.totalCents,
+          extrasCents: created[index]!.extrasCents,
+          channel: 'desk',
+        });
       }
       await tx.insert(pass).values({ beachId: actor.beachId, bookingId: created[0]!.id, groupId: group.id });
       await enqueue(tx, actor.beachId, 'booking.confirmed', { bookingId: created[0]!.id });
@@ -833,9 +861,10 @@ export async function deskBooking(
 
 /**
  * Collects (part of) the outstanding balance of a group at the front desk: a
- * `desk` payment that succeeds at once. The ledger is untouched — the sale was
- * recorded in full at confirmation; the collection lives in the payment
- * aggregate of the group (D31, D38).
+ * `desk` payment that succeeds at once, plus a `payment_received` ledger entry
+ * for the collected amount (D72: the ledger only ever says money that arrived).
+ * The shares were recorded at confirmation; the collection also lives in the
+ * payment aggregate of the group (D31, D38).
  */
 export function collectAtDesk(db: Database, actor: Actor, input: { code: string; amountCents: number }): Promise<{ paidCents: number; remainingCents: number; paymentState: PaymentState }> {
   return withActor(db, actor.beachId, actor.userId, async (tx) => {
@@ -859,6 +888,9 @@ export function collectAtDesk(db: Database, actor: Actor, input: { code: string;
       amountCents: input.amountCents,
       purpose: 'desk',
     });
+    // The money really arrived now: the inflow lands in the ledger on the lead
+    // booking of the group, for the collected amount (D72).
+    await tx.insert(ledgerEntry).values({ beachId: actor.beachId, bookingId: members[0]!.booking.id, kind: 'payment_received', amountCents: input.amountCents });
     await tx.insert(auditEvent).values({ beachId: actor.beachId, actorUserId: actor.userId, action: 'booking.collect', target: group.code, detail: { amountCents: input.amountCents } });
     const paidCents = await paidCentsOfGroup(tx, group.id);
     return { paidCents, remainingCents: Math.max(0, totalCents - paidCents), paymentState: paymentStateOf(totalCents, paidCents) };
@@ -917,13 +949,13 @@ export function addExtrasToBooking(
       .update(booking)
       .set({ extrasCents: lead.booking.extrasCents + addedCents, totalCents: lead.booking.totalCents + addedCents })
       .where(eq(booking.id, lead.booking.id));
-    // The sale grows: the dedicated extras movement and the grown sale amount are
-    // both recorded, mirroring what recordSale wrote at confirmation.
-    await tx.insert(ledgerEntry).values([
-      { beachId: actor.beachId, bookingId: lead.booking.id, kind: 'payment_received', amountCents: addedCents },
-      { beachId: actor.beachId, bookingId: lead.booking.id, kind: 'extras_revenue', party: 'beach_club' as const, amountCents: addedCents },
-    ]);
+    // The sale grows: the dedicated extras movement is always recorded, but the
+    // inflow only when the desk collects now (D72) — with `collect: 'later'` the
+    // amount stays in the residual and its `payment_received` will come from
+    // `collectAtDesk` or from a payment request.
+    await tx.insert(ledgerEntry).values({ beachId: actor.beachId, bookingId: lead.booking.id, kind: 'extras_revenue', party: 'beach_club' as const, amountCents: addedCents });
     if (input.collect === 'desk') {
+      await tx.insert(ledgerEntry).values({ beachId: actor.beachId, bookingId: lead.booking.id, kind: 'payment_received', amountCents: addedCents });
       await tx.insert(payment).values({
         beachId: actor.beachId,
         bookingId: lead.booking.id,

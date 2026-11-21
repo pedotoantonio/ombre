@@ -9,17 +9,28 @@ import { ownContract } from './sharing';
 type Party = 'season_holder' | 'beach_club' | 'platform';
 
 /**
- * Writes the money trail of a confirmed booking: the payment and each party's share.
- * An ordinary day has no season holder: that share stays with the beach club.
- * The leftover cents of the division always go to the beach club.
+ * Writes the shares of a confirmed booking. It never writes `payment_received`:
+ * that row belongs to the payment, not to the confirmation (D72) — the caller
+ * records one inflow per succeeded payment, for its amount, on the lead booking.
+ * The shares below stay recorded at confirmation, because they describe what is
+ * owed. An ordinary day has no season holder: that share stays with the beach
+ * club. The leftover cents of the division always go to the beach club.
+ *
+ * `channel: 'desk'` folds the platform basis points into the beach club share
+ * and writes no `platform` allocation at all (D72): no collection flow exists
+ * for cash taken at the desk, and none of the evaluated scenarios keeps a fee on
+ * the club's till. The season holder share of a shared day stays untouched.
  *
  * Extras (spec §4.2) belong entirely to the beach club: a dedicated ledger movement
  * in the same transaction, no platform fee, no seasonal share — on a shared day the
  * split below starts from the spot price alone (total − extras).
  */
-export async function recordSale(tx: Transaction, beachId: string, sale: { bookingId: string; inventoryDayId: string; totalCents: number; extrasCents?: number }): Promise<void> {
+export async function recordSale(
+  tx: Transaction,
+  beachId: string,
+  sale: { bookingId: string; inventoryDayId: string; totalCents: number; extrasCents?: number; channel: 'online' | 'desk' },
+): Promise<void> {
   const extrasCents = sale.extrasCents ?? 0;
-  await tx.insert(ledgerEntry).values({ beachId, bookingId: sale.bookingId, kind: 'payment_received', amountCents: sale.totalCents });
   if (extrasCents > 0) {
     await tx.insert(ledgerEntry).values({ beachId, bookingId: sale.bookingId, kind: 'extras_revenue', party: 'beach_club', amountCents: extrasCents });
   }
@@ -34,15 +45,18 @@ export async function recordSale(tx: Transaction, beachId: string, sale: { booki
     .where(eq(inventoryDay.id, sale.inventoryDayId));
   const holderUserId = day?.shared ? (day.holderUserId ?? null) : null;
 
+  // On a desk sale the platform points flow to the beach club (D72): the club
+  // part grows by `platformBps` and the `platform` party gets no row at all.
+  const desk = sale.channel === 'desk';
   const shares: Share<Party>[] = holderUserId
     ? [
         { party: 'season_holder', bps: rule.seasonHolderBps },
-        { party: 'beach_club', bps: rule.beachClubBps },
-        { party: 'platform', bps: rule.platformBps },
+        { party: 'beach_club', bps: desk ? rule.beachClubBps + rule.platformBps : rule.beachClubBps },
+        ...(desk ? [] : [{ party: 'platform', bps: rule.platformBps } as const]),
       ]
     : [
-        { party: 'beach_club', bps: rule.seasonHolderBps + rule.beachClubBps },
-        { party: 'platform', bps: rule.platformBps },
+        { party: 'beach_club', bps: desk ? rule.seasonHolderBps + rule.beachClubBps + rule.platformBps : rule.seasonHolderBps + rule.beachClubBps },
+        ...(desk ? [] : [{ party: 'platform', bps: rule.platformBps } as const]),
       ];
   const amounts = splitAmount(spotCents, shares, 'beach_club');
 

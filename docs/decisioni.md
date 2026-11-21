@@ -739,13 +739,16 @@ del banco resterebbe un credito non riscuotibile) e D8 (i piani A e B e le
 percentuali restano quelli del pilota: cambia solo l'effetto del canale).
 
 1. `payment_received` nel registro corrisponde sempre a denaro davvero
-   incassato. Per le prenotazioni al banco «da incassare» la riga nasce
-   all'incasso (`collectAtDesk`, richieste di pagamento, extra incassati al
-   banco), per l'importo incassato; le quote (`allocation`,
-   `allocation_expected`) restano registrate alla conferma perché descrivono
-   il dovuto. Questo corregge il passo di D31 «vendita registrata alla
-   conferma»: la vendita resta registrata alla conferma nelle quote, ma
-   l'incasso si scrive solo quando arriva.
+   incassato: una riga per pagamento riuscito, per il suo importo. Alla
+   conferma online la riga dice ciò che il pagamento ha incassato (in
+   modalità caparra D52, la sola caparra); per le prenotazioni al banco
+   «da incassare» non nasce nessuna riga e l'incasso la scrive quando
+   arriva (`collectAtDesk`, richieste di pagamento, extra incassati al
+   banco). Le quote (`allocation`, `allocation_expected`) restano
+   registrate alla conferma perché descrivono il dovuto. Questo corregge
+   il passo di D31 «vendita registrata alla conferma»: la vendita resta
+   registrata alla conferma nelle quote, ma l'incasso si scrive solo
+   quando arriva.
 2. Nessuna quota di piattaforma sulle vendite al banco: `recordSale` riceve
    il canale della vendita e sul banco i punti base della piattaforma
    confluiscono allo stabilimento (nessuna riga di quota `platform`); la

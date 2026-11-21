@@ -128,9 +128,10 @@ describe.skipIf(!testAdminUrl)('multiple payments, deferred collection and payme
     expect(pass.rowCount).toBe(1);
     const payments = await admin('SELECT 1 FROM payment WHERE booking_id = $1', [bookingId]);
     expect(payments.rowCount).toBe(0);
-    // The sale is recorded at confirmation, exactly as a paid one (maturazione invariata).
+    // D72: payment_received solo all'incasso — the shares are recorded at
+    // confirmation, the inflow is not, because no money has arrived yet.
     const sale = await admin<{ amount_cents: number }>("SELECT amount_cents FROM ledger_entry WHERE booking_id = $1 AND kind = 'payment_received'", [bookingId]);
-    expect(sale.rows.map((entry) => Number(entry.amount_cents))).toEqual([3000]);
+    expect(sale.rows).toEqual([]);
 
     // The whole balance collected at the desk: a desk payment, state «saldata».
     const collected = await call('POST', `${manage}/bookings/${code}/collect`, { amountCents: 3000 }, 'reception');
@@ -138,6 +139,9 @@ describe.skipIf(!testAdminUrl)('multiple payments, deferred collection and payme
     expect(collected.body).toMatchObject({ paidCents: 3000, remainingCents: 0, paymentState: 'paid' });
     const kinds = await admin<{ purpose: string; status: string }>('SELECT purpose, status FROM payment WHERE booking_id = $1', [bookingId]);
     expect(kinds.rows).toEqual([{ purpose: 'desk', status: 'succeeded' }]);
+    // D72: payment_received solo all'incasso — the collection writes the inflow.
+    const inflow = await admin<{ amount_cents: number }>("SELECT amount_cents FROM ledger_entry WHERE booking_id = $1 AND kind = 'payment_received'", [bookingId]);
+    expect(inflow.rows.map((entry) => Number(entry.amount_cents))).toEqual([3000]);
     expect(errorCode(await call('POST', `${manage}/bookings/${code}/collect`, { amountCents: 1 }, 'reception'))).toBe('invalid_state');
   });
 
