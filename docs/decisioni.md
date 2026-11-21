@@ -729,3 +729,29 @@ invii al minuto per indirizzo; archivio nella nuova tabella
 riservata `/area/richieste`, solo per il ruolo di piattaforma `admin`
 (mai usato finora), con la marcatura «richiamato». Tre rotte nuove nel
 contratto (135 → 138). Indirizzi, menu (D41) e home (D70) invariati.
+
+## D72 — Il registro dice il vero e il banco non paga la piattaforma — accettata (21/11/2026)
+
+Correzione di difetti del modello economico (gruppo A, iterazione 1), valida
+in ogni scenario, compresa la cessione o licenza del software. Richiama D6
+(nessun flusso di incasso reale nel MVP: una quota trattenuta sul contante
+del banco resterebbe un credito non riscuotibile) e D8 (i piani A e B e le
+percentuali restano quelli del pilota: cambia solo l'effetto del canale).
+
+1. `payment_received` nel registro corrisponde sempre a denaro davvero
+   incassato. Per le prenotazioni al banco «da incassare» la riga nasce
+   all'incasso (`collectAtDesk`, richieste di pagamento, extra incassati al
+   banco), per l'importo incassato; le quote (`allocation`,
+   `allocation_expected`) restano registrate alla conferma perché descrivono
+   il dovuto. Questo corregge il passo di D31 «vendita registrata alla
+   conferma»: la vendita resta registrata alla conferma nelle quote, ma
+   l'incasso si scrive solo quando arriva.
+2. Nessuna quota di piattaforma sulle vendite al banco: `recordSale` riceve
+   il canale della vendita e sul banco i punti base della piattaforma
+   confluiscono allo stabilimento (nessuna riga di quota `platform`); la
+   quota dello Stagionale sulle giornate condivise resta invariata. Online
+   nulla cambia. È anche una scelta di prezzo: nessuno degli scenari
+   valutati tiene una commissione sulla cassa del bagno.
+
+Registro che si può solo estendere: nessuna migrazione, le vendite già
+registrate non si toccano.
