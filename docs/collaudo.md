@@ -1,5 +1,132 @@
 # Collaudo
 
+## Collaudo delle correzioni del gruppo A, iterazione 1 (21/11/2026)
+
+Collaudo della commessa «Correzioni del gruppo A, iterazione 1 (D72)»
+([specifica](specifica-correzioni-gruppo-a-1.md), criteri §7 cioè quelli del
+[prompt](prompt-correzioni-gruppo-a-1.md) 1–6): il registro dice solo denaro
+incassato (`recordSale` senza `payment_received`, una riga per pagamento sulla
+capofila), quota di piattaforma zero sulle vendite al banco, dotazioni senza
+parti a zero, testi it/en coerenti (cabine, annullamento, tempo di riserva),
+`holdNote(minuti)` da `OMBRE_HOLD_MINUTES` e `callback.sentText` senza rinvii
+a contatti assenti. Backend in `0368f72`, frontend in `7719cc6`.
+
+Eseguito su **pila vergine usa-e-getta** con `pnpm collaudo`: progetto compose
+dedicato `ombre-collaudo-pila` (web `127.0.0.1:3250`, API `127.0.0.1:3251`),
+PostgreSQL dei test sulla porta predefinita **54329**, `build` → `up -d db
+migrate api worker web` → health → **dodici** suite fumo nell'ordine → backup
+**ripristinato davvero** (stesse righe in ogni tabella, 72 politiche di
+sicurezza) → `down -v` della sola pila del giro. In più, prima del giro, `pnpm
+test:db` a sé su porta **54333** e, dopo, `pnpm check` (lint, tipi, test,
+build: 15 compiti turbo verdi — criterio 6). La pila esporta ora
+**`OMBRE_HOLD_MINUTES=15`** (novità in `collaudo.sh`): la prova che i minuti
+della riserva vengono dalla configurazione, non dal predefinito 10. L'ambiente
+fisso `ombre-collaudo` (`:3232`) e `ombre-demo` **mai toccati**. **Un solo
+giro, tutto verde al primo colpo.**
+
+### Controlli estesi (mai ridotti): +12 fumo
+
+- **`scripts/smoke.ts` +8**, da 553 a 561 — blocco «Le pagine non si
+  contraddicono (gruppo A, D72)», 4 per lingua: il `<main>` di
+  `/gestore-stabilimento` e `/en/beach-manager` **non contiene più «cabine» né
+  «cabins»** (il gestionale le gestisce: i limiti non le rinnegano);
+  `/come-funziona` e `/en/how-it-works` portano i testi nuovi «Fasce orarie e
+  cabine non si prenotano online.» / «Time slots and cabins cannot be booked
+  online.»; `/assistenza` e `/en/help` contengono «fino a 48 ore prima» / «up
+  to 48 hours before» (48 è il predefinito di piattaforma
+  `defaultCancelDeadlineHours` di `@ombre/shared`, lo stesso di
+  `beach.cancel_deadline_hours`: il controllo verifica proprio quel
+  predefinito, col commento che ne dice la fonte) e **non contengono più**
+  «Dipende dalle condizioni» / «It depends on the terms».
+- **`scripts/smoke-flow.ts` +2**, da 77 a 79: la pagina `/prenota`
+  (riepilogo), nel flusso senza JavaScript, contiene
+  `${Number(process.env.OMBRE_HOLD_MINUTES ?? '10')} minuti` — i minuti letti
+  dall'ambiente con lo stesso predefinito del servizio web, **mai scritti a
+  mano** — e «quando arriva il pagamento». Con la pila avviata a 15, il verde
+  prova il «15 minuti» del criterio 4.
+- **`scripts/smoke-richiamata.ts` +2**, da 52 a 54: la conferma dell'invio
+  (`?inviata=1`), in entrambe le lingue, **non contiene più «più in basso» /
+  «further down»** — nessun rinvio a contatti che la pagina non mostra.
+- **`scripts/collaudo.sh`**: la sola riga `export OMBRE_HOLD_MINUTES=15`
+  accanto alle altre export, col commento del motivo (criterio 4). Progetto e
+  porte invariati.
+- **`scripts/smoke-booking.ts` non toccato**: il grep preventivo (platform,
+  allocation, payment\_received, collect, banco) trova una sola verifica di
+  quote, sulla **vendita online** del giro end-to-end — che per D72 resta
+  identica a prima («online nulla cambia») e infatti resta verde senza
+  ritocchi.
+
+Nessuna asserzione esistente tolta né indebolita.
+
+### Test e collaudi fumo (un giro, pila vergine)
+
+| Parte | Controlli | Esito |
+|---|---|---|
+| Lint e tipi (`pnpm lint`, `pnpm typecheck`) | tutto il codice | Superati |
+| Test con PostgreSQL vero (54333 a sé, 54329 nella pila) | **304** (**48** shared, 11 comms, 66 db, **172** api, 7 worker: **+7**, i sei di `ledger-d72.test.ts` e le dotazioni in `i18n.test.ts`), contratto OpenAPI a **138 rotte** (invariato) | Superati |
+| `pnpm check` (lint, tipi, test, build) | 15 compiti turbo | Superati |
+| Pagine pubbliche (`smoke`) | 561 (**+8**) | Superati |
+| Ricerca, planimetria e riserva (`smoke:flow`) | 79 (**+2**) | Superati |
+| Aree riservate (`smoke:areas`) | 85 | Superati |
+| Sito dello stabilimento (`smoke:site`) | 25 | Superati |
+| Modulo di richiamata (`smoke:richiamata`) | 54 (**+2**) | Superati |
+| Conto, Google e carrello (`smoke:conto`) | 139 | Superati |
+| Al passo col mercato (`smoke:mercato`) | 110 | Superati |
+| La spiaggia illustrata (`smoke:spiaggia`) | 121 | Superati |
+| La scheda della postazione (`smoke:schede`) | 141 | Superati |
+| Prenotazione end-to-end (`smoke:booking`) | 15 | Superati |
+| Presa simultanea (`smoke:api`) | 13 | Superati |
+| Due passaggi (`smoke:2fa`, per ultima) | 11 | Superati |
+| Backup e prova di ripristino | quadratura, 72 politiche | Superati |
+
+In totale **1354 controlli fumo** (1342 + 12 del collaudatore), tutti verdi
+al primo giro.
+
+### Criteri di accettazione (prompt 1–6)
+
+1. **Il registro dice solo denaro incassato — superato.**
+   `apps/api/tests/ledger-d72.test.ts` su database nuovo: «writes no inflow
+   for a desk booking “da incassare”, one per collection, and their sum closes
+   at the total» (nessun `payment_received` alla conferma, una riga per
+   incasso parziale, la somma chiude al totale, **e il caso d'errore**:
+   l'incasso oltre il residuo resta rifiutato 409 `invalid_state` senza
+   lasciare traccia); «records the inflow when a payment request is
+   collected»; «writes the deposit alone at an online confirmation in deposit
+   mode, and the balance at its collection» (caparra D52 senza doppio
+   conteggio). Verdi in `pnpm test:db` (porta 54333) e nella pila.
+2. **Quota di piattaforma zero sul banco — superato.** Sempre in
+   `ledger-d72.test.ts` i tre casi: «gives the beach club 100% of the spot
+   price on a desk sale of an ordinary day», «keeps the seasonal share
+   untouched and moves the platform share to the club on a desk sale of a
+   shared day», «keeps the online quotas exactly as today»; in ogni caso la
+   somma delle quote chiude al lordo. La vendita **online** end-to-end di
+   `smoke:booking` (15 controlli) conferma sulla pila che online nulla cambia.
+3. **Dotazioni senza parti a zero — superato.**
+   `packages/shared/tests/i18n.test.ts`, «leave the zero parts out of the
+   equipment line»: «1 lettino», «1 ombrellone e 2 lettini», «2 ombrelloni» e
+   gli equivalenti inglesi, più la stringa vuota con entrambe le quantità a
+   zero (48 test shared verdi).
+4. **Le pagine non si contraddicono — superato.** Gli 8 controlli nuovi di
+   `pnpm smoke` nelle due lingue (guida Gestore senza «cabine»/«cabins» nel
+   `main`, guida Ospite e assistenza coi testi nuovi e le 48 ore dal
+   predefinito di piattaforma) e i 2 di `smoke:flow`: pila avviata con
+   `OMBRE_HOLD_MINUTES=15` e riepilogo che mostra **«15 minuti»** coi minuti
+   letti dall'ambiente, più «quando arriva il pagamento». Tutti verdi.
+5. **La conferma della richiamata — superato.** I 2 controlli nuovi di
+   `smoke:richiamata` (54 totali): `?inviata=1` senza «più in basso» (it) né
+   «further down» (en).
+6. **Nessuna regressione — superato.** `pnpm check` verde (15 compiti turbo,
+   build compresa), `pnpm test:db` verde (304 test, 138 rotte a contratto),
+   `pnpm collaudo` verde su pila vergine al primo giro (1354 controlli fumo,
+   backup ripristinato). `smoke:booking` e i test economici esistenti non
+   verificavano la quota di piattaforma sul banco né il `payment_received`
+   alla conferma «da incassare»: nessun adeguamento servito, motivo scritto
+   sopra.
+
+### Difetti trovati
+
+Nessuno: né del prodotto né delle suite, giro unico tutto verde.
+
 ## Collaudo della vetrina del Gestore (21/11/2026)
 
 Collaudo della commessa «la vetrina del Gestore e il modulo "Ti chiamiamo

@@ -91,6 +91,10 @@ for (const lang of ['it', 'en'] as const) {
   const confirmed = await guest.get(`${t.page}?inviata=1`);
   check(confirmed.status === 200 && /<p class="alert alert--info" role="status">[^]*?<\/p>/.test(confirmed.html) && confirmed.html.includes(t.sent), `${lang}: the confirmation «${t.sent}» is not rendered in the page`);
   check(!confirmed.html.includes('action="/azioni/richiamata"'), `${lang}: the form is still in the page after a sent request`);
+  // Correzioni del gruppo A (D72): la conferma non rimanda più a contatti che la
+  // pagina non mostra — «più in basso» / «further down» sono banditi.
+  const banished = lang === 'it' ? 'più in basso' : 'further down';
+  check(!confirmed.html.includes(banished), `${lang}: the confirmation still points «${banished}» towards contacts the page does not show (gruppo A, D72)`);
 
   // Nome vuoto: flag enome e gli altri valori ricompilati nella query e nel campo.
   const noName = parsed(await guest.post('richiamata', { lang, name: '', phone, beach: beaches[lang], consent: '1', sito: '' }, address(1, lang)));

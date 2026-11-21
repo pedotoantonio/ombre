@@ -327,6 +327,46 @@ for (const file of vetrinaScreens) {
   check(picture.status === 200 && (picture.headers.get('content-type') ?? '').startsWith('image/'), `vetrina: /img/gestionale/${file} is not served as an image (D71)`);
 }
 
+// Le pagine non si contraddicono (correzioni del gruppo A, iterazione 1, D72):
+// la guida del Gestore non elenca più le cabine tra i limiti — il gestionale le
+// gestisce, quindi nel main della pagina la parola non compare affatto; la guida
+// dell'Ospite dice che fasce orarie e cabine non si prenotano online; l'assistenza
+// risponde sull'annullamento con le ore vere e senza il vecchio «Dipende». Le 48
+// ore sono il predefinito di piattaforma defaultCancelDeadlineHours di
+// @ombre/shared (lo stesso della colonna beach.cancel_deadline_hours usato da
+// cancel.defaultPolicy): qui restano scritte 48 perché il controllo verifica
+// proprio quel predefinito, non un numero del dizionario.
+const groupA = {
+  it: {
+    manager: '/gestore-stabilimento',
+    guest: '/come-funziona',
+    help: '/assistenza',
+    cabins: 'cabine',
+    note: 'Fasce orarie e cabine non si prenotano online.',
+    deadline: 'fino a 48 ore prima',
+    oldAnswer: 'Dipende dalle condizioni',
+  },
+  en: {
+    manager: '/en/beach-manager',
+    guest: '/en/how-it-works',
+    help: '/en/help',
+    cabins: 'cabins',
+    note: 'Time slots and cabins cannot be booked online.',
+    deadline: 'up to 48 hours before',
+    oldAnswer: 'It depends on the terms',
+  },
+} as const;
+for (const lang of ['it', 'en'] as const) {
+  const t = groupA[lang];
+  const mainOf = async (path: string) => /<main\b[^]*<\/main>/.exec(await (await fetch(base + path)).text())?.[0] ?? '';
+  const managerMain = await mainOf(t.manager);
+  check(managerMain !== '' && !managerMain.toLowerCase().includes(t.cabins), `${t.manager}: the main still mentions «${t.cabins}» — the limits must not disown what the gestionale handles (gruppo A, D72)`);
+  check((await mainOf(t.guest)).includes(t.note), `${t.guest}: the guest guide does not carry «${t.note}» (gruppo A, D72)`);
+  const helpMain = await mainOf(t.help);
+  check(helpMain.includes(t.deadline), `${t.help}: the cancellation answer does not carry «${t.deadline}» (platform default defaultCancelDeadlineHours, gruppo A, D72)`);
+  check(!helpMain.includes(t.oldAnswer), `${t.help}: the old answer «${t.oldAnswer}» is still in the page (gruppo A, D72)`);
+}
+
 // The two-row header (D67): the menu bar is a band of its own — nav.site-nav is a
 // sibling of .site-header__inner, never inside it — with its entries in a container,
 // in the D41 order, same in both languages. The rainbow of D68 lives in the CSS and is

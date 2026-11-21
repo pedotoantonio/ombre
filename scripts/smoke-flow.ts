@@ -138,6 +138,12 @@ check(/<meta name="robots" content="noindex/.test(summary.html), 'summary: must 
 check(summary.html.includes('30,00') && summary.html.includes('27,00'), 'summary: MARE10 does not turn 30,00 into 27,00');
 const key = /name="key" value="(web-[0-9a-f-]{36})"/.exec(summary.html)?.[1] ?? '';
 check(key !== '', 'summary: the form has no idempotency key');
+// Correzioni del gruppo A (D72): il riepilogo dice i minuti veri della riserva —
+// letti qui da OMBRE_HOLD_MINUTES con lo stesso predefinito del servizio web,
+// mai scritti a mano — e che la conferma arriva col pagamento.
+const holdMinutes = Number(process.env.OMBRE_HOLD_MINUTES ?? '10');
+check(summary.html.includes(`${holdMinutes} minuti`), `summary: the hold note does not say «${holdMinutes} minuti» as OMBRE_HOLD_MINUTES prescribes (gruppo A, D72)`);
+check(summary.html.includes('quando arriva il pagamento'), 'summary: the hold note does not say the booking is confirmed when the payment arrives (gruppo A, D72)');
 
 const fields = { lang: 'it', beach: 'bagno-delle-dune', spot: spotId, day, promo: 'MARE10', key };
 const created = await submit(fields);

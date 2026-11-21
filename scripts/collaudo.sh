@@ -31,6 +31,9 @@ export OMBRE_OIDC_TEST_SECRET="collaudo-oidc-segreto-di-prova"
 # The acceptance stack declares its public address, so canonical/hreflang stay under test.
 export OMBRE_SITE_URL="http://localhost:$web_port"
 export OMBRE_WORKER_INTERVAL_SECONDS=2
+# Prova che i minuti della riserva vengono dalla configurazione (gruppo A, criterio 4):
+# con 15 la pila deve mostrare «15 minuti», non il predefinito 10.
+export OMBRE_HOLD_MINUTES=15
 
 step() { printf '\n== %s ==\n' "$1"; }
 cleanup() {
