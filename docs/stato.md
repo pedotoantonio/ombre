@@ -229,6 +229,24 @@ indicizzato.
   collegamento è diventato un pulsante secondario (classi già
   esistenti e misurate); menu a cinque voci e ogni altra pagina
   invariati; la via dei due tocchi del Gestore resta quella del menu.
+- Correzioni del gruppo A, iterazione 1 (21/11/2026), specifica in
+  [specifica-correzioni-gruppo-a-1.md](specifica-correzioni-gruppo-a-1.md)
+  ([prompt](prompt-correzioni-gruppo-a-1.md)), decisione D72 — correzione di
+  difetti validi in ogni scenario, nessuna funzione nuova (sviluppo fermo per
+  il verdetto di fase 1, vedi [FASI.md](../FASI.md)): il registro scrive
+  `payment_received` solo per denaro davvero incassato (una riga per
+  pagamento riuscito, per il suo importo, sulla capofila: alla conferma in
+  modalità caparra la sola caparra; «da incassare» nessuna riga, l'incasso
+  la scrive quando arriva); nessuna quota di piattaforma sulle vendite al
+  banco (`recordSale` riceve il canale: i punti base della piattaforma
+  confluiscono allo stabilimento, quota dello Stagionale invariata, online
+  come oggi, nessuna migrazione); `booking.equipment` omette le dotazioni a
+  zero; cabine fuori dai limiti della guida Gestore e nota dell'Ospite
+  riscritta; FAQ dell'annullamento con le ore dal predefinito di piattaforma
+  (`defaultCancelDeadlineHours`, 48); `holdNote` con i minuti da
+  `OMBRE_HOLD_MINUTES` (anche sul servizio web, pila di collaudo a 15);
+  `callback.sentText` senza rinvii a contatti assenti. It/en allo stesso
+  livello; piani A e B e ripartizione 50/40/10 invariati.
 - Iterazione «La vetrina del Gestore» (21/11/2026), specifica in
   [specifica-vetrina-gestore.md](specifica-vetrina-gestore.md)
   ([prompt](prompt-vetrina-gestore.md)), decisione D71: la pagina del
@@ -315,6 +333,15 @@ indicizzato.
 ## Collaudo
 
 Esito completo in [collaudo.md](collaudo.md).
+
+Il 21/11/2026, «Correzioni del gruppo A, iterazione 1» (D72): **304 test**
+con database (contratto fermo a **138 rotte**; +6 in `ledger-d72.test.ts`
+sui criteri economici, +1 sulle dotazioni senza zeri) e **1354 controlli
+fumo** tutti verdi su pila vergine al primo giro (+8 in `smoke` sulle
+pagine che non si contraddicono nelle due lingue, +2 in `smoke:flow` sui
+minuti della riserva letti da `OMBRE_HOLD_MINUTES` — pila avviata a 15 —
++2 in `smoke:richiamata` sulla conferma senza rinvii); `pnpm check` verde;
+nessun difetto, né del prodotto né delle suite.
 
 Il 21/11/2026, iterazione «La vetrina del Gestore»: **297 test** con
 database (contratto a **138 rotte**: le tre della richiamata) e
