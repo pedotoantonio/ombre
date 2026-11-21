@@ -518,6 +518,21 @@ export const notification = pgTable('notification', {
 });
 
 /**
+ * A «Ti chiamiamo noi» request of the manager showcase (D71): a platform row,
+ * owned by no beach club and reachable only outside any beach context.
+ */
+export const callbackRequest = pgTable('callback_request', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  name: text('name').notNull(),
+  phone: text('phone').notNull(),
+  beachName: text('beach_name'),
+  locale: text('locale', { enum: ['it', 'en'] }).notNull(),
+  status: text('status', { enum: ['new', 'called'] }).notNull().default('new'),
+  calledAt: timestamp('called_at', { withTimezone: true }),
+});
+
+/**
  * A verified review (D51): one per stay (booking_group_id UNIQUE), written by
  * the account that owns the group. Flagged ones stay visible, with the reply.
  */

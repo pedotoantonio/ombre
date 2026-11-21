@@ -38,6 +38,7 @@ import {
   confirmTwoFactor,
   conventionStatement,
   createCabin,
+  createCallbackRequest,
   createCart,
   createContract,
   createConvention,
@@ -75,6 +76,7 @@ import {
   listActiveBeaches,
   listActiveExtras,
   listCabins,
+  listCallbackRequests,
   listDayMap,
   listBookings,
   listContracts,
@@ -103,6 +105,7 @@ import {
   locateCartBeach,
   login,
   logout,
+  markCallbackRequestCalled,
   passwordMinLength,
   registerAccount,
   relinkBookings,
@@ -307,6 +310,14 @@ const loginSchema = z.object({ email: z.email().max(200), password: z.string().m
 // The guest's account (D44): name and email, nothing else; the password is generated.
 const registerSchema = z.object({ name: z.string().trim().min(1).max(120), email: z.email().max(200), locale: z.enum(['it', 'en']).default('it') });
 const changePasswordSchema = z.object({ current: z.string().min(1).max(200), next: z.string().min(1).max(200) });
+// The «Ti chiamiamo noi» form of the manager showcase (D71): name and phone to
+// call back, the beach club as free text; the consent stays a field of the form.
+const callbackSchema = z.object({
+  name: z.string().trim().min(1).max(80),
+  phone: z.string().trim().min(6).max(20).regex(/^[+0-9 ()./-]+$/),
+  beachName: z.string().trim().min(1).max(80).optional(),
+  locale: z.enum(['it', 'en']),
+});
 const priceSchema = z.number().int().min(0).max(1_000_000);
 const publishSchema = z.object({ day: daySchema, priceCents: priceSchema, spotIds: z.array(z.uuid()).min(1).max(500).optional() });
 const blockSchema = z.object({ spotId: z.uuid(), day: daySchema, blocked: z.boolean(), reason: z.string().trim().max(200).optional() });
@@ -727,6 +738,8 @@ const limits: Record<string, number> = {
   // The public payment page, limited like the purchase routes (spec §4.3).
   'get /v1/pay-requests/:token': 60,
   'post /v1/pay-requests/:token/payments': 20,
+  // The «Ti chiamiamo noi» form (D71): five a minute per address.
+  'post /v1/callback-requests': 5,
 };
 
 export function createApp(options: AppOptions): Hono {
@@ -2108,6 +2121,34 @@ export function createApp(options: AppOptions): Hono {
       },
       held.replayed ? 200 : 201,
     );
+  });
+
+  // ---- The «Ti chiamiamo noi» callback (D71): the public form and the platform list ----
+
+  /** Signed-in platform administrator: the only role the platform routes answer. */
+  async function platformAdmin(authorization: string | undefined): Promise<void> {
+    const user = await currentUser(authorization);
+    if (user.platformRole !== 'admin') throw new HttpError(403, 'forbidden', 'Reserved to the platform administrator');
+  }
+
+  route({ method: 'post', path: '/v1/callback-requests', summary: 'Ask to be called back about the beach manager offer, with a name and a phone number', tag: 'Public', auth: 'none', request: callbackSchema, success: 201, errors: [400, 429] }, async (c) => {
+    const request = parse(callbackSchema, await body(c.req.raw), 'callback request');
+    const created = await createCallbackRequest(db, { name: request.name, phone: request.phone, beachName: request.beachName ?? null, locale: request.locale });
+    return c.json({ requestId: created.requestId }, 201);
+  });
+
+  route({ method: 'get', path: '/v1/platform/callback-requests', summary: 'Callback requests of the showcase form, the most recent first, at most 200', tag: 'Platform', auth: 'session', success: 200, errors: [401, 403] }, async (c) => {
+    await platformAdmin(c.req.header('Authorization'));
+    const requests = await listCallbackRequests(db);
+    return c.json({
+      requests: requests.map((request) => ({ ...request, createdAt: request.createdAt.toISOString(), calledAt: request.calledAt?.toISOString() ?? null })),
+    });
+  });
+
+  route({ method: 'post', path: '/v1/platform/callback-requests/:requestId/called', summary: 'Mark a callback request as called; one already marked stays as it was', tag: 'Platform', auth: 'session', success: 204, errors: [400, 401, 403, 404] }, async (c) => {
+    await platformAdmin(c.req.header('Authorization'));
+    await markCallbackRequestCalled(db, parse(z.uuid(), c.req.param('requestId'), 'callback request'));
+    return c.body(null, 204);
   });
 
   // The document lists exactly the routes registered above.

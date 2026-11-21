@@ -4,6 +4,7 @@ export * from './amenities';
 export * from './auth';
 export * from './bookings';
 export * from './cabins';
+export * from './callbacks';
 export * from './cart';
 export * from './conventions';
 export * from './extras';

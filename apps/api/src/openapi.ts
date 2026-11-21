@@ -4,7 +4,7 @@ export interface Operation {
   method: 'get' | 'post' | 'put' | 'delete';
   path: string;
   summary: string;
-  tag: 'Public' | 'Booking' | 'Sign-in' | 'Account' | 'Season holder' | 'Cabin holder' | 'Beach club' | 'System';
+  tag: 'Public' | 'Booking' | 'Sign-in' | 'Account' | 'Season holder' | 'Cabin holder' | 'Beach club' | 'Platform' | 'System';
   /** Who may call it: nobody in particular, a signed-in person, or the holder of one booking, cart or order token. */
   auth: 'none' | 'session' | 'booking-token' | 'cart-token' | 'order-token' | 'provider-signature';
   request?: z.ZodType;
