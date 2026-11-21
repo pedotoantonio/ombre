@@ -710,3 +710,22 @@ via dei due tocchi del Gestore resta quella del menu. Il resto di D41 —
 barra fissa, cinque voci nell'ordine committed, tre guide per ruolo —
 resta valido. I collaudi dell'eroe si aggiornano alla nuova forma: l'eroe
 non contiene i tre tasti, le carte portano alle tre guide.
+
+## D71 — La vetrina del Gestore e il modulo «Ti chiamiamo noi» — accettata (21/11/2026)
+
+La pagina del Gestore diventa la vetrina commerciale del gestionale,
+sull'impianto studiato di spiagge.it ma senza numeri, testimonianze o
+loghi inventati: eroe con claim e due azioni («Ti chiamiamo noi» verso
+il modulo, «Guarda il gestionale» verso le schede), riga discreta «Sei
+già un cliente? Entra nel gestionale», cinque schede-funzionalità con
+le schermate vere (la quinta, la condivisione degli stagionali, con una
+schermata nuova dal gestionale dimostrativo), quattro vantaggi reali,
+trasparenza conservata verso il fondo, chiusura che rimanda all'àncora
+del modulo. Il modulo di richiamata: nome, telefono, stabilimento
+facoltativo, consenso esplicito; POST senza JavaScript con errori
+leggibili; campo trappola che finge l'esito buono; limite di cinque
+invii al minuto per indirizzo; archivio nella nuova tabella
+`callback_request` (migrazione 026) e consultazione nella pagina
+riservata `/area/richieste`, solo per il ruolo di piattaforma `admin`
+(mai usato finora), con la marcatura «richiamato». Tre rotte nuove nel
+contratto (135 → 138). Indirizzi, menu (D41) e home (D70) invariati.
