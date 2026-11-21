@@ -135,6 +135,8 @@ services:
         OMBRE_CONTACT_EMAIL: ${OMBRE_CONTACT_EMAIL:-}
     environment:
       OMBRE_API_URL: http://api:3000
+      # The booking page is dynamic and tells the guest the hold time: same default as the API.
+      OMBRE_HOLD_MINUTES: ${OMBRE_HOLD_MINUTES:-10}
       # Shows the test payment page. Empty in production.
       OMBRE_SANDBOX_WEBHOOK_SECRET: ${OMBRE_SANDBOX_WEBHOOK_SECRET:-}
     depends_on:

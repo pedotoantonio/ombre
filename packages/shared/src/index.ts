@@ -1,4 +1,5 @@
 export * from './config';
+export * from './policy';
 export * from './i18n/index';
 export * from './domain/amenities';
 export * from './domain/money';

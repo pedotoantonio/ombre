@@ -62,6 +62,9 @@ import { spotTypesOf, typeByName, TypeCardLink, typeCardHref, TypeCardsPanel, ty
 
 type Query = Record<string, string | string[] | undefined>;
 
+/** I minuti della riserva detti all'Ospite: lo stesso predefinito dell'API (apps/api/src/server.ts). */
+const holdMinutes = Number(process.env.OMBRE_HOLD_MINUTES ?? '10');
+
 function first(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
 }
@@ -1464,7 +1467,7 @@ export async function BookView({ lang, section, slug, step, query }: { lang: str
 
   return (
     <PageShell locale={locale} page="search" alternatePath={alternate} crumbs={crumbsFor(locale, beach, t.summaryTitle)}>
-      <PageHead title={t.bookTitle(beach.name)} lead={t.holdNote} />
+      <PageHead title={t.bookTitle(beach.name)} lead={t.holdNote(holdMinutes)} />
       <DemoBadge locale={locale} beach={beach} />
       <section className="section">
         <div className="container">

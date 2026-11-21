@@ -1,3 +1,5 @@
+import { defaultCancelDeadlineHours } from '../policy';
+
 /** A calendar day in pieces, as the wording of a period needs it. */
 export interface DayParts {
   day: number;
@@ -73,7 +75,7 @@ export function makeIt(brand: string) {
       submit: 'Chiamami',
       trap: 'Non compilare questo campo',
       sentTitle: 'Richiesta ricevuta',
-      sentText: 'Ti richiamiamo al numero che hai lasciato. Se preferisci scrivere, i contatti sono più in basso in questa pagina.',
+      sentText: 'Ti richiamiamo al numero che hai lasciato.',
       errName: 'Scrivi il tuo nome: fino a 80 caratteri.',
       errPhone: 'Scrivi un telefono da 6 a 20 caratteri: cifre, spazi e + ( ) . / -',
       errBeach: 'Il nome dello stabilimento arriva fino a 80 caratteri.',
@@ -141,8 +143,14 @@ export function makeIt(brand: string) {
       periodBackwards: 'La data «al» viene prima della data «dal». Scambia o correggi le date.',
       row: (number: number) => `Fila ${number}`,
       spot: (code: string) => `Postazione ${code}`,
+      // Le parti a zero si omettono: «1 lettino», «1 ombrellone e 2 lettini», «2 ombrelloni».
       equipment: (umbrellas: number, sunbeds: number) =>
-        `${umbrellas} ${umbrellas === 1 ? 'ombrellone' : 'ombrelloni'} e ${sunbeds} ${sunbeds === 1 ? 'lettino' : 'lettini'}`,
+        [
+          umbrellas > 0 ? `${umbrellas} ${umbrellas === 1 ? 'ombrellone' : 'ombrelloni'}` : null,
+          sunbeds > 0 ? `${sunbeds} ${sunbeds === 1 ? 'lettino' : 'lettini'}` : null,
+        ]
+          .filter((part) => part !== null)
+          .join(' e '),
       guests: (max: number) => `Fino a ${max} ${max === 1 ? 'ospite' : 'ospiti'}`,
       sharedDay: 'Giornata condivisa',
       choose: (code: string) => `Scegli ${code}`,
@@ -177,7 +185,8 @@ export function makeIt(brand: string) {
       conditionsTitle: 'Condizioni di annullamento',
       conditionsMissing: 'Lo stabilimento non ha ancora pubblicato le condizioni di annullamento.',
       holdButton: 'Riserva la postazione',
-      holdNote: 'La postazione resta riservata per un tempo limitato mentre completi il pagamento. La riserva non è una conferma.',
+      holdNote: (minutes: number) =>
+        `Ti teniamo il posto per ${minutes} minuti mentre paghi. La prenotazione è confermata quando arriva il pagamento.`,
       notAvailableTitle: 'Postazione non più disponibile',
       notAvailableText: 'Questa postazione non è libera nel giorno scelto.',
       backToBeach: 'Torna alle postazioni',
@@ -1687,7 +1696,7 @@ export function makeIt(brand: string) {
         ],
         notesTitle: 'Da sapere prima di prenotare',
         notes: [
-          'Si prenotano giornate intere. Fasce orarie e cabine non fanno parte del primo rilascio.',
+          'Si prenotano giornate intere. Fasce orarie e cabine non si prenotano online.',
           'Le condizioni di annullamento le stabilisce lo stabilimento. Valgono quelle salvate nella tua prenotazione.',
           'Se compare «Pagamento in verifica» non serve pagare di nuovo: l\'esito viene controllato e la prenotazione aggiornata.',
         ],
@@ -1734,7 +1743,7 @@ export function makeIt(brand: string) {
         limitsTitle: 'Cosa non comprende, per ora',
         limits: [
           `Integrazioni con altri gestionali. Se ne usi già uno, prima dell'attivazione si decide quale sistema governa le postazioni vendute con ${brand}.`,
-          'Fasce orarie, cabine e risorse composte.',
+          'Fasce orarie e risorse composte.',
           'Varchi automatici e pass nei portafogli digitali.',
         ],
         activationTitle: 'Come si attiva',
@@ -1807,7 +1816,7 @@ export function makeIt(brand: string) {
           },
           {
             q: 'Posso annullare una prenotazione?',
-            a: 'Dipende dalle condizioni dello stabilimento, che leggi nel riepilogo con data e ora limite. Valgono quelle salvate nella tua prenotazione.',
+            a: `Sì. Di norma annulli gratis fino a ${defaultCancelDeadlineHours} ore prima e ti rimborsiamo tutto. Alcuni stabilimenti hanno condizioni proprie: le leggi nel riepilogo, prima di pagare.`,
           },
           {
             q: 'Come entro in spiaggia?',

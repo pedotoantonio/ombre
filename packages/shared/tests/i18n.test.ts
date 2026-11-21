@@ -62,6 +62,17 @@ describe('dictionaries', () => {
     expect(en.account.reportLead('from 1 to 30 November 2026')).toMatch(/^From 1 to 30 November 2026\. /);
   });
 
+  it('leave the zero parts out of the equipment line', () => {
+    expect(it_.booking.equipment(0, 1)).toBe('1 lettino');
+    expect(it_.booking.equipment(1, 2)).toBe('1 ombrellone e 2 lettini');
+    expect(it_.booking.equipment(2, 0)).toBe('2 ombrelloni');
+    expect(en.booking.equipment(0, 1)).toBe('1 sunbed');
+    expect(en.booking.equipment(1, 2)).toBe('1 umbrella and 2 sunbeds');
+    expect(en.booking.equipment(2, 0)).toBe('2 umbrellas');
+    expect(it_.booking.equipment(0, 0)).toBe('');
+    expect(en.booking.equipment(0, 0)).toBe('');
+  });
+
   it('give reserved pages a title that ends with the brand', () => {
     expect(it_.meta.pageTitle('Accedi')).toBe('Accedi | Marchio');
     expect(en.meta.beachPageTitle('Summary', 'Lido Aurora')).toBe('Summary · Lido Aurora | Marchio');

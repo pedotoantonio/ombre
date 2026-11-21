@@ -1,3 +1,4 @@
+import { defaultCancelDeadlineHours } from '../policy';
 import type { DayParts, Dictionary } from './it';
 
 export function makeEn(brand: string): Dictionary {
@@ -61,7 +62,7 @@ export function makeEn(brand: string): Dictionary {
       submit: 'Call me',
       trap: 'Do not fill in this field',
       sentTitle: 'Request received',
-      sentText: 'We will call you at the number you left. If you prefer writing, the contact details are further down this page.',
+      sentText: 'We will call you at the number you left.',
       errName: 'Write your name: up to 80 characters.',
       errPhone: 'Write a phone number of 6 to 20 characters: digits, spaces and + ( ) . / -',
       errBeach: 'The beach club name can be up to 80 characters.',
@@ -129,8 +130,14 @@ export function makeEn(brand: string): Dictionary {
       periodBackwards: 'The "to" date comes before the "from" date. Swap or correct the dates.',
       row: (number: number) => `Row ${number}`,
       spot: (code: string) => `Spot ${code}`,
+      // Zero parts are omitted: "1 sunbed", "1 umbrella and 2 sunbeds", "2 umbrellas".
       equipment: (umbrellas: number, sunbeds: number) =>
-        `${umbrellas} ${umbrellas === 1 ? 'umbrella' : 'umbrellas'} and ${sunbeds} ${sunbeds === 1 ? 'sunbed' : 'sunbeds'}`,
+        [
+          umbrellas > 0 ? `${umbrellas} ${umbrellas === 1 ? 'umbrella' : 'umbrellas'}` : null,
+          sunbeds > 0 ? `${sunbeds} ${sunbeds === 1 ? 'sunbed' : 'sunbeds'}` : null,
+        ]
+          .filter((part) => part !== null)
+          .join(' and '),
       guests: (max: number) => `Up to ${max} ${max === 1 ? 'guest' : 'guests'}`,
       sharedDay: 'Shared day',
       choose: (code: string) => `Choose ${code}`,
@@ -165,7 +172,8 @@ export function makeEn(brand: string): Dictionary {
       conditionsTitle: 'Cancellation terms',
       conditionsMissing: 'The beach club has not published its cancellation terms yet.',
       holdButton: 'Hold this spot',
-      holdNote: 'The spot stays held for a limited time while you complete the payment. A hold is not a confirmation.',
+      holdNote: (minutes: number) =>
+        `We hold your spot for ${minutes} minutes while you pay. The booking is confirmed when the payment arrives.`,
       notAvailableTitle: 'Spot no longer available',
       notAvailableText: 'This spot is not free on the day you chose.',
       backToBeach: 'Back to the spots',
@@ -1675,7 +1683,7 @@ export function makeEn(brand: string): Dictionary {
         ],
         notesTitle: 'Good to know before you book',
         notes: [
-          'You book full days. Time slots and cabins are not part of the first release.',
+          'You book whole days. Time slots and cabins cannot be booked online.',
           'Cancellation terms are set by the beach club. The ones saved in your booking apply.',
           'If you see “Payment under review” you do not need to pay again: the outcome is checked and your booking updated.',
         ],
@@ -1722,7 +1730,7 @@ export function makeEn(brand: string): Dictionary {
         limitsTitle: 'What it does not include yet',
         limits: [
           `Integrations with other management systems. If you already use one, before activation we agree which system governs the spots sold with ${brand}.`,
-          'Time slots, cabins and combined resources.',
+          'Time slots and combined resources.',
           'Automatic gates and passes in digital wallets.',
         ],
         activationTitle: 'How activation works',
@@ -1795,7 +1803,7 @@ export function makeEn(brand: string): Dictionary {
           },
           {
             q: 'Can I cancel a booking?',
-            a: 'It depends on the terms of the beach club, which you read in the summary with a deadline date and time. The ones saved in your booking apply.',
+            a: `Yes. As a rule you cancel free of charge up to ${defaultCancelDeadlineHours} hours before and we refund everything. Some beach clubs have their own terms: you read them in the summary, before paying.`,
           },
           {
             q: 'How do I get onto the beach?',
