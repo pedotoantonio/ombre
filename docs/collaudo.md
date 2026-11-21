@@ -1,5 +1,144 @@
 # Collaudo
 
+## Collaudo della vetrina del Gestore (21/11/2026)
+
+Collaudo della commessa «la vetrina del Gestore e il modulo "Ti chiamiamo
+noi"» ([specifica](specifica-vetrina-gestore.md), D71, criteri §6 cioè
+quelli del [prompt](prompt-vetrina-gestore.md) 1–7 più i tre propri della
+specifica): la pagina `/gestore-stabilimento` (e `/en/beach-manager`) è
+diventata la vetrina commerciale del gestionale col modulo di richiamata.
+Backend in `1b4a1c8` (migrazione 026, tre rotte, contratto a 138),
+frontend in `6331a27`, quinta schermata vera in `e12cf48`.
+
+Eseguito su **pila vergine usa-e-getta** con `bash scripts/collaudo.sh`:
+progetto compose dedicato `ombre-collaudo-pila` (web `127.0.0.1:3250`, API
+`127.0.0.1:3251`), PostgreSQL dei test sulla porta predefinita **54329**,
+`build` → `up -d db migrate api worker web` → health → **dodici** suite
+fumo nell'ordine → backup **ripristinato davvero** (stesse righe in ogni
+tabella, **72** politiche di sicurezza: una in più per
+`callback_request`) → `down -v` della sola pila del giro. L'ambiente
+fisso `ombre-collaudo` (`:3232`) e `ombre-demo` **mai toccati** (sul 3232
+solo una passata di sola lettura di `smoke.ts` per tarare i controlli
+nuovi, nessuna scrittura). **Un solo giro, tutto verde al primo colpo.**
+
+### Controlli estesi (mai ridotti): +105 fumo
+
+- **`scripts/smoke.ts` +53**, da 500 a 553 — blocco «La vetrina del
+  Gestore (D71)» su `/gestore-stabilimento` e `/en/beach-manager` (24 per
+  lingua + 5 condivisi): `h1` aggiornato al claim nuovo della vetrina
+  (prima la pagina era la guida); eroe con l'azione primaria verso
+  `#richiamata` (**due volte esatte**: eroe e chiusura) e la secondaria
+  verso `#funzionalita`; la riga discreta `manager-already` **due volte**,
+  sempre verso l'accesso (i due tocchi di D41 conservati — il controllo
+  D70 del collegamento resta); modulo POST verso `/azioni/richiamata` con
+  lingua nascosta, `name` (80, obbligatorio), `phone` (tel, 20,
+  obbligatorio), `beach` (80, facoltativo), consenso `checkbox` con
+  valore «1» e trappola `sito` nascosta (`visually-hidden`,
+  `aria-hidden`, `tabindex="-1"`, `autocomplete="off"`) — i controlli
+  cercano il campo per nome e poi gli attributi, senza dipendere
+  dall'ordine di resa del server; **esattamente cinque** schede
+  `manager-features` con le cinque schermate vere nell'ordine
+  (`condivisione-it-desktop.png` compresa, `alt` vuoto), e le cinque
+  immagini servite 200 come `image/*`; «Perché Ombrè» con **esattamente
+  quattro** carte; le quattro sezioni della trasparenza
+  (comprende / non comprende / come si attiva / Costi); chiusura
+  `next-step` con l'àncora del modulo e la via discreta; **nessuna cifra
+  da vetrina**: nel testo visibile di `<main>` nessun numero seguito da
+  `%` (il controllo onesto scelto contro i «+30%» da brochure). Home e
+  ricerca non toccate: i blocchi D70/D67/D41 restano identici.
+- **NUOVA `scripts/smoke-richiamata.ts`: 52 controlli** — il percorso
+  intero del modulo come un browser **senza JavaScript**, nelle **due
+  lingue** (15 per lingua + 22 di consultazione): invio valido (303 su
+  `?inviata=1#richiamata`, conferma resa in pagina al posto del modulo);
+  convalide (nome vuoto → `enome=1`, telefono corto → `etel=1`, consenso
+  mancante → `econsenso=1`, sempre coi valori ricompilati nella query e
+  nei campi, errore annunciato accanto al campo); trappola compilata
+  (risposta identica a un invio riuscito e **niente in archivio**);
+  limite di invii (cinque passano, il **sesto dallo stesso indirizzo** →
+  `emodulo=limite` spiegato accanto al modulo; ogni scenario usa il suo
+  `X-Forwarded-For`); pagina riservata `/area/richieste`
+  (`/en/account/callback-requests`): senza sessione → accesso, gestore
+  senza ruolo di piattaforma → **404** in entrambe le lingue,
+  amministratore → elenco con data, nome, telefono e stabilimento,
+  marcatura «Segna come richiamato» (`?ok=1`, stato «Richiamato», modulo
+  sparito, **idempotente lato pagina**), gemella inglese sullo stesso
+  archivio.
+- **`scripts/collaudo.sh`**: solo i due collegamenti ammessi — la suite
+  nuova nell'ordine (dopo `smoke:site`, lanciata col node di pnpm perché
+  non ha voce in package.json) e l'amministratore di piattaforma della
+  pila (`OMBRE_ADMIN_EMAIL=amministrazione@collaudo.example`,
+  `OMBRE_ADMIN_PASSWORD` uguale alla parola d'ordine dimostrativa della
+  pila), creato dal servizio migrate come negli altri ambienti. Progetto
+  e porte invariati. `smoke-flow.ts` non serviva: non esercita la pagina
+  del Gestore.
+
+Nessuna asserzione esistente tolta né indebolita.
+
+### Test e collaudi fumo (un giro, pila vergine)
+
+| Parte | Controlli | Esito |
+|---|---|---|
+| Lint e tipi (`pnpm lint`, `pnpm typecheck`) | tutto il codice | Superati |
+| Test con PostgreSQL vero (porta predefinita 54329) | **297** (47 shared, 11 comms, **66** db, **166** api, 7 worker), contratto OpenAPI a **138 rotte** | Superati |
+| Pagine pubbliche (`smoke`) | 553 (**+53**) | Superati |
+| Ricerca, planimetria e riserva (`smoke:flow`) | 77 | Superati |
+| Aree riservate (`smoke:areas`) | 85 | Superati |
+| Sito dello stabilimento (`smoke:site`) | 25 | Superati |
+| **Modulo di richiamata (`smoke:richiamata`, nuova)** | **52** | Superati |
+| Conto, Google e carrello (`smoke:conto`) | 139 | Superati |
+| Al passo col mercato (`smoke:mercato`) | 110 | Superati |
+| La spiaggia illustrata (`smoke:spiaggia`) | 121 | Superati |
+| La scheda della postazione (`smoke:schede`) | 141 | Superati |
+| Prenotazione end-to-end (`smoke:booking`) | 15 | Superati |
+| Presa simultanea (`smoke:api`) | 13 | Superati |
+| Due passaggi (`smoke:2fa`, per ultima) | 11 | Superati |
+| Backup e prova di ripristino | quadratura, 72 politiche | Superati |
+
+In totale **1342 controlli fumo** (1237 + 105 del collaudatore), tutti
+verdi al primo giro.
+
+### Criteri di accettazione (prompt 1–7)
+
+1. **Eroe da vetrina con le due azioni — superato.** Claim nuovo come
+   `h1`, «Ti chiamiamo noi» primaria verso il modulo, secondaria verso le
+   schermate, «Entra nel gestionale» in forma discreta due volte, in
+   italiano e in inglese (controlli nuovi di `smoke.ts`).
+2. **Il modulo di richiamata — superato.** Registra nome, telefono ed
+   eventuale stabilimento col consenso esplicito; funziona senza
+   JavaScript (percorso intero della suite nuova), convalida con errori
+   leggibili e valori ricompilati, conferma dopo l'invio, limite di
+   cinque al minuto per indirizzo e campo trappola attivi (il bot riceve
+   la risposta buona e l'archivio resta pulito).
+3. **Consultazione riservata — superato.** Le richieste si leggono da
+   `/area/richieste` con data, nome, telefono, stabilimento e stato;
+   la marcatura «richiamato» funziona ed è idempotente; senza ruolo di
+   piattaforma la pagina non esiste (404), senza sessione si va
+   all'accesso; nessun dato del modulo finisce altrove (niente outbox:
+   66 test db e 166 api lo attestano).
+4. **Schede con le schermate vere — superato.** Cinque schede con le
+   cinque schermate del gestionale dimostrativo nell'ordine, compresa la
+   condivisione degli stagionali; i quattro vantaggi di «Perché Ombrè»
+   sono esattamente quattro e corrispondono a funzioni reali del
+   prodotto.
+5. **Niente numeri, testimonianze o loghi inventati; trasparenza
+   conservata — superato.** Il testo visibile della pagina non porta
+   percentuali (controllo nuovo); le sezioni comprende / non comprende /
+   come si attiva restano, Costi e Contatti con la formula della fase
+   pilota.
+6. **Nessun'altra pagina cambia — superato.** Home (D70), Ricerca
+   ombrellone, guide, menu a cinque voci (D41/D67) e area riservata:
+   tutti i blocchi esistenti restano verdi identici; il contratto passa
+   a 138 rotte come da specifica.
+7. **Tutti i collaudi verdi — superato.** 297 test di pacchetto, 138
+   rotte a contratto, 1342 controlli fumo (+105); i controlli della
+   vecchia pagina aggiornati alla nuova forma **estendendoli**, mai
+   ridotti. Le schermate finali della pagina e della pagina riservata
+   restano **in capo al coordinatore**.
+
+### Difetti trovati
+
+Nessuno: né del prodotto né delle suite, giro unico tutto verde.
+
 ## Collaudo della home dell'Ospite (20/11/2026)
 
 Collaudo della commessa «la home è dell'Ospite»

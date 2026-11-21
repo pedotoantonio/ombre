@@ -249,6 +249,84 @@ for (const [guidePath, signInPath] of [['/gestore-stabilimento', '/area/accesso'
   check(guideHtml.includes(`href="${signInPath}"`), `${guidePath}: no link to ${signInPath} — the Manager lost the second touch (D70)`);
 }
 
+// La vetrina del Gestore (D71): la pagina del Gestore è la vetrina commerciale del
+// gestionale. Eroe con le due azioni (primaria «Ti chiamiamo noi» → #richiamata,
+// secondaria → #funzionalita) e la riga discreta di chi è già cliente (i due tocchi
+// di D41 restano); modulo di richiamata coi quattro campi, la casella del consenso e
+// il campo trappola nascosto; cinque schede con le cinque schermate vere servite come
+// immagini; «Perché Ombrè» con quattro voci; le sezioni della trasparenza conservate;
+// chiusura con le stesse azioni. Niente numeri da vetrina inventati: il testo visibile
+// della pagina non porta percentuali (il controllo onesto: nessuna cifra seguita da %).
+const vetrina = {
+  it: {
+    path: '/gestore-stabilimento',
+    h1: 'Il gestionale per il Gestore stabilimento',
+    signIn: '/area/accesso',
+    transparency: ['Cosa comprende il primo rilascio', 'Cosa non comprende, per ora', 'Come si attiva', 'Costi'],
+  },
+  en: {
+    path: '/en/beach-manager',
+    h1: 'The management area for the Beach manager',
+    signIn: '/en/account/sign-in',
+    transparency: ['What the first release includes', 'What it does not include yet', 'How activation works', 'Costs'],
+  },
+} as const;
+// Le schermate vere del gestionale dimostrativo, nell'ordine delle cinque schede.
+const vetrinaScreens = ['console-filtri-it-desktop.png', 'planner-it-desktop.png', 'scheda-postazione-it-desktop.png', 'economia-it-desktop.png', 'condivisione-it-desktop.png'];
+for (const lang of ['it', 'en'] as const) {
+  const { path, h1, signIn, transparency } = vetrina[lang];
+  const html = (await (await fetch(base + path)).text()).replaceAll('&#x27;', "'").replaceAll('&amp;', '&');
+  check(new RegExp(`<h1[^>]*>${h1}</h1>`).test(html), `${path}: the h1 is not the showcase claim «${h1}» (D71)`);
+  // Le due azioni dell'eroe; la primaria torna identica in chiusura, quindi due volte.
+  check((html.match(/<a class="button" href="#richiamata">/g) ?? []).length === 2, `${path}: the primary action towards #richiamata must appear twice, in the hero and in the closing (D71)`);
+  check(html.includes('<a class="button button--secondary" href="#funzionalita">'), `${path}: the hero lost the secondary action towards #funzionalita (D71)`);
+  // La riga discreta di chi è già cliente, nell'eroe e in chiusura, sempre verso l'accesso.
+  const already = html.match(/<p class="manager-already">[^]*?<\/p>/g) ?? [];
+  check(already.length === 2 && already.every((row) => row.includes(`href="${signIn}"`)), `${path}: the discreet «already a customer» line must appear twice and link to ${signIn} (D71)`);
+  // Il modulo di richiamata: POST senza script, i quattro campi e la casella del
+  // consenso. Il server rende gli attributi in un ordine suo: i controlli cercano
+  // il tag del campo per nome e poi gli attributi, senza pretendere l'ordine.
+  const form = /<form[^>]*action="\/azioni\/richiamata"[^]*?<\/form>/.exec(html)?.[0] ?? '';
+  const field = (name: string) => new RegExp(`<input[^>]*name="${name}"[^>]*>`, 'i').exec(form)?.[0] ?? '';
+  const has = (tag: string, attr: string) => new RegExp(attr, 'i').test(tag);
+  check(form !== '' && has(form, 'method="post"'), `${path}: no POST form towards /azioni/richiamata (D71)`);
+  check(has(field('lang'), 'type="hidden"') && has(field('lang'), `value="${lang}"`), `${path}: the callback form does not carry its language (D71)`);
+  check(has(field('name'), 'maxlength="80"') && has(field('name'), 'required'), `${path}: the name field is missing, optional or without its 80-character limit (D71)`);
+  check(has(field('phone'), 'type="tel"') && has(field('phone'), 'maxlength="20"') && has(field('phone'), 'required'), `${path}: the phone field is missing, optional or not a tel field (D71)`);
+  check(field('beach') !== '' && has(field('beach'), 'maxlength="80"') && !has(field('beach'), 'required'), `${path}: the beach club field is missing, required or without its limit (D71)`);
+  check(has(field('consent'), 'type="checkbox"') && has(field('consent'), 'value="1"'), `${path}: the consent checkbox with value "1" is missing (D71)`);
+  const trap = /<div class="visually-hidden" aria-hidden="true">[^]*?<\/div>/.exec(form)?.[0] ?? '';
+  const trapField = new RegExp('<input[^>]*name="sito"[^>]*>', 'i').exec(trap)?.[0] ?? '';
+  check(has(trapField, 'tabindex="-1"') && has(trapField, 'autocomplete="off"'), `${path}: the hidden trap field «sito» is missing or reachable (D71)`);
+  // Le cinque schede con le cinque schermate vere, nell'ordine.
+  const features = /<ul class="manager-features">[^]*?<\/ul>/.exec(html)?.[0] ?? '';
+  check((features.match(/<li\b/g) ?? []).length === 5 && (features.match(/<h3>/g) ?? []).length === 5, `${path}: expected exactly five feature cards with their headings (D71)`);
+  let lastIndex = -1;
+  for (const file of vetrinaScreens) {
+    const index = features.indexOf(`<img src="/img/gestionale/${file}" alt=""`);
+    check(index > lastIndex, `${path}: the screenshot ${file} is missing from the feature cards, without an empty alt, or out of order (D71)`);
+    if (index >= 0) lastIndex = index;
+  }
+  // «Perché Ombrè»: quattro vantaggi reali, né più né meno.
+  const why = /<ul class="cards">[^]*?<\/ul>/.exec(html)?.[0] ?? '';
+  check((why.match(/<li class="card"/g) ?? []).length === 4, `${path}: expected exactly four «Perché Ombrè» cards (D71)`);
+  // La trasparenza compattata verso il fondo: le quattro sezioni restano.
+  for (const title of transparency) {
+    check(html.includes(`<h3>${title}</h3>`), `${path}: the transparency section «${title}» is gone (D71)`);
+  }
+  // La chiusura ripete l'azione primaria e la via discreta.
+  const closing = /<div class="next-step">[^]*?<\/section>/.exec(html)?.[0] ?? '';
+  check(closing.includes('href="#richiamata"') && closing.includes('class="manager-already"'), `${path}: the closing lost the callback action or the discreet sign-in line (D71)`);
+  // Niente cifre da vetrina: nel testo visibile della pagina nessun numero seguito da %.
+  const visible = (/<main\b[^]*<\/main>/.exec(html)?.[0] ?? '').replace(/<[^>]*>/g, ' ');
+  check(!/\d\s*%/.test(visible), `${path}: the page shows a percentage figure — invented showcase numbers are banished (D71)`);
+}
+// Le cinque schermate sono servite davvero come immagini.
+for (const file of vetrinaScreens) {
+  const picture = await fetch(`${base}/img/gestionale/${file}`);
+  check(picture.status === 200 && (picture.headers.get('content-type') ?? '').startsWith('image/'), `vetrina: /img/gestionale/${file} is not served as an image (D71)`);
+}
+
 // The two-row header (D67): the menu bar is a band of its own — nav.site-nav is a
 // sibling of .site-header__inner, never inside it — with its entries in a container,
 // in the D41 order, same in both languages. The rainbow of D68 lives in the CSS and is

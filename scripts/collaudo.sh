@@ -19,6 +19,10 @@ export OMBRE_DEMO_MODE=true
 # recensioni e caparra vivono sui suoi dati. Il segreto di firma ha il default del compose.
 export OMBRE_SEED_SHOWCASE=true
 export OMBRE_DEMO_PASSWORD="collaudo-password-123"
+# L'amministratore di piattaforma (D71) nasce dal servizio migrate, come negli altri
+# ambienti: serve alla suite della richiamata per l'elenco riservato e la marcatura.
+export OMBRE_ADMIN_EMAIL="amministrazione@collaudo.example"
+export OMBRE_ADMIN_PASSWORD="$OMBRE_DEMO_PASSWORD"
 export OMBRE_SANDBOX_WEBHOOK_SECRET="collaudo-segreto-fornitore"
 export OMBRE_MAIL_PROVIDER=log
 # Identity provider di prova (D48): il collaudo del conto esercita l'intero giro OIDC.
@@ -69,10 +73,12 @@ run_smoke() {
     return 1
   fi
 }
-for check in smoke smoke:flow smoke:areas smoke:site smoke:conto smoke:mercato smoke:spiaggia smoke:schede smoke:booking smoke:api smoke:2fa; do
+for check in smoke smoke:flow smoke:areas smoke:site smoke:richiamata smoke:conto smoke:mercato smoke:spiaggia smoke:schede smoke:booking smoke:api smoke:2fa; do
   case "$check" in
     smoke:booking | smoke:api) run_smoke "$check" "$api" ;;
     smoke:mercato | smoke:spiaggia | smoke:schede) run_smoke "$check" "$web" "$api" ;;
+    # La suite della richiamata (D71) non ha voce in package.json: si lancia col node di pnpm.
+    smoke:richiamata) run_smoke exec node scripts/smoke-richiamata.ts "$web" ;;
     *) run_smoke "$check" "$web" ;;
   esac
 done
